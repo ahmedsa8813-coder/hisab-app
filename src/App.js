@@ -212,7 +212,7 @@ export default function App() {
   };
   const pr = selProj ? projRep(selProj,pfFrom,pfTo) : null;
 
-  const navMgr    = [{icon:"📊",label:"الملخص",v:"home"},{icon:"📋",label:"المعاملات",v:"allTx"},{icon:"🏗️",label:"المشاريع",v:"projects"},{icon:"💰",label:"المالية",v:"projReport"},{icon:"🏢",label:"الشركة",v:"company"},{icon:"💳",label:"الديون",v:"debts"},{icon:"⚖️",label:"افتتاحي",v:"opening"}];
+  const navMgr    = [{icon:"📊",label:"الملخص",v:"home"},{icon:"📄",label:"الكشوفات",v:"statements"},{icon:"📋",label:"المعاملات",v:"allTx"},{icon:"🏗️",label:"المشاريع",v:"projects"},{icon:"💰",label:"المالية",v:"projReport"},{icon:"🏢",label:"الشركة",v:"company"},{icon:"💳",label:"الديون",v:"debts"},{icon:"⚖️",label:"افتتاحي",v:"opening"}];
   const navWorker = [{icon:"🏠",label:"الرئيسية",v:"home"},{icon:"➕",label:"تسجيل",v:"add"}];
   const navItems  = user?.role==="manager" ? navMgr : navWorker;
 
@@ -554,11 +554,10 @@ export default function App() {
 
           {!D&&(
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginTop:4}}>
-              {[["📋 المعاملات","allTx","linear-gradient(135deg,#1d4ed8,#1455cc)"],["🏗️ المشاريع","projects","linear-gradient(135deg,#065f46,#047857)"],["💰 كشف المشاريع","projReport","linear-gradient(135deg,#b45309,#92400e)"],["🏢 كشف الشركة","company","linear-gradient(135deg,#7c3aed,#5b21b6)"]].map(([l,v,bg])=>(
+              {[["📄 الكشوفات","statements","linear-gradient(135deg,#1A7A4A,#147A40)"],["📋 المعاملات","allTx","linear-gradient(135deg,#1d4ed8,#1455cc)"],["🏗️ المشاريع","projects","linear-gradient(135deg,#065f46,#047857)"],["💰 كشف المشاريع","projReport","linear-gradient(135deg,#b45309,#92400e)"],["🏢 كشف الشركة","company","linear-gradient(135deg,#7c3aed,#5b21b6)"],["💳 الديون","debts","linear-gradient(135deg,#C0392B,#A93226)"]].map(([l,v,bg])=>(
                 <button key={v} style={{...S.goldBtn,background:bg,color:"#fff",marginBottom:0}} onClick={()=>setView(v)}>{l}</button>
               ))}
               <button style={{...S.goldBtn,background:"linear-gradient(135deg,#374151,#1f2937)",color:"#fff",gridColumn:"1/-1",marginBottom:0}} onClick={()=>setView("opening")}>⚖️ الأرصدة الافتتاحية</button>
-              <button style={{...S.goldBtn,background:"linear-gradient(135deg,#C0392B,#A93226)",color:"#fff",gridColumn:"1/-1",marginBottom:0}} onClick={()=>setView("debts")}>💳 قائمة الديون</button>
             </div>
           )}
         </div>
@@ -821,6 +820,122 @@ export default function App() {
         {!D&&<button style={S.canBtn} onClick={()=>setView("home")}>← رجوع</button>}
       </div>
     );
+    // STATEMENTS - كشف الحسابات
+    if(user.role==="manager"&&view==="statements") {
+      const stUserObj = USERS.find(u=>u.id===stUser);
+      const stOBobj   = OBs[stUser]||{};
+      const stTxsAll  = stUser ? txs.filter(t=>{
+        if(t.userId!==stUser)return false;
+        if(t.currency!==fuCur&&!(fuCur==="دينار"&&!t.currency))return false;
+        if(fuProj!=="all"&&t.projectId!==fuProj)return false;
+        if(fuFrom&&t.date<fuFrom)return false;
+        if(fuTo&&t.date>fuTo)return false;
+        return true;
+      }) : [];
+      const stObR2 = (!fuFrom&&fuProj==="all")?(fuCur==="دينار"?(stOBobj.dinarReceived||0):(stOBobj.dollarReceived||0)):0;
+      const stObS2 = (!fuFrom&&fuProj==="all")?(fuCur==="دينار"?(stOBobj.dinarSpent||0):(stOBobj.dollarSpent||0)):0;
+      const stR2   = stTxsAll.filter(t=>t.type==="استلام").reduce((s,t)=>s+t.amount,0)+stObR2;
+      const stS2   = stTxsAll.filter(t=>t.type==="صرف").reduce((s,t)=>s+t.amount,0)+stObS2;
+      const stB2   = stR2-stS2;
+
+      const pdfSt = () => {
+        if(!stUserObj) return;
+        const pn=fuProj!=="all"?((p=projs.find(p=>p.id===fuProj))=>p?`${p.name}`:"")():"كل المشاريع";
+        const obRow=(stObR2||stObS2)?`<tr style="background:#fff8e1"><td>قبل النظام</td><td>-</td><td>رصيد افتتاحي</td><td>${toAr(stObR2.toLocaleString("ar-IQ"))}</td><td>${toAr(stObS2.toLocaleString("ar-IQ"))}</td><td>-</td></tr>`:"";
+        const rows=stTxsAll.map(t=>`<tr><td>${t.date}</td><td>${t.projectName||"-"}</td><td style="color:${t.type==='استلام'?'green':'red'}">${t.type}${t.isPersonal?" (شخصي)":""}</td><td>${t.type==='استلام'?toAr(Number(t.amount).toLocaleString("ar-IQ")):'-'}</td><td>${t.type==='صرف'?toAr(Number(t.amount).toLocaleString("ar-IQ")):'-'}</td><td>${t.note||"-"}</td></tr>`).join("");
+        const html=`<!DOCTYPE html><html dir="rtl" lang="ar"><head><meta charset="UTF-8"/><title>كشف - ${stUserObj.name}</title><style>body{font-family:Tahoma,sans-serif;padding:30px;direction:rtl}h1{color:#1d4ed8;font-size:20px}.i{font-size:13px;color:#555;margin:8px 0 20px}.s{display:flex;gap:12px;margin-bottom:24px}.b{border:1px solid #ddd;border-radius:8px;padding:12px;flex:1;text-align:center}.l{font-size:11px;color:#888}.v{font-size:16px;font-weight:bold;margin-top:4px}.g{color:green}.r{color:red}table{width:100%;border-collapse:collapse;font-size:12px}th{background:#1d4ed8;color:#fff;padding:8px}td{padding:7px 8px;border-bottom:1px solid #eee;text-align:center}tr:nth-child(even){background:#f9f9f9}.f{margin-top:24px;font-size:11px;color:#aaa;text-align:center}</style></head><body><h1>كشف حساب — ${stUserObj.name}</h1><div class="i">العملة: ${fuCur} | المشروع: ${pn} | من: ${fuFrom||"البداية"} | إلى: ${fuTo||"الآن"}</div><div class="s"><div class="b"><div class="l">إجمالي الاستلام</div><div class="v g">${fmt(stR2,fuCur)}</div></div><div class="b"><div class="l">إجمالي الصرف</div><div class="v r">${fmt(stS2,fuCur)}</div></div><div class="b"><div class="l">الرصيد</div><div class="v ${stB2>=0?'g':'r'}">${fmt(Math.abs(stB2),fuCur)} ${stB2>=0?'متبقي':'عليه'}</div></div></div><table><thead><tr><th>التاريخ</th><th>المشروع</th><th>النوع</th><th>استلام</th><th>صرف</th><th>ملاحظات</th></tr></thead><tbody>${obRow}${rows}</tbody></table><div class="f">نظام حساب — ${new Date().toLocaleDateString("ar-IQ")}</div></body></html>`;
+        const w=window.open("","_blank");w.document.write(html);w.document.close();setTimeout(()=>w.print(),500);
+      };
+
+      return (
+        <div>
+          <div style={S.secTitle}>📄 كشف الحسابات</div>
+          <div style={D?{display:"flex",gap:20}:{}}>
+            {/* فلاتر */}
+            <div style={D?{width:300,flexShrink:0}:{}}>
+              <div style={S.formCard}>
+                <div style={S.fLbl}>اختر الشخص</div>
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+                  {WORKERS.map(u=>(
+                    <button key={u.id} style={{
+                      display:"flex",alignItems:"center",gap:8,padding:"10px 12px",
+                      borderRadius:12,border:`2px solid ${stUser===u.id?C.gold:C.cardBorder}`,
+                      background:stUser===u.id?`rgba(193,123,47,0.08)`:C.bg2,
+                      cursor:"pointer",transition:"all 0.2s",textAlign:"right",
+                    }} onClick={()=>setStUser(u.id)}>
+                      <div style={{...S.av,width:32,height:32,fontSize:14,borderRadius:10,background:avatarBg(u.role),flexShrink:0}}>{u.name[0]}</div>
+                      <div style={{fontSize:13,fontWeight:700,color:stUser===u.id?C.gold:C.text}}>{u.name}</div>
+                    </button>
+                  ))}
+                </div>
+
+                <div style={S.fLbl}>العملة</div>
+                <div style={S.tRow}>
+                  <button style={{...S.tBtn,...(fuCur==="دينار"?{background:"rgba(37,87,167,0.15)",border:`1px solid #2557A7`,color:"#2557A7"}:{})}} onClick={()=>setFuCur("دينار")}>🇮🇶 دينار</button>
+                  <button style={{...S.tBtn,...(fuCur==="دولار"?{background:"rgba(37,87,167,0.15)",border:`1px solid #2557A7`,color:"#2557A7"}:{})}} onClick={()=>setFuCur("دولار")}>🇺🇸 دولار</button>
+                </div>
+
+                <div style={S.fLbl}>المشروع</div>
+                <select style={S.sel} value={fuProj} onChange={e=>setFuProj(e.target.value)}>
+                  <option value="all">كل المشاريع</option>
+                  {projs.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}
+                </select>
+
+                <div style={S.fLbl}>من تاريخ</div>
+                <input style={S.inp} type="date" value={fuFrom} onChange={e=>setFuFrom(e.target.value)}/>
+
+                <div style={S.fLbl}>إلى تاريخ</div>
+                <input style={S.inp} type="date" value={fuTo} onChange={e=>setFuTo(e.target.value)}/>
+
+                {stUser&&<button style={{...S.subBtn,background:`linear-gradient(135deg,${C.blue},${C.blueL})`,color:"#fff"}} onClick={pdfSt}>📄 تصدير PDF</button>}
+                <button style={{...S.canBtn,marginTop:8}} onClick={()=>{setFuFrom("");setFuTo("");setFuProj("all");setStUser(null);}}>↺ إعادة تعيين</button>
+              </div>
+            </div>
+
+            {/* النتائج */}
+            <div style={{flex:1}}>
+              {!stUser?(
+                <div style={{...S.empty,background:C.card,borderRadius:20,border:`1px solid ${C.cardBorder}`,display:"flex",flexDirection:"column",alignItems:"center",gap:12}}>
+                  <div style={{fontSize:48}}>👆</div>
+                  <div style={{fontWeight:700,color:C.textMd}}>اختر شخصاً من القائمة</div>
+                  <div style={{fontSize:13,color:C.textSm}}>لعرض كشف حسابه</div>
+                </div>
+              ):(
+                <>
+                  {/* بطاقة الرصيد */}
+                  <div style={{...S.balCard,background:stB2>=0?"linear-gradient(135deg,#1A7A4A,#147A40)":"linear-gradient(135deg,#C0392B,#A93226)",marginBottom:16}}>
+                    <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:12}}>
+                      <div style={{...S.av,width:44,height:44,fontSize:19,borderRadius:14,background:"rgba(255,255,255,0.2)"}}>{stUserObj?.name[0]}</div>
+                      <div>
+                        <div style={{fontSize:18,fontWeight:800,color:"#fff"}}>{stUserObj?.name}</div>
+                        <div style={{fontSize:12,color:"rgba(255,255,255,0.8)"}}>كشف حساب — {fuCur}</div>
+                      </div>
+                    </div>
+                    <div style={S.balAmt}>{fmt(Math.abs(stB2),fuCur)}</div>
+                    <div style={{fontSize:14,fontWeight:800,color:"rgba(255,255,255,0.9)",margin:"6px 0 12px"}}>
+                      {stB2>0?"✅ مطلوب منه":stB2<0?"⚠️ طالب":"◼️ متوازن"}
+                    </div>
+                    <div style={S.balRow}>
+                      <span style={S.balSt}>↓ استلم {fmt(stR2,fuCur)}</span>
+                      <span style={S.balSt}>↑ صرف {fmt(stS2,fuCur)}</span>
+                    </div>
+                  </div>
+
+                  {/* المعاملات */}
+                  <div style={{fontSize:13,color:C.textMd,marginBottom:12,fontWeight:600}}>{toAr(stTxsAll.length)} معاملة</div>
+                  {stTxsAll.length===0?(
+                    <div style={S.empty}>ما في معاملات بهذه الفلاتر</div>
+                  ):(
+                    <div style={D?S.txGrid:{}}>{stTxsAll.map(t=><TxCard key={t.id} t={t} onDelete={()=>delTx(t.id)} onImg={setViewImg}/>)}</div>
+                  )}
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      );
+    }
+
     // DEBTS
     if(user.role==="manager"&&view==="debts") return (
       <div>
