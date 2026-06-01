@@ -3,13 +3,13 @@ import { db } from "./firebase";
 import { collection, addDoc, onSnapshot, query, orderBy, deleteDoc, doc, setDoc } from "firebase/firestore";
 
 const USERS = [
-  { id: "manager",  name: "المدير المالي", role: "manager",   pin: "0000" },
-  { id: "noor",     name: "نور",           role: "partner",   pin: "0000", share: 35, canReceive: false },
-  { id: "mohammed", name: "محمد",          role: "partner",   pin: "0000", share: 15, canReceive: false },
-  { id: "hussein",  name: "حسين",          role: "employee",  pin: "0000",            canReceive: false },
-  { id: "ahmed",    name: "أحمد",          role: "accountant",pin: "0000", share: 15, canReceive: true  },
-  { id: "ihab",     name: "إيهاب",         role: "partner",   pin: "0000", share: 35, canReceive: false },
-  { id: "foreman",  name: "Foreman",       role: "foreman",   pin: "0000" },
+  { id: "manager",  name: "المدير المالي", role: "manager",   pin: "000000" },
+  { id: "noor",     name: "نور",           role: "partner",   pin: "", share: 35, canReceive: false },
+  { id: "mohammed", name: "محمد",          role: "partner",   pin: "", share: 15, canReceive: false },
+  { id: "hussein",  name: "حسين",          role: "employee",  pin: "",            canReceive: false },
+  { id: "ahmed",    name: "أحمد",          role: "accountant",pin: "", share: 15, canReceive: true  },
+  { id: "ihab",     name: "إيهاب",         role: "partner",   pin: "", share: 35, canReceive: false },
+  { id: "foreman",  name: "Foreman",       role: "foreman",   pin: "" },
 ];
 
 const PARTNERS    = USERS.filter(u => u.share && u.role !== "manager");
@@ -117,7 +117,11 @@ export default function App() {
 
   const doLogin = () => {
     const u=USERS.find(u=>u.id===loginId);
-    if(u&&pin===u.pin){setUser(u);setScreen("app");setView("home");setPinErr(false);}
+    if(!u) return;
+    // غير المدير: يدخل مباشرة بدون رمز
+    if(u.role!=="manager"){setUser(u);setScreen("app");setView("home");setPinErr(false);return;}
+    // المدير: يحتاج 6 أرقام
+    if(pin===u.pin){setUser(u);setScreen("app");setView("home");setPinErr(false);}
     else{setPinErr(true);setPin("");}
   };
 
@@ -536,6 +540,7 @@ export default function App() {
           </>
         ) : (
           <>
+            {/* بطاقة الشخص المختار */}
             <div style={S.selCard}>
               <div style={{...S.av,background:avatarBg(USERS.find(u=>u.id===loginId)?.role)}}>{USERS.find(u=>u.id===loginId)?.name[0]}</div>
               <div>
@@ -543,15 +548,49 @@ export default function App() {
                 <div style={{fontSize:12,color:"#9ca3af",marginTop:2}}>{USERS.find(u=>u.id===loginId)?.role==="manager"?"مدير مالي":USERS.find(u=>u.id===loginId)?.role==="foreman"?"Foreman":"موظف"}</div>
               </div>
             </div>
-            <div style={S.lbl}>أدخل الرمز السري</div>
-            <div style={S.dots}>{[0,1,2,3].map(i=><div key={i} style={{...S.dot,background:pin.length>i?C.gold:C.bg3}}/>)}</div>
-            {pinErr&&<div style={S.pinErr}>رمز خاطئ، حاول مرة ثانية</div>}
-            <div style={D?S.numpadD:S.numpad}>
-              {["1","2","3","4","5","6","7","8","9","","0","⌫"].map((k,i)=>(
-                <button key={i} style={k===""?S.numEmpty:S.numBtn} onClick={()=>{if(!k)return;if(k==="⌫"){setPin(p=>p.slice(0,-1));setPinErr(false);}else if(pin.length<4)setPin(p=>p+k);}}>{k}</button>
-              ))}
-            </div>
-            <button style={S.loginBtn} onClick={doLogin}>دخول</button>
+
+            {/* المدير فقط يحتاج رمز سري */}
+            {USERS.find(u=>u.id===loginId)?.role==="manager" ? (
+              <>
+                <div style={S.lbl}>أدخل الرمز السري (6 أرقام)</div>
+                {/* 6 نقاط */}
+                <div style={{...S.dots,gap:12}}>
+                  {[0,1,2,3,4,5].map(i=>(
+                    <div key={i} style={{
+                      ...S.dot,
+                      width:14,height:14,
+                      background:pin.length>i?C.gold:C.bg3,
+                      boxShadow:pin.length>i?`0 0 8px rgba(193,123,47,0.4)`:"none",
+                      transition:"all 0.15s",
+                    }}/>
+                  ))}
+                </div>
+                {pinErr&&<div style={S.pinErr}>رمز خاطئ، حاول مرة ثانية</div>}
+                <div style={D?S.numpadD:S.numpad}>
+                  {["1","2","3","4","5","6","7","8","9","","0","⌫"].map((k,i)=>(
+                    <button key={i} style={k===""?S.numEmpty:S.numBtn}
+                      onClick={()=>{if(!k)return;if(k==="⌫"){setPin(p=>p.slice(0,-1));setPinErr(false);}else if(pin.length<6)setPin(p=>p+k);}}>
+                      {k}
+                    </button>
+                  ))}
+                </div>
+                <button style={{...S.loginBtn,opacity:pin.length===6?1:0.5}} onClick={doLogin} disabled={pin.length<6}>
+                  دخول
+                </button>
+              </>
+            ) : (
+              /* غير المدير: يدخل مباشرة */
+              <>
+                <div style={{textAlign:"center",marginBottom:20}}>
+                  <div style={{fontSize:48,marginBottom:8}}>👋</div>
+                  <div style={{fontSize:16,fontWeight:700,color:C.text}}>
+                    أهلاً {USERS.find(u=>u.id===loginId)?.name}!
+                  </div>
+                  <div style={{fontSize:13,color:C.textSm,marginTop:4}}>اضغط دخول للمتابعة</div>
+                </div>
+                <button style={S.loginBtn} onClick={doLogin}>دخول →</button>
+              </>
+            )}
             {!urlUser&&<button style={S.backBtn} onClick={()=>{setLoginId(null);setPin("");}}>← رجوع</button>}
           </>
         )}
@@ -614,6 +653,19 @@ export default function App() {
 
   function renderView() {
     if(loading) return <div style={{textAlign:"center",color:"#6b7280",padding:60,fontSize:16}}>⏳ جاري التحميل...</div>;
+
+    // زر الرجوع المشترك
+    const BackBtn = ({to,label}) => (
+      <button style={{
+        display:"inline-flex",alignItems:"center",gap:6,
+        background:C.card,border:`1px solid ${C.cardBorder}`,
+        borderRadius:10,padding:"8px 16px",color:C.textMd,
+        fontSize:13,fontWeight:700,cursor:"pointer",
+        boxShadow:C.shadow,marginBottom:20,
+      }} onClick={()=>setView(to||"home")}>
+        ← {label||"رجوع للرئيسية"}
+      </button>
+    );
 
     // FOREMAN HOME
     if(user.role==="foreman"&&view==="home") {
@@ -801,7 +853,7 @@ export default function App() {
     // ADD TX
     if(user.role!=="manager"&&view==="add") return (
       <div style={D?{maxWidth:600}:{}}>
-        <div style={S.secTitle}>تسجيل معاملة جديدة</div>
+        <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:4}}><BackBtn to="home" label="رجوع"/><div style={S.secTitle}>تسجيل معاملة جديدة</div></div>
         {formOK?(
           <div style={{textAlign:"center",padding:60,color:"#34d399"}}><div style={{fontSize:60,marginBottom:12}}>✅</div><div style={{fontSize:20,fontWeight:800}}>تم التسجيل بنجاح!</div></div>
         ):(
@@ -1139,7 +1191,7 @@ export default function App() {
     // ALL TX
     if(user.role==="manager"&&view==="allTx") return (
       <div>
-        <div style={S.secTitle}>كل المعاملات</div>
+        <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:4}}>{!D&&<BackBtn/>}<div style={S.secTitle}>كل المعاملات</div></div>
         <div style={D?{display:"flex",gap:20}:{}}>
           <div style={D?{width:260,flexShrink:0}:{}}>
             <div style={S.filterCard}>
@@ -1163,7 +1215,7 @@ export default function App() {
     // PROJECTS
     if(user.role==="manager"&&view==="projects") return (
       <div style={D?{maxWidth:720}:{}}>
-        <div style={S.secTitle}>إدارة المشاريع</div>
+        <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:4}}>{!D&&<BackBtn/>}<div style={S.secTitle}>إدارة المشاريع</div></div>
         <div style={S.formCard}>
           <div style={S.fLbl}>اسم المشروع</div>
           <input style={S.inp} placeholder="مثال: برج الأمل" value={newProj.name} onChange={e=>setNewProj(p=>({...p,name:e.target.value}))}/>
@@ -1200,7 +1252,7 @@ export default function App() {
     // PROJECT REPORT
     if(user.role==="manager"&&view==="projReport") return (
       <div>
-        <div style={S.secTitle}>💰 الكشف المالي للمشاريع</div>
+        <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:4}}>{!D&&<BackBtn/>}<div style={S.secTitle}>💰 الكشف المالي للمشاريع</div></div>
         {!selProj ? (
           <div style={D?S.txGrid:{}}>{projs.map(p=>{
             const r=projRep(p,"",""); const pct=p.value?Math.min(100,Math.round(r.total/p.value*100)):0;
@@ -1267,7 +1319,7 @@ export default function App() {
     // COMPANY
     if(user.role==="manager"&&view==="company") return (
       <div>
-        <div style={S.secTitle}>🏢 الكشف المالي للشركة</div>
+        <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:4}}>{!D&&<BackBtn/>}<div style={S.secTitle}>🏢 الكشف المالي للشركة</div></div>
         <div style={S.filterCard}>
           <div style={S.fLbl}>رأس المال الكلي (دينار)</div>
           <input style={S.inp} type="number" placeholder={fmtD(compSet.capital||0)} value={compForm.capital??""} onChange={e=>setCompForm(f=>({...f,capital:e.target.value}))}/>
@@ -1322,7 +1374,7 @@ export default function App() {
     // OPENING BALANCES
     if(user.role==="manager"&&view==="opening") return (
       <div style={D?{maxWidth:900}:{}}>
-        <div style={S.secTitle}>⚖️ الأرصدة الافتتاحية</div>
+        <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:4}}>{!D&&<BackBtn/>}<div style={S.secTitle}>⚖️ الأرصدة الافتتاحية</div></div>
         <div style={{fontSize:13,color:"#6b7280",marginBottom:20,fontWeight:500}}>أدخل الأرصدة السابقة لكل شخص قبل بداية استخدام النظام</div>
         {OBok&&<div style={{color:"#34d399",fontSize:14,marginBottom:16,fontWeight:700}}>✅ تم الحفظ!</div>}
         <div style={D?S.empGrid:{}}>
@@ -1385,7 +1437,7 @@ export default function App() {
 
       return (
         <div>
-          <div style={S.secTitle}>📄 كشف الحسابات</div>
+          <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:4}}>{!D&&<BackBtn/>}<div style={S.secTitle}>📄 كشف الحسابات</div></div>
           <div style={D?{display:"flex",gap:20}:{}}>
             {/* فلاتر */}
             <div style={D?{width:300,flexShrink:0}:{}}>
@@ -1519,7 +1571,7 @@ export default function App() {
       return (
         <div>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16,flexWrap:"wrap",gap:8}}>
-            <div style={S.secTitle}>💵 الرواتب والأوفر تايم</div>
+            <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:4}}>{!D&&<BackBtn/>}<div style={S.secTitle}>💵 الرواتب والأوفر تايم</div></div>
             <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
               <select style={{...S.sel,width:"auto",padding:"8px 12px",fontSize:13}} value={salFilterMonth} onChange={e=>setSalFilterMonth(e.target.value)}>
                 <option value="">كل الأشهر</option>
@@ -2207,7 +2259,7 @@ export default function App() {
     if(user.role==="manager"&&view==="debts") return (
       <div>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
-          <div style={S.secTitle}>💳 قائمة الديون</div>
+          <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:4}}>{!D&&<BackBtn/>}<div style={S.secTitle}>💳 قائمة الديون</div></div>
           <button style={{...S.goldBtn,width:"auto",padding:"10px 20px",marginBottom:0,background:"linear-gradient(135deg,#C0392B,#A93226)",color:"#fff",fontSize:14}} onClick={()=>setShowDebtForm(v=>!v)}>
             {showDebtForm?"✕ إغلاق":"+ إضافة دين"}
           </button>
