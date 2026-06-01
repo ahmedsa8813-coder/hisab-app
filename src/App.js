@@ -1570,15 +1570,255 @@ export default function App() {
           {/* تبويبة المجمل */}
           {salTab==="summary"&&(
             <div>
-              {/* سعر الصرف */}
+              {/* سعر الصرف + زر الطباعة */}
               <div style={{...S.formCard,marginBottom:20,padding:16}}>
-                <div style={{display:"flex",alignItems:"center",gap:12,flexWrap:"wrap"}}>
-                  <div style={{fontSize:14,fontWeight:700,color:C.text}}>💱 سعر الصرف</div>
-                  <div style={{fontSize:13,color:C.textMd}}>1 دولار =</div>
-                  <input style={{...S.inp,width:160,padding:"8px 12px",fontSize:14,fontWeight:700}} type="number" placeholder={toAr(exchangeRate)} value={exchInput} onChange={e=>setExchInput(e.target.value)}/>
-                  <div style={{fontSize:13,color:C.textMd}}>دينار</div>
-                  <button style={{...S.goldBtn,width:"auto",padding:"8px 16px",marginBottom:0,fontSize:13}} onClick={saveExchangeRate}>💾 حفظ</button>
-                  <div style={{fontSize:12,color:C.textSm}}>الحالي: 1$ = {toAr(exchangeRate)} د.ع</div>
+                <div style={{display:"flex",alignItems:"center",gap:12,flexWrap:"wrap",justifyContent:"space-between"}}>
+                  <div style={{display:"flex",alignItems:"center",gap:12,flexWrap:"wrap"}}>
+                    <div style={{fontSize:14,fontWeight:700,color:C.text}}>💱 سعر الصرف</div>
+                    <div style={{fontSize:13,color:C.textMd}}>1 دولار =</div>
+                    <input style={{...S.inp,width:140,padding:"8px 12px",fontSize:14,fontWeight:700}} type="number" placeholder={toAr(exchangeRate)} value={exchInput} onChange={e=>setExchInput(e.target.value)}/>
+                    <div style={{fontSize:13,color:C.textMd}}>دينار</div>
+                    <button style={{...S.goldBtn,width:"auto",padding:"8px 16px",marginBottom:0,fontSize:13}} onClick={saveExchangeRate}>💾 حفظ</button>
+                    <div style={{fontSize:12,color:C.textSm}}>الحالي: 1$ = {toAr(exchangeRate)} د.ع</div>
+                  </div>
+                  <button style={{...S.goldBtn,width:"auto",padding:"10px 20px",marginBottom:0,fontSize:13,background:"linear-gradient(135deg,#1d4ed8,#1455cc)",color:"#fff"}}
+                    onClick={()=>{
+                      // PDF كشف الرواتب
+                      const period = salFilterMonth||"كل الأشهر";
+                      const totalDinarBase2=salaryEmployees.filter(e=>e.currency==="دينار"||!e.currency).reduce((s,e)=>s+e.baseSalary,0);
+                      const printDate = new Date().toLocaleDateString("ar-IQ");
+                      const printTime = new Date().toLocaleTimeString("ar-IQ",{hour:"2-digit",minute:"2-digit"});
+                      const fmtCell=(v,cur)=>toAr(v.toLocaleString("ar-IQ"))+" "+(cur==="دولار"?"$":"د.ع");
+                      const rows = salaryEmployees.map((e,idx)=>{
+                        const base=e.baseSalary||0;
+                        const ot=filtOt.filter(p=>p.employeeId===e.id).reduce((s,p)=>s+p.amount,0);
+                        const adv=filtAdv.filter(p=>p.employeeId===e.id).reduce((s,p)=>s+p.amount,0);
+                        const paid=filtPay.filter(p=>p.employeeId===e.id).reduce((s,p)=>s+p.amount,0);
+                        const total=base+ot;
+                        const totalRec=adv+paid;
+                        const rem=total-totalRec;
+                        const cur=e.currency||"دينار";
+                        const rowBg=idx%2===0?"#ffffff":"#f8fafc";
+                        return `<tr style="background:${rowBg}">
+                          <td style="text-align:right;font-weight:800;color:#1a1a2e;padding-right:14px">${e.name}</td>
+                          <td><span class="currency-badge">${cur==="دولار"?"🇺🇸 دولار":"🇮🇶 دينار"}</span></td>
+                          <td style="color:#374151;font-weight:600">${fmtCell(base,cur)}</td>
+                          <td style="color:#6B3FA0;font-weight:700">${ot>0?fmtCell(ot,cur):'<span style="color:#cbd5e1">—</span>'}</td>
+                          <td style="color:#1d4ed8;font-weight:900;background:#eff6ff">${fmtCell(total,cur)}</td>
+                          <td style="color:#b45309;font-weight:700">${adv>0?fmtCell(adv,cur):'<span style="color:#cbd5e1">—</span>'}</td>
+                          <td style="color:#1A7A4A;font-weight:700">${paid>0?fmtCell(paid,cur):'<span style="color:#cbd5e1">—</span>'}</td>
+                          <td style="color:#C17B2F;font-weight:900">${fmtCell(totalRec,cur)}</td>
+                          <td style="background:${rem>=0?"#f0fdf4":"#fef2f2"}"><span class="${rem>=0?"badge-g":"badge-r"}">${fmtCell(Math.abs(rem),cur)} ${rem<0?"⚠️":""}</span></td>
+                        </tr>`;
+                      }).join("");
+                      const html=`<!DOCTYPE html>
+<html dir="rtl" lang="ar">
+<head>
+<meta charset="UTF-8"/>
+<title>كشف رواتب — ${period}</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@400;700;800;900&display=swap');
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{font-family:'Tajawal',Tahoma,sans-serif;background:#fff;color:#1a1a2e;direction:rtl;font-size:13px}
+  .page{max-width:900px;margin:0 auto;padding:32px 36px}
+
+  /* الترويسة */
+  .header{border-bottom:3px solid #1d4ed8;padding-bottom:18px;margin-bottom:24px;display:flex;justify-content:space-between;align-items:flex-start}
+  .company-block{display:flex;align-items:center;gap:14px}
+  .logo-circle{width:56px;height:56px;border-radius:50%;background:linear-gradient(135deg,#1d4ed8,#3b82f6);display:flex;align-items:center;justify-content:center;color:#fff;font-size:24px;font-weight:900;flex-shrink:0}
+  .company-name{font-size:22px;font-weight:900;color:#1d4ed8;letter-spacing:-0.5px}
+  .company-sub{font-size:12px;color:#6b7280;margin-top:2px}
+  .doc-info{text-align:left;font-size:12px;color:#6b7280;line-height:1.8}
+  .doc-number{font-size:16px;font-weight:900;color:#1d4ed8;margin-bottom:4px}
+
+  /* عنوان الكشف */
+  .doc-title{background:linear-gradient(135deg,#1d4ed8,#2563eb);color:#fff;border-radius:12px;padding:16px 22px;margin-bottom:20px;display:flex;justify-content:space-between;align-items:center}
+  .doc-title h1{font-size:20px;font-weight:900;letter-spacing:-0.5px}
+  .doc-title .period{font-size:13px;opacity:0.85;margin-top:3px}
+  .doc-title .rate{font-size:12px;background:rgba(255,255,255,0.2);padding:4px 12px;border-radius:20px}
+
+  /* بطاقات الملخص */
+  .summary{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:24px}
+  .box{border:1px solid #e2e8f0;border-radius:10px;padding:12px 10px;text-align:center;background:#f8fafc}
+  .box-icon{font-size:20px;margin-bottom:4px}
+  .box-label{font-size:10px;color:#64748b;font-weight:700;margin-bottom:4px;line-height:1.3}
+  .box-val{font-size:14px;font-weight:900}
+  .box-cur{font-size:10px;color:#94a3b8}
+  .blue{color:#1d4ed8}.green{color:#1A7A4A}.red{color:#C0392B}.gold{color:#C17B2F}.purple{color:#6B3FA0}
+
+  /* الجدول */
+  .table-wrap{border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;margin-bottom:20px}
+  .table-title{background:#f1f5f9;padding:10px 16px;font-size:12px;font-weight:800;color:#1d4ed8;border-bottom:1px solid #e2e8f0;display:flex;justify-content:space-between}
+  table{width:100%;border-collapse:collapse;font-size:11.5px}
+  thead tr{background:#1d4ed8}
+  thead th{padding:10px 10px;color:#fff;font-weight:700;text-align:center;font-size:11px;white-space:nowrap}
+  thead th:first-child{text-align:right;padding-right:14px}
+  tbody tr:nth-child(even){background:#f8fafc}
+  tbody tr:hover{background:#eff6ff}
+  tbody td{padding:10px 10px;border-bottom:1px solid #f1f5f9;text-align:center;vertical-align:middle}
+  tbody td:first-child{text-align:right;font-weight:800;color:#1a1a2e;padding-right:14px}
+  tfoot tr{background:#dbeafe}
+  tfoot td{padding:11px 10px;font-weight:900;text-align:center;border-top:2px solid #1d4ed8;color:#1d4ed8;font-size:12px}
+  tfoot td:first-child{text-align:right;padding-right:14px;color:#1a1a2e}
+
+  /* باقي له */
+  .badge-g{background:#dcfce7;color:#166534;padding:3px 8px;border-radius:6px;font-size:10px;font-weight:800;white-space:nowrap}
+  .badge-r{background:#fee2e2;color:#991b1b;padding:3px 8px;border-radius:6px;font-size:10px;font-weight:800;white-space:nowrap}
+  .currency-badge{font-size:10px;background:#eff6ff;color:#1d4ed8;padding:2px 7px;border-radius:5px;font-weight:700}
+
+  /* التوقيعات */
+  .signatures{display:flex;justify-content:space-between;margin-top:30px;padding-top:20px;border-top:1px solid #e2e8f0}
+  .sig-box{text-align:center;width:160px}
+  .sig-line{border-top:1px solid #94a3b8;margin-bottom:8px;margin-top:40px}
+  .sig-label{font-size:11px;color:#64748b;font-weight:700}
+
+  /* التذييل */
+  .footer{margin-top:20px;padding-top:14px;border-top:2px solid #e2e8f0;display:flex;justify-content:space-between;align-items:center}
+  .footer-left{font-size:10px;color:#94a3b8}
+  .footer-right{font-size:10px;color:#94a3b8;text-align:left}
+  .footer-brand{font-size:12px;font-weight:900;color:#1d4ed8}
+
+  @media print{
+    body{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+    .page{padding:20px 24px}
+    thead tr{-webkit-print-color-adjust:exact}
+  }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <!-- الترويسة -->
+  <div class="header">
+    <div class="company-block">
+      <div class="logo-circle">⚡</div>
+      <div>
+        <div class="company-name">نظام حساب</div>
+        <div class="company-sub">إدارة الرواتب والموارد البشرية</div>
+      </div>
+    </div>
+    <div class="doc-info">
+      <div class="doc-number">كشف رواتب رقم #${toAr(new Date().getTime().toString().slice(-4))}</div>
+      <div>تاريخ الإصدار: ${printDate}</div>
+      <div>وقت الطباعة: ${printTime}</div>
+      <div>الفترة: ${period}</div>
+    </div>
+  </div>
+
+  <!-- عنوان الكشف -->
+  <div class="doc-title">
+    <div>
+      <h1>كشف رواتب الموظفين</h1>
+      <div class="period">الفترة المالية: ${period}</div>
+    </div>
+    <div class="rate">💱 1$ = ${toAr(exchangeRate)} د.ع</div>
+  </div>
+
+  <!-- بطاقات الملخص -->
+  <div class="summary">
+    <div class="box">
+      <div class="box-icon">🇮🇶</div>
+      <div class="box-label">رواتب الدينار الأساسية</div>
+      <div class="box-val blue">${toAr(totalDinarBase2.toLocaleString("ar-IQ"))}</div>
+      <div class="box-cur">دينار عراقي</div>
+    </div>
+    <div class="box">
+      <div class="box-icon">🇺🇸</div>
+      <div class="box-label">رواتب الدولار الأساسية</div>
+      <div class="box-val green">${toAr(totalDollarBase.toLocaleString("ar-IQ"))}</div>
+      <div class="box-cur">دولار أمريكي</div>
+    </div>
+    <div class="box">
+      <div class="box-icon">📊</div>
+      <div class="box-label">المجمل الكلي بالدينار</div>
+      <div class="box-val gold">${toAr(Math.round(totalDinarAll).toLocaleString("ar-IQ"))}</div>
+      <div class="box-cur">دينار عراقي</div>
+    </div>
+    <div class="box">
+      <div class="box-icon">✅</div>
+      <div class="box-label">إجمالي المدفوع دينار</div>
+      <div class="box-val red">${toAr((dinarPaid+dinarAdv+dinarOT).toLocaleString("ar-IQ"))}</div>
+      <div class="box-cur">دينار عراقي</div>
+    </div>
+    <div class="box">
+      <div class="box-icon">✅</div>
+      <div class="box-label">إجمالي المدفوع دولار</div>
+      <div class="box-val red">${toAr((dollarPaid+dollarAdv+dollarOT).toLocaleString("ar-IQ"))}</div>
+      <div class="box-cur">دولار أمريكي</div>
+    </div>
+  </div>
+
+  <!-- جدول الرواتب -->
+  <div class="table-wrap">
+    <div class="table-title">
+      <span>📋 تفصيل رواتب الموظفين — ${period}</span>
+      <span style="color:#64748b;font-weight:400">جميع المبالغ بالعملة المحددة لكل موظف</span>
+    </div>
+    <table>
+      <thead>
+        <tr>
+          <th style="width:14%">الموظف</th>
+          <th style="width:7%">العملة</th>
+          <th>الراتب الأساسي</th>
+          <th>الأوفر تايم</th>
+          <th>الإجمالي المستحق</th>
+          <th>السلف المستلمة</th>
+          <th>الرواتب المدفوعة</th>
+          <th>إجمالي المستلم</th>
+          <th>الباقي له</th>
+        </tr>
+      </thead>
+      <tbody>${rows}</tbody>
+      <tfoot>
+        <tr>
+          <td colspan="2">الإجمالي الكلي (دينار)</td>
+          <td>${toAr(totalDinarBase2.toLocaleString("ar-IQ"))} د.ع</td>
+          <td style="color:#6B3FA0">${toAr(dinarOT.toLocaleString("ar-IQ"))} د.ع</td>
+          <td>${toAr((totalDinarBase2+dinarOT).toLocaleString("ar-IQ"))} د.ع</td>
+          <td style="color:#b45309">${toAr(dinarAdv.toLocaleString("ar-IQ"))} د.ع</td>
+          <td style="color:#1A7A4A">${toAr(dinarPaid.toLocaleString("ar-IQ"))} د.ع</td>
+          <td style="color:#C17B2F">${toAr((dinarPaid+dinarAdv).toLocaleString("ar-IQ"))} د.ع</td>
+          <td>${toAr(Math.abs(totalDinarBase2+dinarOT-(dinarPaid+dinarAdv)).toLocaleString("ar-IQ"))} د.ع</td>
+        </tr>
+      </tfoot>
+    </table>
+  </div>
+
+  <!-- خانات التوقيع -->
+  <div class="signatures">
+    <div class="sig-box">
+      <div class="sig-line"></div>
+      <div class="sig-label">المدير المالي</div>
+    </div>
+    <div class="sig-box">
+      <div class="sig-line"></div>
+      <div class="sig-label">المحاسب المسؤول</div>
+    </div>
+    <div class="sig-box">
+      <div class="sig-line"></div>
+      <div class="sig-label">مدير الشركة</div>
+    </div>
+  </div>
+
+  <!-- التذييل -->
+  <div class="footer">
+    <div class="footer-left">
+      <div class="footer-brand">⚡ نظام حساب</div>
+      <div>نظام إدارة الرواتب والحسابات</div>
+    </div>
+    <div class="footer-right">
+      <div>تم الإصدار بتاريخ: ${printDate} الساعة ${printTime}</div>
+      <div>هذه الوثيقة صادرة إلكترونياً وتعتبر رسمية</div>
+    </div>
+  </div>
+
+</div>
+</body>
+</html>`;
+                      const w=window.open("","_blank");w.document.write(html);w.document.close();setTimeout(()=>w.print(),600);
+                    }}>
+                    🖨️ طباعة كشف الرواتب
+                  </button>
                 </div>
               </div>
 
