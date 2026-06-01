@@ -582,29 +582,7 @@ export default function App() {
         </div>
       </div>
 
-      {/* شريط تبديل القسم - للمدير فقط */}
-      {user.role==="manager"&&(
-        <div style={{background:C.bg2,borderBottom:`1px solid ${C.cardBorder}`,padding:"8px 20px",display:"flex",gap:6,alignItems:"center"}}>
-          <span style={{fontSize:11,color:C.textSm,fontWeight:700,marginLeft:8}}>القسم:</span>
-          <button onClick={()=>{setModule("finance");setView("home");}} style={{
-            padding:"8px 20px",borderRadius:10,border:"none",cursor:"pointer",
-            fontWeight:800,fontSize:13,transition:"all 0.2s",letterSpacing:-0.3,
-            background:module==="finance"?`linear-gradient(135deg,${C.gold},${C.goldD})`:"transparent",
-            color:module==="finance"?"#fff":C.textMd,
-            boxShadow:module==="finance"?C.shadow:"none",
-          }}>💰 المالية</button>
-          <button onClick={()=>{setModule("admin");setView("adminHome");}} style={{
-            padding:"8px 20px",borderRadius:10,border:"none",cursor:"pointer",
-            fontWeight:800,fontSize:13,transition:"all 0.2s",letterSpacing:-0.3,
-            background:module==="admin"?"linear-gradient(135deg,#2557A7,#1d4ed8)":"transparent",
-            color:module==="admin"?"#fff":C.textMd,
-            boxShadow:module==="admin"?C.shadow:"none",
-          }}>💼 الإدارة</button>
-          <div style={{marginRight:"auto",fontSize:11,color:C.textSm,fontWeight:600}}>
-            {module==="finance"?"الحسابات والماليات":"متابعة الأعمال والمشاريع"}
-          </div>
-        </div>
-      )}
+      {/* شريط تبديل القسم محذوف - انتقل للصفحة الرئيسية */}
 
       {D ? (
         <div style={{display:"flex",flex:1,overflow:"hidden"}}>
@@ -1003,7 +981,33 @@ export default function App() {
       const GF = generalFund();
       return (
         <div>
-          {/* الصندوق العام */}
+          {/* مبدّل القسم */}
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14,marginBottom:24}}>
+            <button onClick={()=>{setModule("finance");}} style={{
+              background:module==="finance"?`linear-gradient(135deg,${C.gold},${C.goldD})`:`${C.card}`,
+              border:module==="finance"?`2px solid ${C.gold}`:`2px solid ${C.cardBorder}`,
+              borderRadius:20,padding:"22px 20px",cursor:"pointer",textAlign:"right",
+              boxShadow:module==="finance"?`0 8px 24px rgba(193,123,47,0.25)`:C.shadow,
+              transition:"all 0.25s",
+            }}>
+              <div style={{fontSize:36,marginBottom:8}}>💰</div>
+              <div style={{fontWeight:900,fontSize:18,color:module==="finance"?"#fff":C.text,letterSpacing:-0.5}}>المالية</div>
+              <div style={{fontSize:12,color:module==="finance"?"rgba(255,255,255,0.85)":C.textSm,marginTop:4,fontWeight:600}}>الحسابات والأرصدة والمعاملات</div>
+              {module==="finance"&&<div style={{marginTop:10,background:"rgba(255,255,255,0.2)",borderRadius:8,padding:"4px 10px",fontSize:11,color:"#fff",fontWeight:700,display:"inline-block"}}>✓ نشط</div>}
+            </button>
+            <button onClick={()=>{setModule("admin");setView("adminHome");}} style={{
+              background:module==="admin"?"linear-gradient(135deg,#2557A7,#1d4ed8)":C.card,
+              border:module==="admin"?"2px solid #2557A7":`2px solid ${C.cardBorder}`,
+              borderRadius:20,padding:"22px 20px",cursor:"pointer",textAlign:"right",
+              boxShadow:module==="admin"?"0 8px 24px rgba(37,87,167,0.25)":C.shadow,
+              transition:"all 0.25s",
+            }}>
+              <div style={{fontSize:36,marginBottom:8}}>💼</div>
+              <div style={{fontWeight:900,fontSize:18,color:module==="admin"?"#fff":C.text,letterSpacing:-0.5}}>الإدارة</div>
+              <div style={{fontSize:12,color:module==="admin"?"rgba(255,255,255,0.85)":C.textSm,marginTop:4,fontWeight:600}}>متابعة المشاريع والموظفين</div>
+              {module==="admin"&&<div style={{marginTop:10,background:"rgba(255,255,255,0.2)",borderRadius:8,padding:"4px 10px",fontSize:11,color:"#fff",fontWeight:700,display:"inline-block"}}>✓ نشط</div>}
+            </button>
+          </div>
           <div style={S.secTitle}>الصندوق العام للشركة</div>
           <div style={D?{display:"flex",gap:12,marginBottom:20}:{marginBottom:20}}>
             {/* دينار */}
@@ -1084,7 +1088,7 @@ export default function App() {
             ))}
           </div>
 
-          {!D&&(
+          {!D&&module==="finance"&&(
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginTop:4}}>
               {[["📄 الكشوفات","statements","linear-gradient(135deg,#1A7A4A,#147A40)"],["📋 المعاملات","allTx","linear-gradient(135deg,#1d4ed8,#1455cc)"],["🏗️ المشاريع","projects","linear-gradient(135deg,#065f46,#047857)"],["💰 كشف المشاريع","projReport","linear-gradient(135deg,#b45309,#92400e)"],["🏢 كشف الشركة","company","linear-gradient(135deg,#7c3aed,#5b21b6)"],["💳 الديون","debts","linear-gradient(135deg,#C0392B,#A93226)"],["💵 الرواتب","salaries","linear-gradient(135deg,#1A7A4A,#0f5c36)"]].map(([l,v,bg])=>(
                 <button key={v} style={{...S.goldBtn,background:bg,color:"#fff",marginBottom:0}} onClick={()=>setView(v)}>{l}</button>
