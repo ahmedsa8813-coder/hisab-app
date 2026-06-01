@@ -67,6 +67,8 @@ export default function App() {
   const [pfFrom,  setPfFrom]  = useState("");
   const [pfTo,    setPfTo]    = useState("");
   const [viewImg, setViewImg] = useState(null);
+  const [editTx,  setEditTx]  = useState(null);
+  const [foremen, setForemen] = useState([]); // قائمة الفورمنية // المعاملة قيد التعديل
   const [OBform,  setOBform]  = useState({});
   const [OBok,    setOBok]    = useState(false);
   const [compForm,setCompForm]= useState({});
@@ -110,6 +112,7 @@ export default function App() {
     u.push(onSnapshot(query(collection(db,"overtimePayments"),orderBy("date","desc")), s => setOvertimePayments(s.docs.map(d=>({id:d.id,...d.data()})))));
     u.push(onSnapshot(query(collection(db,"salaryAdvances"),orderBy("date","desc")), s => setSalaryAdvances(s.docs.map(d=>({id:d.id,...d.data()})))));
     u.push(onSnapshot(query(collection(db,"workLogs"),orderBy("date","desc")), s => setWorkLogs(s.docs.map(d=>({id:d.id,...d.data()})))));
+    u.push(onSnapshot(collection(db,"foremen"), s => setForemen(s.docs.map(d=>({id:d.id,...d.data()})))));
     // تحميل سعر الصرف المحفوظ
     onSnapshot(doc(db,"settings","exchangeRate"), s => { if(s.exists()&&s.data().rate) setExchangeRate(s.data().rate); });
     return () => u.forEach(f=>f());
@@ -248,6 +251,24 @@ export default function App() {
 
   const delProj = async id=>{ if(window.confirm("تحذف المشروع؟")) await deleteDoc(doc(db,"projects",id)); };
   const delTx   = async id=>{ if(window.confirm("تحذف المعاملة؟")) await deleteDoc(doc(db,"transactions",id)); };
+
+  const saveTxEdit = async (id, updates) => {
+    await setDoc(doc(db,"transactions",id), updates, {merge:true});
+    setEditTx(null);
+  };
+
+  // الفورمنية
+  const addForeman = async (data) => {
+    await addDoc(collection(db,"foremen"), {
+      name: data.name.trim(),
+      projectId: data.projectId||"",
+      projectName: projs.find(p=>p.id===data.projectId)?.name||"",
+      phone: data.phone||"",
+      note: data.note||"",
+      createdAt: new Date().toISOString(),
+    });
+  };
+  const delForeman = async id => { if(window.confirm("تحذف هذا الفورمن؟")) await deleteDoc(doc(db,"foremen",id)); };
 
   const addDebt = async () => {
     if(!debtForm.name.trim()||!debtForm.amount) return;
@@ -530,7 +551,7 @@ export default function App() {
 
   const navMgr = module==="admin"
     ? [{icon:"🏠",label:"الرئيسية",v:"adminHome"},{icon:"🏗️",label:"المشاريع",v:"adminProjects"},{icon:"👷",label:"الموظفون",v:"adminEmployees"},{icon:"📋",label:"المهام",v:"adminTasks"},{icon:"📊",label:"التقارير",v:"adminReports"}]
-    : [{icon:"📊",label:"الملخص",v:"home"},{icon:"📄",label:"الكشوفات",v:"statements"},{icon:"📋",label:"المعاملات",v:"allTx"},{icon:"🏗️",label:"المشاريع",v:"projects"},{icon:"💰",label:"المالية",v:"projReport"},{icon:"🏢",label:"الشركة",v:"company"},{icon:"💳",label:"الديون",v:"debts"},{icon:"💵",label:"الرواتب",v:"salaries"},{icon:"⚖️",label:"افتتاحي",v:"opening"}];
+    : [{icon:"📊",label:"الملخص",v:"home"},{icon:"📄",label:"الكشوفات",v:"statements"},{icon:"📋",label:"المعاملات",v:"allTx"},{icon:"🏗️",label:"المشاريع",v:"projects"},{icon:"💰",label:"المالية",v:"projReport"},{icon:"🏢",label:"الشركة",v:"company"},{icon:"💳",label:"الديون",v:"debts"},{icon:"💵",label:"الرواتب",v:"salaries"},{icon:"👷",label:"الفورمنية",v:"foremen"},{icon:"⚖️",label:"افتتاحي",v:"opening"}];
   const navWorker = user?.role==="accountant"
     ? [{icon:"🏠",label:"الرئيسية",v:"home"},{icon:"➕",label:"استلام/سلفة",v:"add"},{icon:"💵",label:"الرواتب",v:"salaries"}]
     : user?.role==="foreman"
@@ -651,6 +672,7 @@ export default function App() {
   return (
     <div style={D?S.appWrapD:S.appWrap}>
       {viewImg&&<div style={S.overlay} onClick={()=>setViewImg(null)}><img src={viewImg} style={S.fullImg} alt="وصل"/></div>}
+      {editTx&&<EditTxModal tx={editTx} projs={projs} onSave={saveTxEdit} onClose={()=>setEditTx(null)} S={S} C={C} today={today}/>}
 
       {/* HEADER */}
       <div style={D?S.headerD:S.header}>
@@ -1282,7 +1304,7 @@ export default function App() {
               <div style={S.balSub}>{stB>=0?"متبقي معه":"عليه"}</div>
               <div style={S.balRow}><span style={S.balSt}>↓ استلم {fmt(stR,fuCur)}</span><span style={S.balSt}>↑ صرف {fmt(stS,fuCur)}</span></div>
             </div>
-            {stTxs.length===0?<div style={S.empty}>ما في معاملات</div>:<div style={D?S.txGrid:{}}>{stTxs.map(t=><TxCard key={t.id} t={t} onDelete={()=>delTx(t.id)} onImg={setViewImg}/>)}</div>}
+            {stTxs.length===0?<div style={S.empty}>ما في معاملات</div>:<div style={D?S.txGrid:{}}>{stTxs.map(t=><TxCard key={t.id} t={t} onDelete={()=>delTx(t.id)} onImg={setViewImg} onEdit={setEditTx}/>)}</div>}
             {!D&&<button style={S.canBtn} onClick={()=>setView("home")}>← رجوع</button>}
           </div>
         </div>
@@ -1306,7 +1328,7 @@ export default function App() {
           </div>
           <div style={{flex:1}}>
             <div style={{fontSize:13,color:"#6b7280",marginBottom:12}}>{toAr(allTxs.length)} معاملة</div>
-            {allTxs.length===0?<div style={S.empty}>ما في نتائج</div>:<div style={D?S.txGrid:{}}>{allTxs.map(t=><TxCard key={t.id} t={t} showUser onDelete={()=>delTx(t.id)} onImg={setViewImg}/>)}</div>}
+            {allTxs.length===0?<div style={S.empty}>ما في نتائج</div>:<div style={D?S.txGrid:{}}>{allTxs.map(t=><TxCard key={t.id} t={t} showUser onDelete={()=>delTx(t.id)} onImg={setViewImg} onEdit={setEditTx}/>)}</div>}
             {!D&&<button style={S.canBtn} onClick={()=>setView("home")}>← رجوع</button>}
           </div>
         </div>
@@ -1408,7 +1430,7 @@ export default function App() {
                     </div>
                   ))}
                   <div style={{...S.secTitle,fontSize:16,marginTop:24}}>تفاصيل المعاملات</div>
-                  <div style={D?S.txGrid:{}}>{pr.pt.map(t=><TxCard key={t.id} t={t} showUser onDelete={()=>delTx(t.id)} onImg={setViewImg}/>)}</div>
+                  <div style={D?S.txGrid:{}}>{pr.pt.map(t=><TxCard key={t.id} t={t} showUser onDelete={()=>delTx(t.id)} onImg={setViewImg} onEdit={setEditTx}/>)}</div>
                 </>}
               </div>
             </div>
@@ -1615,7 +1637,7 @@ export default function App() {
                   {stTxsAll.length===0?(
                     <div style={S.empty}>ما في معاملات بهذه الفلاتر</div>
                   ):(
-                    <div style={D?S.txGrid:{}}>{stTxsAll.map(t=><TxCard key={t.id} t={t} onDelete={()=>delTx(t.id)} onImg={setViewImg}/>)}</div>
+                    <div style={D?S.txGrid:{}}>{stTxsAll.map(t=><TxCard key={t.id} t={t} onDelete={()=>delTx(t.id)} onImg={setViewImg} onEdit={setEditTx}/>)}</div>
                   )}
                 </>
               )}
@@ -1642,6 +1664,8 @@ export default function App() {
         db={db}
         collection={collection}
         addDoc={addDoc}
+        setDoc={setDoc}
+        doc={doc}
       />;
     }
     // DEBTS
@@ -1988,11 +2012,165 @@ export default function App() {
       </div>
     );
 
+    // FOREMEN
+    if(user.role==="manager"&&view==="foremen") return (
+      <ForemenPage
+        D={D} foremen={foremen} projs={projs} txs={txs}
+        onAdd={addForeman} onDel={delForeman}
+        S={S} C={C} fmt={fmt} fmtD={fmtD} toAr={toAr} today={today}
+        BackBtn={BackBtn}
+      />
+    );
+
     return null;
   }
 }
 
-function SalariesPage({D,user,isManager,salaryEmployees,salaryPayments,salaryAdvances,overtimePayments,onBack,onDelEmployee,onDelPayment,S,C,fmt,fmtD,toAr,today,BackBtn,USERS,db,collection,addDoc}) {
+function ForemenPage({D,foremen,projs,txs,onAdd,onDel,S,C,fmt,fmtD,toAr,today,BackBtn}) {
+  const [showForm, setShowForm] = useState(false);
+  const [form, setForm]         = useState({name:"",projectId:"",phone:"",note:""});
+  const [selForeman, setSelForeman] = useState(null);
+  const [saving, setSaving]     = useState(false);
+
+  const save = async () => {
+    if(!form.name.trim()||saving) return;
+    setSaving(true);
+    await onAdd(form);
+    setSaving(false);
+    setForm({name:"",projectId:"",phone:"",note:""});
+    setShowForm(false);
+  };
+
+  // كشف حساب الفورمن
+  const foremanTxs = (foremanId) => txs.filter(t=>t.foremanId===foremanId||t.note?.includes(foremen.find(f=>f.id===foremanId)?.name||"NOMATCH"));
+
+  const getForemanStats = (f) => {
+    const proj = projs.find(p=>p.id===f.projectId);
+    // المبالغ المستلمة من أحمد (استلام في معاملات التحويل لهذا الفورمن)
+    const received = txs.filter(t=>t.foremanId===f.id&&t.type==="استلام").reduce((s,t)=>s+t.amount,0);
+    const spent    = txs.filter(t=>t.foremanId===f.id&&t.type==="صرف").reduce((s,t)=>s+t.amount,0);
+    return {proj, received, spent, balance: received-spent};
+  };
+
+  return (
+    <div>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20,flexWrap:"wrap",gap:10}}>
+        <div style={{display:"flex",alignItems:"center",gap:12}}>
+          <BackBtn/>
+          <div style={S.secTitle}>👷 الفورمنية</div>
+        </div>
+        <button style={{...S.goldBtn,width:"auto",padding:"9px 18px",marginBottom:0,fontSize:13}}
+          onClick={()=>setShowForm(v=>!v)}>
+          {showForm?"✕ إغلاق":"+ إضافة فورمن"}
+        </button>
+      </div>
+
+      {/* نموذج إضافة */}
+      {showForm&&(
+        <div style={{...S.formCard,marginBottom:20}}>
+          <div style={{fontWeight:800,fontSize:15,color:C.text,marginBottom:12}}>إضافة فورمن جديد</div>
+          <div style={D?{display:"flex",gap:12}:{}}>
+            <div style={D?{flex:2}:{}}>
+              <div style={S.fLbl}>اسم الفورمن</div>
+              <input style={S.inp} placeholder="مثال: علي محمد" value={form.name} onChange={e=>setForm(f=>({...f,name:e.target.value}))} autoFocus/>
+            </div>
+            <div style={D?{flex:2}:{}}>
+              <div style={S.fLbl}>المشروع المرتبط</div>
+              <select style={S.sel} value={form.projectId} onChange={e=>setForm(f=>({...f,projectId:e.target.value}))}>
+                <option value="">اختر المشروع</option>
+                {projs.map(p=><option key={p.id} value={p.id}>{p.name} — {p.specialization||p.spec}</option>)}
+              </select>
+            </div>
+            <div style={D?{flex:1}:{}}>
+              <div style={S.fLbl}>رقم الهاتف</div>
+              <input style={S.inp} placeholder="07x..." value={form.phone} onChange={e=>setForm(f=>({...f,phone:e.target.value}))}/>
+            </div>
+          </div>
+          <div style={S.fLbl}>ملاحظة</div>
+          <input style={S.inp} placeholder="اختياري..." value={form.note} onChange={e=>setForm(f=>({...f,note:e.target.value}))}/>
+          <button style={{...S.subBtn,opacity:saving?0.7:1}} onClick={save} disabled={saving}>
+            {saving?"جاري الحفظ...":"+ إضافة الفورمن"}
+          </button>
+        </div>
+      )}
+
+      {/* قائمة الفورمنية */}
+      {foremen.length===0&&!showForm?(
+        <div style={{...S.empty,background:C.card,borderRadius:20,border:`1px solid ${C.cardBorder}`,padding:40}}>
+          <div style={{fontSize:48,marginBottom:8}}>👷</div>
+          <div style={{fontWeight:700,color:C.textMd}}>ما في فورمنية مسجلين</div>
+        </div>
+      ):(
+        <div style={D?S.empGrid:{}}>
+          {foremen.map(f=>{
+            const stats = getForemanStats(f);
+            const proj  = projs.find(p=>p.id===f.projectId);
+            return (
+              <div key={f.id} style={{...S.txCard,marginBottom:14,cursor:"pointer",transition:"all 0.2s"}}
+                onClick={()=>setSelForeman(selForeman?.id===f.id?null:f)}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:10}}>
+                  <div style={{display:"flex",alignItems:"center",gap:10}}>
+                    <div style={{...S.av,width:44,height:44,fontSize:19,borderRadius:14,background:"linear-gradient(135deg,#b45309,#92400e)",flexShrink:0}}>{f.name[0]}</div>
+                    <div>
+                      <div style={{fontWeight:800,fontSize:16,color:C.text}}>{f.name}</div>
+                      {proj&&<div style={{fontSize:12,color:C.gold,marginTop:2,fontWeight:600}}>🏗️ {proj.name}</div>}
+                      {f.phone&&<div style={{fontSize:12,color:C.textSm,marginTop:1}}>📞 {f.phone}</div>}
+                    </div>
+                  </div>
+                  <button style={{background:"transparent",border:`1px solid rgba(192,57,43,0.2)`,borderRadius:8,padding:"4px 8px",color:C.red,fontSize:13,cursor:"pointer"}}
+                    onClick={e=>{e.stopPropagation();onDel(f.id);}}>🗑️</button>
+                </div>
+
+                {/* ملخص الحساب */}
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
+                  <div style={{background:"rgba(26,122,74,0.08)",borderRadius:10,padding:"8px 10px",textAlign:"center"}}>
+                    <div style={{fontSize:10,color:C.textSm,fontWeight:700,marginBottom:3}}>استلم</div>
+                    <div style={{fontSize:14,fontWeight:800,color:"#1A7A4A"}}>{fmtD(stats.received)}</div>
+                  </div>
+                  <div style={{background:"rgba(192,57,43,0.08)",borderRadius:10,padding:"8px 10px",textAlign:"center"}}>
+                    <div style={{fontSize:10,color:C.textSm,fontWeight:700,marginBottom:3}}>صرف</div>
+                    <div style={{fontSize:14,fontWeight:800,color:C.red}}>{fmtD(stats.spent)}</div>
+                  </div>
+                  <div style={{background:stats.balance>=0?"rgba(26,122,74,0.08)":"rgba(192,57,43,0.08)",borderRadius:10,padding:"8px 10px",textAlign:"center"}}>
+                    <div style={{fontSize:10,color:C.textSm,fontWeight:700,marginBottom:3}}>الرصيد</div>
+                    <div style={{fontSize:14,fontWeight:800,color:stats.balance>=0?"#1A7A4A":C.red}}>{fmtD(Math.abs(stats.balance))}</div>
+                  </div>
+                </div>
+
+                {f.note&&<div style={{fontSize:12,color:C.textSm,marginTop:8}}>📝 {f.note}</div>}
+
+                {/* تفاصيل المعاملات */}
+                {selForeman?.id===f.id&&(
+                  <div style={{marginTop:14,borderTop:`1px solid ${C.cardBorder}`,paddingTop:14}}>
+                    <div style={{fontWeight:800,fontSize:14,color:C.text,marginBottom:10}}>📋 كشف حساب الفورمن</div>
+                    {txs.filter(t=>t.foremanId===f.id).length===0?(
+                      <div style={{textAlign:"center",color:C.textSm,padding:16,fontSize:13}}>ما في معاملات مرتبطة بهذا الفورمن</div>
+                    ):txs.filter(t=>t.foremanId===f.id).map(t=>(
+                      <div key={t.id} style={{background:C.bg2,borderRadius:10,padding:"10px 12px",marginBottom:6,display:"flex",justifyContent:"space-between"}}>
+                        <div>
+                          <div style={{fontSize:13,fontWeight:700,color:C.text}}>{t.type}</div>
+                          <div style={{fontSize:11,color:C.textSm}}>📅 {t.date} {t.note&&`· ${t.note}`}</div>
+                        </div>
+                        <div style={{fontWeight:800,fontSize:14,color:t.type==="صرف"?C.red:"#1A7A4A"}}>{fmt(t.amount,t.currency)}</div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* تنبيه */}
+      <div style={{background:`rgba(37,87,167,0.06)`,border:`1px solid rgba(37,87,167,0.15)`,borderRadius:14,padding:"12px 16px",marginTop:16,fontSize:13,color:"#2557A7",fontWeight:600}}>
+        💡 لربط معاملة بفورمن: عند تسجيل المعاملة اختر "فورمن" من حقل التوجيه (قريباً)
+      </div>
+    </div>
+  );
+}
+
+function SalariesPage({D,user,isManager,salaryEmployees,salaryPayments,salaryAdvances,overtimePayments,onBack,onDelEmployee,onDelPayment,S,C,fmt,fmtD,toAr,today,BackBtn,USERS,db,collection,addDoc,setDoc,doc}) {
   const curMonth = new Date().toISOString().slice(0,7);
   const [payModal,    setPayModal]    = useState(null);
   const [payAmt,      setPayAmt]      = useState("");
@@ -2002,6 +2180,8 @@ function SalariesPage({D,user,isManager,salaryEmployees,salaryPayments,salaryAdv
   const [addEmpModal, setAddEmpModal] = useState(false);
   const [newEmp,      setNewEmp]      = useState({name:"",baseSalary:"",currency:"دينار",note:""});
   const [saving,      setSaving]      = useState(false);
+  const [exchRate,    setExchRate]    = useState(1520);
+  const [exchInput,   setExchInput]   = useState("");
 
   // حسابات لكل موظف
   const empData = salaryEmployees.map(e=>{
@@ -2014,12 +2194,24 @@ function SalariesPage({D,user,isManager,salaryEmployees,salaryPayments,salaryAdv
     const due     = e.baseSalary + totalOT;
     const received= totalAdv + totalPay;
     const remaining=due - received;
-    return{...e,totalAdv,totalPay,totalOT,due,received,remaining};
+    // تحويل للدينار
+    const rate    = e.currency==="دولار"?exchRate:1;
+    const dueD    = due*rate;
+    const receivedD=received*rate;
+    const remainingD=remaining*rate;
+    return{...e,totalAdv,totalPay,totalOT,due,received,remaining,dueD,receivedD,remainingD,rate};
   });
 
-  const totalDue  = empData.filter(e=>e.currency==="دينار"||!e.currency).reduce((s,e)=>s+e.due,0);
-  const totalPaid = empData.filter(e=>e.currency==="دينار"||!e.currency).reduce((s,e)=>s+e.received,0);
-  const totalRem  = totalDue - totalPaid;
+  // مجاميع موحدة بالدينار
+  const grandDue  = empData.reduce((s,e)=>s+e.dueD,0);
+  const grandPaid = empData.reduce((s,e)=>s+e.receivedD,0);
+  const grandRem  = grandDue - grandPaid;
+
+  // فصل دينار ودولار للعرض
+  const totalDinDue  = empData.filter(e=>e.currency==="دينار"||!e.currency).reduce((s,e)=>s+e.due,0);
+  const totalDolDue  = empData.filter(e=>e.currency==="دولار").reduce((s,e)=>s+e.due,0);
+  const totalDinPaid = empData.filter(e=>e.currency==="دينار"||!e.currency).reduce((s,e)=>s+e.received,0);
+  const totalDolPaid = empData.filter(e=>e.currency==="دولار").reduce((s,e)=>s+e.received,0);
 
   const doPaySalary = async () => {
     if(!payModal||!payAmt||!payDate||saving) return;
@@ -2074,18 +2266,42 @@ function SalariesPage({D,user,isManager,salaryEmployees,salaryPayments,salaryAdv
         )}
       </div>
 
+      {/* سعر الصرف */}
+      <div style={{...S.filterCard,padding:"12px 16px",marginBottom:16,display:"flex",alignItems:"center",gap:12,flexWrap:"wrap"}}>
+        <span style={{fontSize:13,fontWeight:700,color:C.text}}>💱 سعر الصرف:</span>
+        <span style={{fontSize:13,color:C.textMd}}>1$ =</span>
+        <input style={{...S.inp,width:120,padding:"7px 12px",fontSize:14,fontWeight:700,textAlign:"center"}}
+          type="number" value={exchInput} placeholder={toAr(exchRate)}
+          onChange={e=>setExchInput(e.target.value)}/>
+        <span style={{fontSize:13,color:C.textMd}}>دينار</span>
+        <button style={{...S.goldBtn,width:"auto",padding:"8px 16px",marginBottom:0,fontSize:13}}
+          onClick={()=>{if(exchInput&&Number(exchInput)>0){setExchRate(Number(exchInput));setExchInput("");}}}>
+          حفظ
+        </button>
+        <span style={{fontSize:12,color:C.textSm,marginRight:"auto"}}>الحالي: 1$ = {toAr(exchRate)} د.ع</span>
+      </div>
+
       {/* ملخص */}
-      <div style={{display:"grid",gridTemplateColumns:D?"repeat(3,1fr)":"1fr 1fr",gap:12,marginBottom:24}}>
-        {[
-          ["إجمالي المستحق",totalDue,"linear-gradient(135deg,#1d4ed8,#2563eb)"],
-          ["إجمالي المدفوع",totalPaid,"linear-gradient(135deg,#C0392B,#A93226)"],
-          ["الباقي المستحق",totalRem,"linear-gradient(135deg,#065f46,#047857)"],
-        ].map(([l,v,bg],i)=>(
-          <div key={i} style={{background:bg,borderRadius:16,padding:"16px 18px",boxShadow:C.shadowMd,gridColumn:D?"auto":i===2?"1/-1":"auto"}}>
-            <div style={{fontSize:11,color:"rgba(255,255,255,0.8)",fontWeight:700,marginBottom:6}}>{l}</div>
-            <div style={{fontSize:22,fontWeight:900,color:"#fff",letterSpacing:-0.5}}>{fmtD(Math.abs(v))}</div>
+      <div style={{display:"grid",gridTemplateColumns:D?"repeat(3,1fr)":"1fr",gap:12,marginBottom:24}}>
+        {/* المجمل الكلي بالدينار */}
+        <div style={{background:"linear-gradient(135deg,#1e3a5f,#1d4ed8)",borderRadius:16,padding:"16px 18px",boxShadow:C.shadowMd,gridColumn:D?"auto":"1/-1"}}>
+          <div style={{fontSize:11,color:"rgba(255,255,255,0.8)",fontWeight:700,marginBottom:4}}>📊 إجمالي المستحق (موحد بالدينار)</div>
+          <div style={{fontSize:26,fontWeight:900,color:"#fff",letterSpacing:-1,marginBottom:8}}>{fmtD(Math.round(grandDue))}</div>
+          <div style={{display:"flex",gap:12,fontSize:11,color:"rgba(255,255,255,0.7)"}}>
+            <span>🇮🇶 {fmtD(totalDinDue)}</span>
+            <span>+ 🇺🇸 ${toAr(totalDolDue)} × {toAr(exchRate)}</span>
           </div>
-        ))}
+        </div>
+        <div style={{background:"linear-gradient(135deg,#C0392B,#A93226)",borderRadius:16,padding:"16px 18px",boxShadow:C.shadowMd}}>
+          <div style={{fontSize:11,color:"rgba(255,255,255,0.8)",fontWeight:700,marginBottom:4}}>✅ إجمالي المدفوع</div>
+          <div style={{fontSize:22,fontWeight:900,color:"#fff",letterSpacing:-0.5}}>{fmtD(Math.round(grandPaid))}</div>
+          <div style={{fontSize:11,color:"rgba(255,255,255,0.7)",marginTop:4}}>🇮🇶 {fmtD(totalDinPaid)} + 🇺🇸 ${toAr(totalDolPaid)}</div>
+        </div>
+        <div style={{background:grandRem>0?"linear-gradient(135deg,#065f46,#047857)":"linear-gradient(135deg,#374151,#1f2937)",borderRadius:16,padding:"16px 18px",boxShadow:C.shadowMd}}>
+          <div style={{fontSize:11,color:"rgba(255,255,255,0.8)",fontWeight:700,marginBottom:4}}>🔴 الباقي المستحق</div>
+          <div style={{fontSize:22,fontWeight:900,color:"#fff",letterSpacing:-0.5}}>{fmtD(Math.round(Math.abs(grandRem)))}</div>
+          <div style={{fontSize:11,color:"rgba(255,255,255,0.7)",marginTop:4}}>{grandRem>0?"يستحق الصرف":"مكتمل ✅"}</div>
+        </div>
       </div>
 
       {/* جدول الموظفين */}
@@ -2555,6 +2771,62 @@ function ForemanOTForm({employees, onSubmit}) {
   );
 }
 
+function EditTxModal({tx, projs, onSave, onClose, S, C, today}) {
+  const [amount, setAmount] = useState(String(tx.amount));
+  const [date,   setDate]   = useState(tx.date);
+  const [note,   setNote]   = useState(tx.note||"");
+  const [projId, setProjId] = useState(tx.projectId||"");
+  const [saving, setSaving] = useState(false);
+
+  const save = async () => {
+    if(!amount||!date||saving) return;
+    setSaving(true);
+    const proj = projs.find(p=>p.id===projId);
+    await onSave(tx.id, {
+      amount: Number(amount),
+      date,
+      note,
+      projectId: projId||"",
+      projectName: proj?`${proj.name} - ${proj.specialization||proj.spec} - ${proj.province}`:tx.projectName||"",
+    });
+  };
+
+  return (
+    <div style={{position:"fixed",inset:0,background:"rgba(44,24,16,0.5)",zIndex:500,display:"flex",alignItems:"center",justifyContent:"center",padding:16}} onClick={onClose}>
+      <div style={{background:"#fff",borderRadius:20,padding:22,width:"100%",maxWidth:420,boxShadow:"0 20px 60px rgba(0,0,0,0.2)"}} onClick={e=>e.stopPropagation()}>
+        <div style={{fontWeight:900,fontSize:17,color:C.text,marginBottom:4}}>✏️ تعديل المعاملة</div>
+        <div style={{fontSize:12,color:C.textSm,marginBottom:16}}>
+          {tx.type} — {tx.userName} — {tx.currency||"دينار"}
+        </div>
+
+        {!tx.isPersonal&&projs.length>0&&(<>
+          <div style={S.fLbl}>المشروع</div>
+          <select style={S.sel} value={projId} onChange={e=>setProjId(e.target.value)}>
+            <option value="">بدون مشروع</option>
+            {projs.map(p=><option key={p.id} value={p.id}>{p.name} - {p.specialization||p.spec}</option>)}
+          </select>
+        </>)}
+
+        <div style={S.fLbl}>المبلغ</div>
+        <input style={{...S.inp,fontSize:18,fontWeight:800,textAlign:"center"}} type="number" value={amount} onChange={e=>setAmount(e.target.value)} autoFocus/>
+
+        <div style={S.fLbl}>التاريخ</div>
+        <input style={S.inp} type="date" value={date} onChange={e=>setDate(e.target.value)}/>
+
+        <div style={S.fLbl}>ملاحظة</div>
+        <textarea style={{...S.ta,rows:2}} value={note} onChange={e=>setNote(e.target.value)} rows={2} placeholder="ملاحظات..."/>
+
+        <div style={{display:"flex",gap:10,marginTop:16}}>
+          <button style={{...S.subBtn,flex:2,margin:0,padding:14,opacity:saving?0.7:1}} onClick={save} disabled={saving}>
+            {saving?"جاري الحفظ...":"💾 حفظ التعديل"}
+          </button>
+          <button style={{...S.canBtn,flex:1,margin:0,padding:14}} onClick={onClose}>إلغاء</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function PayDebtRow({debt, onPay}){
   const [amt,setAmt]=useState("");
   const [paying,setPaying]=useState(false);
@@ -2574,28 +2846,34 @@ function PayDebtRow({debt, onPay}){
   );
 }
 
-function TxCard({t,showUser,onDelete,onImg}){
+function TxCard({t,showUser,onDelete,onImg,onEdit}){
   const sp=t.type==="صرف";
+  const ar=n=>String(n).replace(/\d/g,d=>"٠١٢٣٤٥٦٧٨٩"[d]);
   return(
     <div style={{background:"#fff",border:"1px solid #E2D9CC",borderRadius:14,padding:"14px 16px",boxShadow:"0 2px 8px rgba(44,24,16,0.06)",marginBottom:10}}>
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
-        <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:8}}>
+        <div style={{display:"flex",gap:5,alignItems:"center",flexWrap:"wrap",flex:1}}>
           <span style={{borderRadius:8,padding:"4px 12px",fontSize:12,fontWeight:700,background:sp?"rgba(192,57,43,0.1)":"rgba(26,122,74,0.1)",color:sp?"#C0392B":"#1A7A4A",border:`1px solid ${sp?"rgba(192,57,43,0.2)":"rgba(26,122,74,0.2)"}`}}>{t.type}</span>
           {t.isPersonal&&<span style={{borderRadius:8,padding:"4px 10px",fontSize:11,fontWeight:700,background:"rgba(107,63,160,0.1)",color:"#6B3FA0",border:"1px solid rgba(107,63,160,0.2)"}}>👤 شخصي</span>}
-          <span style={{borderRadius:8,padding:"4px 10px",fontSize:11,background:"#F5F0E8",color:"#9B846D",border:"1px solid #E2D9CC"}}>{t.currency||"دينار"}</span>
-          {t.isGeneral&&<span style={{borderRadius:8,padding:"4px 10px",fontSize:11,background:"rgba(193,123,47,0.1)",color:C.gold,border:`1px solid rgba(193,123,47,0.2)`}}>📝 عام</span>}
+          {t.isGeneral&&<span style={{borderRadius:8,padding:"4px 10px",fontSize:11,background:"rgba(193,123,47,0.1)",color:"#C17B2F",border:"1px solid rgba(193,123,47,0.2)"}}>📝 عام</span>}
           {t.isAdvance&&<span style={{borderRadius:8,padding:"4px 10px",fontSize:11,background:"rgba(26,122,74,0.1)",color:"#1A7A4A",border:"1px solid rgba(26,122,74,0.2)"}}>💸 سلفة</span>}
+          <span style={{borderRadius:8,padding:"4px 10px",fontSize:11,background:"#F5F0E8",color:"#9B846D",border:"1px solid #E2D9CC"}}>{t.currency||"دينار"}</span>
         </div>
-        <div style={{fontSize:17,fontWeight:900,color:sp?"#C0392B":"#1A7A4A",letterSpacing:-0.5}}>
-          {sp?"-":"+"}{String(Number(t.amount).toLocaleString("ar-IQ")).replace(/\d/g,d=>"٠١٢٣٤٥٦٧٨٩"[d])} {t.currency==="دولار"?"$":"د.ع"}
+        <div style={{fontSize:17,fontWeight:900,color:sp?"#C0392B":"#1A7A4A",letterSpacing:-0.5,flexShrink:0,marginRight:8}}>
+          {sp?"-":"+"}{ar(Number(t.amount).toLocaleString("ar-IQ"))} {t.currency==="دولار"?"$":"د.ع"}
         </div>
       </div>
       {showUser&&<div style={{fontSize:12,color:"#C17B2F",fontWeight:700,marginBottom:3}}>{t.userName}</div>}
-      {t.projectName&&<div style={{fontSize:13,color:"#6B5744"}}>{t.projectName}</div>}
-      <div style={{fontSize:12,color:"#9B846D",marginTop:4}}>📅 {t.date}</div>
+      {t.projectName&&<div style={{fontSize:13,color:"#6B5744",marginBottom:2}}>{t.projectName}</div>}
+      <div style={{fontSize:12,color:"#9B846D"}}>📅 {t.date}</div>
       {t.note&&<div style={{fontSize:13,color:"#2C1810",marginTop:8,background:"#F5F0E8",borderRadius:10,padding:"8px 12px",border:"1px solid #E2D9CC"}}>{t.note}</div>}
       {t.image&&<img src={t.image} style={{width:"100%",maxHeight:180,objectFit:"cover",borderRadius:12,marginTop:10,cursor:"pointer"}} alt="وصل" onClick={()=>onImg&&onImg(t.image)}/>}
-      {onDelete&&<button style={{marginTop:10,background:"rgba(192,57,43,0.06)",border:"1px solid rgba(192,57,43,0.15)",borderRadius:8,padding:"7px 14px",color:"#C0392B",fontSize:12,cursor:"pointer"}} onClick={onDelete}>🗑️ حذف</button>}
+      {(onDelete||onEdit)&&(
+        <div style={{display:"flex",gap:6,marginTop:10}}>
+          {onEdit&&<button style={{flex:1,background:"rgba(37,87,167,0.06)",border:"1px solid rgba(37,87,167,0.2)",borderRadius:8,padding:"7px 0",color:"#2557A7",fontSize:12,fontWeight:700,cursor:"pointer"}} onClick={()=>onEdit(t)}>✏️ تعديل</button>}
+          {onDelete&&<button style={{flex:1,background:"rgba(192,57,43,0.06)",border:"1px solid rgba(192,57,43,0.15)",borderRadius:8,padding:"7px 0",color:"#C0392B",fontSize:12,fontWeight:700,cursor:"pointer"}} onClick={onDelete}>🗑️ حذف</button>}
+        </div>
+      )}
     </div>
   );
 }
