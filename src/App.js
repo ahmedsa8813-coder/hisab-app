@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useRef } from "react";
 import { db } from "./firebase";
 import { collection, addDoc, onSnapshot, query, orderBy, deleteDoc, doc, setDoc } from "firebase/firestore";
@@ -97,35 +98,47 @@ export default function App() {
 
   const addTx = async () => {
     if(!form.amount||!form.date)return;
-    // السلفة والشخصي ما تحتاج مشروع، الباقي يحتاج
     if(!form.isPersonal&&!form.isAdvance&&!form.projectId)return;
+    // السلفة للمشروع تحتاج مشروع
+    if(form.isAdvance&&!form.advanceIsPersonal&&!form.projectId)return;
+    if(form.isAdvance&&!form.advanceTo)return;
+
     const p=projs.find(p=>p.id===form.projectId);
     const projName=p?`${p.name} - ${p.spec||p.specialization} - ${p.province}`:"";
     const amt=Number(form.amount);
 
-    // لو سلفة: سجل صرف على أحمد + استلام على الشخص الآخر
     if(form.isAdvance&&form.advanceTo){
       const receiver=USERS.find(u=>u.id===form.advanceTo);
-      // صرف من أحمد
+      const isPersonalAdv = form.advanceIsPersonal;
+
+      // صرف من أحمد (دائماً بدون مشروع من جهته)
       await addDoc(collection(db,"transactions"),{
         userId:user.id, userName:user.name,
         projectId:"", projectName:"",
         type:"صرف", amount:amt,
-        currency:form.currency, note:`سلفة إلى ${receiver?.name||""}${form.note?" — "+form.note:""}`,
+        currency:form.currency,
+        note:`${isPersonalAdv?"سلفة شخصية":"دفعة مشروع"} إلى ${receiver?.name||""}${p?" — "+p.name:""}${form.note?" — "+form.note:""}`,
         date:form.date, image:null, isPersonal:false, isAdvance:true,
         advanceTo:form.advanceTo, advanceToName:receiver?.name||"",
+        advanceIsPersonal:isPersonalAdv,
         createdAt:new Date().toISOString(),
       });
-      // استلام للشخص الآخر
+
+      // على الشخص الآخر: إما استلام مشروع أو استلام شخصي
       await addDoc(collection(db,"transactions"),{
         userId:form.advanceTo, userName:receiver?.name||"",
-        projectId:"", projectName:"",
+        projectId:isPersonalAdv?"":form.projectId,
+        projectName:isPersonalAdv?"":projName,
         type:"استلام", amount:amt,
-        currency:form.currency, note:`سلفة من أحمد${form.note?" — "+form.note:""}`,
-        date:form.date, image:null, isPersonal:false, isAdvance:true,
+        currency:form.currency,
+        note:`${isPersonalAdv?"سلفة شخصية من أحمد":"استلام دفعة مشروع من أحمد"}${form.note?" — "+form.note:""}`,
+        date:form.date, image:null,
+        isPersonal:isPersonalAdv,
+        isAdvance:true,
         advanceFrom:user.id, advanceFromName:user.name,
         createdAt:new Date().toISOString(),
       });
+
     } else {
       await addDoc(collection(db,"transactions"),{
         userId:user.id, userName:user.name,
@@ -136,10 +149,11 @@ export default function App() {
         createdAt:new Date().toISOString(),
       });
     }
+
     setFormOK(true);
     setTimeout(()=>{
       setFormOK(false);
-      setForm({type:"استلام",projectId:"",amount:"",currency:"دينار",note:"",date:today(),image:null,isPersonal:false,isAdvance:false,advanceTo:""});
+      setForm({type:"استلام",projectId:"",amount:"",currency:"دينار",note:"",date:today(),image:null,isPersonal:false,isAdvance:false,advanceTo:"",advanceIsPersonal:false});
       setView("home");
     },1500);
   };
@@ -483,9 +497,41 @@ export default function App() {
                         </button>
                       ))}
                     </div>
-                    <div style={{background:"rgba(193,123,47,0.08)",border:`1px solid rgba(193,123,47,0.2)`,borderRadius:10,padding:"10px 14px",marginTop:8,fontSize:13,color:C.gold,fontWeight:600}}>
-                      💡 السلفة ستنقص من رصيدك وتضاف لرصيد الشخص تلقائياً
-                    </div>
+
+                    {form.advanceTo&&(
+                      <>
+                        <div style={S.fLbl}>نوع الدفعة</div>
+                        <div style={S.tRow}>
+                          <button style={{...S.tBtn,...(!form.advanceIsPersonal?{background:"rgba(37,87,167,0.15)",border:`1px solid #2557A7`,color:"#2557A7"}:{})}}
+                            onClick={()=>setForm(f=>({...f,advanceIsPersonal:false}))}>
+                            🏗️ للمشروع
+                          </button>
+                          <button style={{...S.tBtn,...(form.advanceIsPersonal?{background:"rgba(107,63,160,0.15)",border:`1px solid #6B3FA0`,color:"#6B3FA0"}:{})}}
+                            onClick={()=>setForm(f=>({...f,advanceIsPersonal:true,projectId:""}))}>
+                            👤 شخصي
+                          </button>
+                        </div>
+
+                        {!form.advanceIsPersonal&&(
+                          <>
+                            <div style={S.fLbl}>المشروع</div>
+                            <select style={S.sel} value={form.projectId} onChange={e=>setForm(f=>({...f,projectId:e.target.value}))}>
+                              <option value="">اختر المشروع</option>
+                              {projs.map(p=><option key={p.id} value={p.id}>{p.name} - {p.spec||p.specialization} - {p.province}</option>)}
+                            </select>
+                            <div style={{background:"rgba(37,87,167,0.08)",border:`1px solid rgba(37,87,167,0.2)`,borderRadius:10,padding:"10px 14px",marginTop:8,fontSize:13,color:"#2557A7",fontWeight:600}}>
+                              💡 ستتسجل كمصروف مشروع باسم {USERS.find(u=>u.id===form.advanceTo)?.name}
+                            </div>
+                          </>
+                        )}
+
+                        {form.advanceIsPersonal&&(
+                          <div style={{background:"rgba(107,63,160,0.08)",border:`1px solid rgba(107,63,160,0.2)`,borderRadius:10,padding:"10px 14px",marginTop:8,fontSize:13,color:"#6B3FA0",fontWeight:600}}>
+                            💡 ستتسجل كسلفة شخصية على {USERS.find(u=>u.id===form.advanceTo)?.name}
+                          </div>
+                        )}
+                      </>
+                    )}
                   </>
                 )}
 
