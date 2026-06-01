@@ -98,14 +98,28 @@ export default function App() {
 
   const addTx = async () => {
     if(!form.amount||!form.date)return;
-    if(!form.isPersonal&&!form.isAdvance&&!form.projectId)return;
-    // السلفة للمشروع تحتاج مشروع
+    // التحقق حسب النوع
+    if(!form.isPersonal&&!form.isAdvance){
+      if(user.role==="accountant"){
+        // أحمد يستلم: مشروع يحتاج projectId، عام يحتاج generalLabel
+        if(form.receiveType==="project"&&!form.projectId)return;
+        if(form.receiveType==="general"&&!form.generalLabel?.trim())return;
+        if(!form.receiveType)return;
+      } else {
+        if(!form.projectId)return;
+      }
+    }
     if(form.isAdvance&&!form.advanceIsPersonal&&!form.projectId)return;
     if(form.isAdvance&&!form.advanceTo)return;
 
     const p=projs.find(p=>p.id===form.projectId);
     const projName=p?`${p.name} - ${p.spec||p.specialization} - ${p.province}`:"";
     const amt=Number(form.amount);
+
+    // تحديد اسم المشروع أو البند
+    const displayName = form.receiveType==="general"
+      ? form.generalLabel?.trim()||""
+      : projName;
 
     if(form.isAdvance&&form.advanceTo){
       const receiver=USERS.find(u=>u.id===form.advanceTo);
@@ -142,10 +156,13 @@ export default function App() {
     } else {
       await addDoc(collection(db,"transactions"),{
         userId:user.id, userName:user.name,
-        projectId:form.projectId||"", projectName:projName,
+        projectId:form.receiveType==="general"?"":form.projectId||"",
+        projectName:displayName,
         type:form.type, amount:amt,
         currency:form.currency, note:form.note, date:form.date,
         image:form.image||null, isPersonal:form.isPersonal||false, isAdvance:false,
+        isGeneral:form.receiveType==="general",
+        generalLabel:form.generalLabel||"",
         createdAt:new Date().toISOString(),
       });
     }
@@ -153,7 +170,7 @@ export default function App() {
     setFormOK(true);
     setTimeout(()=>{
       setFormOK(false);
-      setForm({type:"استلام",projectId:"",amount:"",currency:"دينار",note:"",date:today(),image:null,isPersonal:false,isAdvance:false,advanceTo:"",advanceIsPersonal:false});
+      setForm({type:"استلام",projectId:"",amount:"",currency:"دينار",note:"",date:today(),image:null,isPersonal:false,isAdvance:false,advanceTo:"",advanceIsPersonal:false,receiveType:"",generalLabel:""});
       setView("home");
     },1500);
   };
@@ -537,11 +554,34 @@ export default function App() {
 
                 {!form.isAdvance&&(
                   <>
-                    <div style={S.fLbl}>المشروع</div>
-                    <select style={S.sel} value={form.projectId} onChange={e=>setForm(f=>({...f,projectId:e.target.value}))}>
-                      <option value="">اختر المشروع</option>
-                      {projs.map(p=><option key={p.id} value={p.id}>{p.name} - {p.spec||p.specialization} - {p.province}</option>)}
-                    </select>
+                    <div style={S.fLbl}>نوع الاستلام</div>
+                    <div style={S.tRow}>
+                      <button style={{...S.tBtn,...(form.receiveType==="project"?{background:"rgba(26,122,74,0.15)",border:`1px solid #1A7A4A`,color:"#1A7A4A"}:{})}}
+                        onClick={()=>setForm(f=>({...f,receiveType:"project",generalLabel:""}))}>
+                        🏗️ من مشروع
+                      </button>
+                      <button style={{...S.tBtn,...(form.receiveType==="general"?{background:"rgba(193,123,47,0.15)",border:`1px solid ${C.gold}`,color:C.gold}:{})}}
+                        onClick={()=>setForm(f=>({...f,receiveType:"general",projectId:""}))}>
+                        📝 عام (بند حر)
+                      </button>
+                    </div>
+
+                    {form.receiveType==="project"&&(
+                      <>
+                        <div style={S.fLbl}>المشروع</div>
+                        <select style={S.sel} value={form.projectId} onChange={e=>setForm(f=>({...f,projectId:e.target.value}))}>
+                          <option value="">اختر المشروع</option>
+                          {projs.map(p=><option key={p.id} value={p.id}>{p.name} - {p.spec||p.specialization} - {p.province}</option>)}
+                        </select>
+                      </>
+                    )}
+
+                    {form.receiveType==="general"&&(
+                      <>
+                        <div style={S.fLbl}>اسم البند</div>
+                        <input style={S.inp} placeholder="مثال: دفعة عميل، إيجار، تحصيل..." value={form.generalLabel||""} onChange={e=>setForm(f=>({...f,generalLabel:e.target.value}))}/>
+                      </>
+                    )}
                   </>
                 )}
               </>
@@ -1222,6 +1262,8 @@ function TxCard({t,showUser,onDelete,onImg}){
           <span style={{borderRadius:8,padding:"4px 12px",fontSize:12,fontWeight:700,background:sp?"rgba(192,57,43,0.1)":"rgba(26,122,74,0.1)",color:sp?"#C0392B":"#1A7A4A",border:`1px solid ${sp?"rgba(192,57,43,0.2)":"rgba(26,122,74,0.2)"}`}}>{t.type}</span>
           {t.isPersonal&&<span style={{borderRadius:8,padding:"4px 10px",fontSize:11,fontWeight:700,background:"rgba(107,63,160,0.1)",color:"#6B3FA0",border:"1px solid rgba(107,63,160,0.2)"}}>👤 شخصي</span>}
           <span style={{borderRadius:8,padding:"4px 10px",fontSize:11,background:"#F5F0E8",color:"#9B846D",border:"1px solid #E2D9CC"}}>{t.currency||"دينار"}</span>
+          {t.isGeneral&&<span style={{borderRadius:8,padding:"4px 10px",fontSize:11,background:"rgba(193,123,47,0.1)",color:C.gold,border:`1px solid rgba(193,123,47,0.2)`}}>📝 عام</span>}
+          {t.isAdvance&&<span style={{borderRadius:8,padding:"4px 10px",fontSize:11,background:"rgba(26,122,74,0.1)",color:"#1A7A4A",border:"1px solid rgba(26,122,74,0.2)"}}>💸 سلفة</span>}
         </div>
         <div style={{fontSize:17,fontWeight:900,color:sp?"#C0392B":"#1A7A4A",letterSpacing:-0.5}}>
           {sp?"-":"+"}{String(Number(t.amount).toLocaleString("ar-IQ")).replace(/\d/g,d=>"٠١٢٣٤٥٦٧٨٩"[d])} {t.currency==="دولار"?"$":"د.ع"}
