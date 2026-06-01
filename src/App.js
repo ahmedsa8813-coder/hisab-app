@@ -1478,25 +1478,82 @@ export default function App() {
           {/* نموذج أوفر تايم */}
           {showOtForm&&(
             <div style={{...S.formCard,marginBottom:16,border:`1px solid rgba(107,63,160,0.2)`}}>
-              <div style={{fontWeight:700,fontSize:14,color:"#6B3FA0",marginBottom:12}}>⏰ تسجيل أوفر تايم</div>
+              <div style={{fontWeight:700,fontSize:14,color:"#6B3FA0",marginBottom:16}}>⏰ تسجيل أوفر تايم</div>
+
+              {/* الصف الأول: الموظف والشهر والتاريخ */}
               <div style={D?{display:"flex",gap:12}:{}}>
                 <div style={D?{flex:2}:{}}>
                   <div style={S.fLbl}>الموظف</div>
                   <select style={S.sel} value={otForm.employeeId} onChange={e=>setOtForm(f=>({...f,employeeId:e.target.value,hours:"",ratePerHour:"",amount:""}))}>
                     <option value="">اختر الموظف</option>
-                    {salaryEmployees.map(e=><option key={e.id} value={e.id}>{e.name}</option>)}
+                    {salaryEmployees.map(e=><option key={e.id} value={e.id}>{e.name} ({e.currency==="دولار"?"🇺🇸":"🇮🇶"})</option>)}
                   </select>
                 </div>
-                <div style={D?{flex:1}:{}}><div style={S.fLbl}>الشهر</div><input style={S.inp} type="month" value={otForm.month} onChange={e=>setOtForm(f=>({...f,month:e.target.value}))}/></div>
-                <div style={D?{flex:1}:{}}><div style={S.fLbl}>التاريخ</div><input style={S.inp} type="date" value={otForm.date} onChange={e=>setOtForm(f=>({...f,date:e.target.value}))}/></div>
+                <div style={D?{flex:1}:{}}>
+                  <div style={S.fLbl}>الشهر</div>
+                  <input style={S.inp} type="month" value={otForm.month} onChange={e=>setOtForm(f=>({...f,month:e.target.value}))}/>
+                </div>
+                <div style={D?{flex:1}:{}}>
+                  <div style={S.fLbl}>التاريخ</div>
+                  <input style={S.inp} type="date" value={otForm.date} onChange={e=>setOtForm(f=>({...f,date:e.target.value}))}/>
+                </div>
               </div>
-              <div style={D?{display:"flex",gap:12}:{}}>
-                <div style={D?{flex:1}:{}}><div style={S.fLbl}>الساعات</div><input style={S.inp} type="number" placeholder="٠" value={otForm.hours} onChange={e=>setOtForm(f=>({...f,hours:e.target.value,amount:e.target.value&&f.ratePerHour?String(Number(e.target.value)*Number(f.ratePerHour)):""}))}/></div>
-                <div style={D?{flex:1}:{}}><div style={S.fLbl}>سعر الساعة</div><input style={S.inp} type="number" placeholder="٠" value={otForm.ratePerHour} onChange={e=>setOtForm(f=>({...f,ratePerHour:e.target.value,amount:f.hours&&e.target.value?String(Number(f.hours)*Number(e.target.value)):""}))}/></div>
-                <div style={D?{flex:1}:{}}><div style={S.fLbl}>المبلغ الكلي</div><input style={S.inp} type="number" placeholder="أو أدخل مباشرة" value={otForm.amount} onChange={e=>setOtForm(f=>({...f,amount:e.target.value}))}/></div>
+
+              {/* الصف الثاني: الساعات والسعر والمجموع */}
+              <div style={{...D?{display:"flex",gap:12}:{},marginTop:4}}>
+                <div style={D?{flex:1}:{}}>
+                  <div style={S.fLbl}>عدد الساعات ⏱️</div>
+                  <input style={{...S.inp,fontWeight:700,fontSize:16,textAlign:"center"}}
+                    type="number" placeholder="٠" value={otForm.hours}
+                    onChange={e=>{
+                      const h=e.target.value;
+                      setOtForm(f=>({...f,hours:h,amount:h&&f.ratePerHour?String(Number(h)*Number(f.ratePerHour)):f.amount}));
+                    }}/>
+                </div>
+                <div style={D?{flex:1}:{}}>
+                  <div style={S.fLbl}>سعر الساعة 💰</div>
+                  <input style={{...S.inp,fontWeight:700,fontSize:16,textAlign:"center"}}
+                    type="number" placeholder="٠" value={otForm.ratePerHour}
+                    onChange={e=>{
+                      const r=e.target.value;
+                      setOtForm(f=>({...f,ratePerHour:r,amount:f.hours&&r?String(Number(f.hours)*Number(r)):f.amount}));
+                    }}/>
+                </div>
+                <div style={D?{flex:1}:{}}>
+                  <div style={S.fLbl}>المبلغ الكلي 🧾</div>
+                  <input style={{...S.inp,fontWeight:900,fontSize:18,textAlign:"center",
+                    background:otForm.hours&&otForm.ratePerHour?"rgba(107,63,160,0.08)":C.bg2,
+                    border:otForm.hours&&otForm.ratePerHour?`2px solid #6B3FA0`:`1px solid ${C.cardBorder}`,
+                    color:"#6B3FA0"}}
+                    type="number" placeholder="أو أدخل مباشرة"
+                    value={otForm.amount}
+                    onChange={e=>setOtForm(f=>({...f,amount:e.target.value}))}/>
+                </div>
               </div>
+
+              {/* معاينة الحساب */}
+              {otForm.hours&&otForm.ratePerHour&&(
+                <div style={{background:"rgba(107,63,160,0.08)",border:"1px solid rgba(107,63,160,0.2)",borderRadius:12,padding:"12px 16px",marginTop:12,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                  <div style={{fontSize:13,color:"#6B3FA0",fontWeight:600}}>
+                    {toAr(otForm.hours)} ساعة × {toAr(otForm.ratePerHour)} = 
+                  </div>
+                  <div style={{fontSize:18,fontWeight:900,color:"#6B3FA0"}}>
+                    {fmtD(Number(otForm.hours)*Number(otForm.ratePerHour))}
+                  </div>
+                </div>
+              )}
+
               <div style={S.fLbl}>ملاحظة</div>
-              <input style={S.inp} placeholder="مثال: عمل ليلي..." value={otForm.note} onChange={e=>setOtForm(f=>({...f,note:e.target.value}))}/>
+              <input style={S.inp} placeholder="مثال: عمل ليلي، إجازة رسمية..." value={otForm.note} onChange={e=>setOtForm(f=>({...f,note:e.target.value}))}/>
+
+              {/* تحذير الصرف */}
+              {otForm.amount&&otForm.employeeId&&(()=>{
+                const emp=salaryEmployees.find(e=>e.id===otForm.employeeId);
+                return <div style={{background:`rgba(107,63,160,0.06)`,border:`1px solid rgba(107,63,160,0.2)`,borderRadius:10,padding:"10px 14px",marginTop:8,fontSize:13,color:"#6B3FA0",fontWeight:600}}>
+                  ⚠️ سيُصرف {fmt(Number(otForm.amount),emp?.currency||"دينار")} من رصيد أحمد
+                </div>;
+              })()}
+
               <button style={{...S.subBtn,background:"linear-gradient(135deg,#6B3FA0,#5B21B6)",color:"#fff"}} onClick={payOvertime}>💾 تسجيل الأوفر تايم</button>
             </div>
           )}
@@ -1582,34 +1639,73 @@ export default function App() {
               {/* جدول كل موظف */}
               <div style={{...S.formCard,padding:0,overflow:"hidden"}}>
                 <div style={{padding:"12px 16px",background:C.bg2,borderBottom:`1px solid ${C.cardBorder}`,fontWeight:700,fontSize:13,color:C.text}}>
-                  كشف راتب كل موظف {salFilterMonth&&`— ${salFilterMonth}`}
+                  📋 كشف راتب كل موظف {salFilterMonth?`— ${salFilterMonth}`:"(كل الأشهر)"}
                 </div>
                 <div style={{overflowX:"auto"}}>
-                  <table style={{width:"100%",borderCollapse:"collapse",fontSize:12,minWidth:600}}>
+                  <table style={{width:"100%",borderCollapse:"collapse",fontSize:12,minWidth:700}}>
                     <thead>
-                      <tr style={{background:C.bg2}}>
-                        {["الموظف","العملة","الراتب الأساسي","السلف","الأوفر تايم","المدفوع","الصافي المستحق"].map(h=>(
-                          <th key={h} style={{padding:"10px 12px",textAlign:"center",fontWeight:700,color:C.textMd,fontSize:11,borderBottom:`1px solid ${C.cardBorder}`}}>{h}</th>
+                      <tr style={{background:"#1d4ed8"}}>
+                        {[
+                          {l:"الموظف",c:"#fff"},
+                          {l:"العملة",c:"#fff"},
+                          {l:"الراتب الأساسي",c:"#bfdbfe"},
+                          {l:"⏰ الأوفر تايم",c:"#c4b5fd"},
+                          {l:"📊 الإجمالي المستحق",c:"#fff"},
+                          {l:"💳 السلف المستلمة",c:"#fde68a"},
+                          {l:"💵 الرواتب المستلمة",c:"#bbf7d0"},
+                          {l:"✅ إجمالي المستلم",c:"#fde68a"},
+                          {l:"🔴 الباقي له",c:"#fff"},
+                        ].map(({l,c})=>(
+                          <th key={l} style={{padding:"10px 12px",textAlign:"center",fontWeight:700,color:c,fontSize:11,borderBottom:"2px solid rgba(255,255,255,0.2)"}}>{l}</th>
                         ))}
                       </tr>
                     </thead>
                     <tbody>
                       {salaryEmployees.map((e,i)=>{
-                        const n=empNetSalary(e.id,e.currency);
-                        const ot=filtOt.filter(p=>p.employeeId===e.id).reduce((s,p)=>s+p.amount,0);
+                        const base = e.baseSalary||0;
+                        const ot   = filtOt.filter(p=>p.employeeId===e.id).reduce((s,p)=>s+p.amount,0);
+                        const adv  = filtAdv.filter(p=>p.employeeId===e.id).reduce((s,p)=>s+p.amount,0);
+                        const paid = filtPay.filter(p=>p.employeeId===e.id).reduce((s,p)=>s+p.amount,0);
+                        const total = base + ot;
+                        const totalReceived = adv + paid;
+                        const remaining = total - totalReceived;
+                        const isOver = remaining < 0;
                         return(
                           <tr key={e.id} style={{borderTop:`1px solid ${C.cardBorder}`,background:i%2===0?"#fff":C.bg}}>
-                            <td style={{padding:"10px 12px",fontWeight:700,color:C.text,textAlign:"right"}}>{e.name}</td>
-                            <td style={{padding:"10px 12px",textAlign:"center"}}><span style={{fontSize:11,fontWeight:700,color:e.currency==="دولار"?"#1A7A4A":"#2557A7",background:e.currency==="دولار"?"rgba(26,122,74,0.1)":"rgba(37,87,167,0.1)",padding:"2px 8px",borderRadius:6}}>{e.currency==="دولار"?"🇺🇸 $":"🇮🇶 د.ع"}</span></td>
-                            <td style={{padding:"10px 12px",textAlign:"center",fontWeight:700,color:C.textMd}}>{fmt(n.base,e.currency)}</td>
-                            <td style={{padding:"10px 12px",textAlign:"center",fontWeight:700,color:"#b45309"}}>{n.adv>0?fmt(n.adv,e.currency):"-"}</td>
-                            <td style={{padding:"10px 12px",textAlign:"center",fontWeight:700,color:"#6B3FA0"}}>{ot>0?fmt(ot,e.currency):"-"}</td>
-                            <td style={{padding:"10px 12px",textAlign:"center",fontWeight:700,color:"#2557A7"}}>{n.paid>0?fmt(n.paid,e.currency):"-"}</td>
-                            <td style={{padding:"10px 12px",textAlign:"center",fontWeight:800,color:n.net>=0?C.green:C.red}}>{fmt(Math.abs(n.net+ot),e.currency)} {n.net+ot<0?"(تجاوز)":""}</td>
+                            <td style={{padding:"10px 12px",fontWeight:800,color:C.text,textAlign:"right",minWidth:90}}>{e.name}</td>
+                            <td style={{padding:"10px 12px",textAlign:"center"}}>
+                              <span style={{fontSize:11,fontWeight:700,color:e.currency==="دولار"?"#1A7A4A":"#2557A7",background:e.currency==="دولار"?"rgba(26,122,74,0.1)":"rgba(37,87,167,0.1)",padding:"3px 8px",borderRadius:6}}>
+                                {e.currency==="دولار"?"🇺🇸":"🇮🇶"}
+                              </span>
+                            </td>
+                            <td style={{padding:"10px 12px",textAlign:"center",fontWeight:700,color:C.textMd}}>{fmt(base,e.currency)}</td>
+                            <td style={{padding:"10px 12px",textAlign:"center",fontWeight:700,color:"#6B3FA0"}}>{ot>0?fmt(ot,e.currency):<span style={{color:C.textSm}}>—</span>}</td>
+                            <td style={{padding:"10px 12px",textAlign:"center",fontWeight:800,color:"#1d4ed8",background:"rgba(29,78,216,0.04)"}}>{fmt(total,e.currency)}</td>
+                            <td style={{padding:"10px 12px",textAlign:"center",fontWeight:700,color:"#b45309"}}>{adv>0?fmt(adv,e.currency):<span style={{color:C.textSm}}>—</span>}</td>
+                            <td style={{padding:"10px 12px",textAlign:"center",fontWeight:700,color:"#1A7A4A"}}>{paid>0?fmt(paid,e.currency):<span style={{color:C.textSm}}>—</span>}</td>
+                            <td style={{padding:"10px 12px",textAlign:"center",fontWeight:800,color:C.gold,background:"rgba(193,123,47,0.05)"}}>{fmt(totalReceived,e.currency)}</td>
+                            <td style={{padding:"10px 12px",textAlign:"center",fontWeight:900,minWidth:110,background:isOver?"rgba(192,57,43,0.06)":"rgba(26,122,74,0.06)"}}>
+                              <div style={{color:isOver?C.red:C.green,fontSize:13}}>{fmt(Math.abs(remaining),e.currency)}</div>
+                              <div style={{fontSize:10,color:isOver?C.red:C.green,marginTop:2}}>{isOver?"⚠️ تجاوز":"✅ مستحق"}</div>
+                            </td>
                           </tr>
                         );
                       })}
                     </tbody>
+                    <tfoot>
+                      <tr style={{background:C.bg2,borderTop:`2px solid #1d4ed8`}}>
+                        <td colSpan={2} style={{padding:"10px 12px",fontWeight:800,color:C.text,fontSize:13}}>الإجمالي</td>
+                        <td style={{padding:"10px 12px",textAlign:"center",fontWeight:800,color:C.textMd}}>
+                          {fmtD(salaryEmployees.filter(e=>e.currency==="دينار"||!e.currency).reduce((s,e)=>s+e.baseSalary,0))}
+                        </td>
+                        <td style={{padding:"10px 12px",textAlign:"center",fontWeight:800,color:"#6B3FA0"}}>{fmtD(dinarOT)}</td>
+                        <td style={{padding:"10px 12px",textAlign:"center",fontWeight:800,color:"#1d4ed8"}}>{fmtD(salaryEmployees.filter(e=>e.currency==="دينار"||!e.currency).reduce((s,e)=>s+e.baseSalary,0)+dinarOT)}</td>
+                        <td style={{padding:"10px 12px",textAlign:"center",fontWeight:800,color:"#b45309"}}>{fmtD(dinarAdv)}</td>
+                        <td style={{padding:"10px 12px",textAlign:"center",fontWeight:800,color:"#1A7A4A"}}>{fmtD(dinarPaid)}</td>
+                        <td style={{padding:"10px 12px",textAlign:"center",fontWeight:800,color:C.gold}}>{fmtD(dinarPaid+dinarAdv)}</td>
+                        <td style={{padding:"10px 12px",textAlign:"center",fontWeight:900,color:C.red}}>{fmtD(salaryEmployees.filter(e=>e.currency==="دينار"||!e.currency).reduce((s,e)=>s+e.baseSalary,0)+dinarOT-(dinarPaid+dinarAdv))}</td>
+                      </tr>
+                    </tfoot>
                   </table>
                 </div>
               </div>
