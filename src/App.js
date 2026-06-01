@@ -4,11 +4,11 @@ import { collection, addDoc, onSnapshot, query, orderBy, deleteDoc, doc, setDoc 
 
 const USERS = [
   { id: "manager",  name: "المدير المالي", role: "manager",  pin: "0000" },
-  { id: "noor",     name: "نور",           role: "partner",  pin: "1111", share: 35 },
-  { id: "mohammed", name: "محمد",          role: "partner",  pin: "2222", share: 15 },
-  { id: "hussein",  name: "حسين",          role: "employee", pin: "3333" },
-  { id: "ahmed",    name: "أحمد",          role: "partner",  pin: "4444", share: 15 },
-  { id: "ihab",     name: "إيهاب",         role: "partner",  pin: "5555", share: 35 },
+  { id: "noor",     name: "نور",           role: "partner",  pin: "0000", share: 35 },
+  { id: "mohammed", name: "محمد",          role: "partner",  pin: "0000", share: 15 },
+  { id: "hussein",  name: "حسين",          role: "employee", pin: "0000" },
+  { id: "ahmed",    name: "أحمد",          role: "partner",  pin: "0000", share: 15 },
+  { id: "ihab",     name: "إيهاب",         role: "partner",  pin: "0000", share: 35 },
 ];
 
 const PARTNERS  = USERS.filter(u => u.role === "partner");
@@ -225,7 +225,7 @@ export default function App() {
                 <button key={u.id} style={{...S.userBtn,...(u.role==="manager"?S.mgrBtn:{}), ...(u.role==="partner"?S.partnerBtnStyle:{})}} onClick={()=>{setLoginId(u.id);setPin("");setPinErr(false);}}>
                   <div style={{...S.av,background:avatarBg(u.role),margin:"0 auto 10px",width:50,height:50,fontSize:22,borderRadius:16}}>{u.name[0]}</div>
                   <div style={S.uName}>{u.name}</div>
-                  <div style={S.uRole}>{u.role==="manager"?"مدير مالي":u.role==="partner"?`شريك ${toAr(u.share)}%`:"موظف"}</div>
+                  <div style={S.uRole}>{u.role==="manager"?"مدير مالي":"موظف"}</div>
                 </button>
               ))}
             </div>
@@ -236,7 +236,7 @@ export default function App() {
               <div style={{...S.av,background:avatarBg(USERS.find(u=>u.id===loginId)?.role)}}>{USERS.find(u=>u.id===loginId)?.name[0]}</div>
               <div>
                 <div style={{fontSize:18,fontWeight:800,letterSpacing:-0.5}}>{USERS.find(u=>u.id===loginId)?.name}</div>
-                <div style={{fontSize:12,color:"#9ca3af",marginTop:2}}>{USERS.find(u=>u.id===loginId)?.role==="manager"?"مدير مالي":USERS.find(u=>u.id===loginId)?.role==="partner"?`شريك ${toAr(USERS.find(u=>u.id===loginId)?.share||0)}%`:"موظف"}</div>
+                <div style={{fontSize:12,color:"#9ca3af",marginTop:2}}>{USERS.find(u=>u.id===loginId)?.role==="manager"?"مدير مالي":"موظف"}</div>
               </div>
             </div>
             <div style={S.lbl}>أدخل الرمز السري</div>
@@ -269,7 +269,7 @@ export default function App() {
           <div style={{...S.av,width:38,height:38,fontSize:16,borderRadius:12,background:avatarBg(user.role)}}>{user.name[0]}</div>
           <div>
             <div style={S.hName}>{user.name}</div>
-            <div style={S.hRole}>{user.role==="manager"?"مدير مالي":user.role==="partner"?`شريك ${toAr(user.share||0)}%`:"موظف"}</div>
+            <div style={S.hRole}>{user.role==="manager"?"مدير مالي":"موظف"}</div>
           </div>
         </div>
         <div style={{display:"flex",gap:8}}>
@@ -312,17 +312,7 @@ export default function App() {
     // WORKER HOME
     if(user.role!=="manager"&&view==="home") return (
       <div>
-        {user.role==="partner"&&myShare&&(
-          <div style={{...S.balCard,background:"linear-gradient(135deg,#4c1d95,#7c3aed)",marginBottom:12}}>
-            <div style={S.balLbl}>🏢 حصتك في الشركة ({toAr(user.share)}%)</div>
-            <div style={S.balAmt}>{fmtD(myShare.shareAmt)}</div>
-            <div style={S.balRow}>
-              <span style={S.balSt}>رأس المال الكلي: {fmtD(CR.cap)}</span>
-              <span style={S.balSt}>سحبت: {fmtD(myShare.withdrawn)}</span>
-            </div>
-            <div style={{fontSize:15,fontWeight:800,color:"#c4b5fd",marginTop:8}}>المتبقي لك: {fmtD(Math.max(0,myShare.remaining))}</div>
-          </div>
-        )}
+
         <div style={D?{display:"flex",gap:12,marginBottom:4}:{}}>
           <div style={{...S.balCard,background:"linear-gradient(135deg,#065f46,#047857)",flex:D?1:undefined,marginBottom:D?0:12}}>
             <div style={S.balLbl}>🇮🇶 دينار عراقي</div>
@@ -358,14 +348,7 @@ export default function App() {
               <button style={{...S.tBtn,...(form.type==="استلام"?{background:"rgba(6,95,70,0.3)",border:"1px solid #047857",color:"#34d399"}:{})}} onClick={()=>setForm(f=>({...f,type:"استلام",isPersonal:false}))}>↓ استلام</button>
               <button style={{...S.tBtn,...(form.type==="صرف"?{background:"rgba(127,29,29,0.3)",border:"1px solid #991b1b",color:"#f87171"}:{})}} onClick={()=>setForm(f=>({...f,type:"صرف"}))}>↑ صرف</button>
             </div>
-            {user.role==="partner"&&form.type==="صرف"&&(<>
-              <div style={S.fLbl}>نوع الصرف</div>
-              <div style={S.tRow}>
-                <button style={{...S.tBtn,...(!form.isPersonal?{background:"rgba(127,29,29,0.3)",border:"1px solid #991b1b",color:"#f87171"}:{})}} onClick={()=>setForm(f=>({...f,isPersonal:false}))}>🏗️ تشغيلي</button>
-                <button style={{...S.tBtn,...(form.isPersonal?{background:"rgba(124,58,237,0.3)",border:"1px solid #7c3aed",color:"#c4b5fd"}:{})}} onClick={()=>setForm(f=>({...f,isPersonal:true}))}>👤 شخصي</button>
-              </div>
-              {form.isPersonal&&<div style={{background:"rgba(124,58,237,0.1)",border:"1px solid rgba(124,58,237,0.3)",borderRadius:10,padding:"10px 14px",fontSize:12,color:"#c4b5fd",marginTop:8,fontWeight:600}}>⚠️ هذا المبلغ سينقص من حصتك في الشركة</div>}
-            </>)}
+
             <div style={S.fLbl}>العملة</div>
             <div style={S.tRow}>
               <button style={{...S.tBtn,...(form.currency==="دينار"?{background:"rgba(29,78,216,0.3)",border:"1px solid #2563eb",color:"#60a5fa"}:{})}} onClick={()=>setForm(f=>({...f,currency:"دينار"}))}>🇮🇶 دينار</button>
@@ -412,7 +395,7 @@ export default function App() {
                 <div style={{...S.av,width:42,height:42,fontSize:18,borderRadius:14,background:avatarBg(e.role)}}>{e.name[0]}</div>
                 <div style={{flex:1}}>
                   <div style={{fontWeight:800,fontSize:16,letterSpacing:-0.5}}>{e.name}</div>
-                  <div style={{fontSize:12,color:"#6b7280",marginTop:2}}>{e.role==="partner"?`شريك ${toAr(e.share||0)}%`:"موظف"} · {toAr(e.cnt)} معاملة</div>
+                  <div style={{fontSize:12,color:"#6b7280",marginTop:2}}>موظف · {toAr(e.cnt)} معاملة</div>
                 </div>
                 <div style={{textAlign:"center",marginLeft:8}}>
                   <div style={{fontSize:12,color:"#34d399",fontWeight:600}}>{fmt(Math.abs(e.din.b),"دينار")}</div>
@@ -667,7 +650,7 @@ export default function App() {
                   <div style={{...S.av,width:36,height:36,fontSize:16,borderRadius:11,background:avatarBg(u.role)}}>{u.name[0]}</div>
                   <div>
                     <div style={{fontWeight:700,fontSize:15}}>{u.name}</div>
-                    <div style={{fontSize:11,color:isP?"#a78bfa":"#9ca3af"}}>{isP?`شريك ${toAr(u.share)}%`:"موظف"}</div>
+                    <div style={{fontSize:11,color:"#9ca3af"}}>"موظف"</div>
                   </div>
                 </div>
                 <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginTop:12}}>
