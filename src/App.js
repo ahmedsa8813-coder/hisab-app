@@ -746,7 +746,6 @@ export default function App() {
 
     // FOREMAN OVERTIME
     if(user.role==="foreman"&&view==="overtime") {
-      const [submitted,setSubmitted] = [false,()=>{}]; // placeholder
       return (
         <div style={{fontFamily:"'Segoe UI',Arial,sans-serif",direction:"ltr",color:C.text}}>
           <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:20}}>
@@ -1836,9 +1835,9 @@ export default function App() {
                     onClick={()=>{
                       // PDF كشف الرواتب
                       const period = salFilterMonth||"كل الأشهر";
-                      const totalDinarBase2=salaryEmployees.filter(e=>e.currency==="دينار"||!e.currency).reduce((s,e)=>s+e.baseSalary,0);
                       const printDate = new Date().toLocaleDateString("ar-IQ");
                       const printTime = new Date().toLocaleTimeString("ar-IQ",{hour:"2-digit",minute:"2-digit"});
+                      const totalDinarBase2=salaryEmployees.filter(e=>e.currency==="دينار"||!e.currency).reduce((s,e)=>s+e.baseSalary,0);
                       const fmtCell=(v,cur)=>toAr(v.toLocaleString("ar-IQ"))+" "+(cur==="دولار"?"$":"د.ع");
                       const rows = salaryEmployees.map((e,idx)=>{
                         const base=e.baseSalary||0;
