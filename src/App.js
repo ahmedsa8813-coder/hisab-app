@@ -87,6 +87,10 @@ export default function App() {
   const [salFilterMonth,setSalFilterMonth]=useState("");
   const [salTab,setSalTab]=useState("summary");
   const [salaryAdvances,setSalaryAdvances]=useState([]);
+  const [workLogs,setWorkLogs]=useState([]); // سجل الساعات اليومي من الفورمن
+  const [workLogForm,setWorkLogForm]=useState({employeeId:"",hours:"",date:today(),note:""});
+  const [showWorkLogForm,setShowWorkLogForm]=useState(false);
+  const [workLogMonth,setWorkLogMonth]=useState(new Date().toISOString().slice(0,7));
   const [salAdvForm,setSalAdvForm]=useState({employeeId:"",amount:"",date:today(),note:""});
   const [showSalAdvForm,setShowSalAdvForm]=useState(false);
   const [exchangeRate,setExchangeRate]=useState(1500);
@@ -105,6 +109,7 @@ export default function App() {
     u.push(onSnapshot(query(collection(db,"salaryPayments"),orderBy("date","desc")), s => setSalaryPayments(s.docs.map(d=>({id:d.id,...d.data()})))));
     u.push(onSnapshot(query(collection(db,"overtimePayments"),orderBy("date","desc")), s => setOvertimePayments(s.docs.map(d=>({id:d.id,...d.data()})))));
     u.push(onSnapshot(query(collection(db,"salaryAdvances"),orderBy("date","desc")), s => setSalaryAdvances(s.docs.map(d=>({id:d.id,...d.data()})))));
+    u.push(onSnapshot(query(collection(db,"workLogs"),orderBy("date","desc")), s => setWorkLogs(s.docs.map(d=>({id:d.id,...d.data()})))));
     // تحميل سعر الصرف المحفوظ
     onSnapshot(doc(db,"settings","exchangeRate"), s => { if(s.exists()&&s.data().rate) setExchangeRate(s.data().rate); });
     return () => u.forEach(f=>f());
@@ -414,6 +419,30 @@ export default function App() {
     if(window.confirm("تحذف هذه السلفة؟")) await deleteDoc(doc(db,"salaryAdvances",id));
   };
 
+  // سجل الساعات اليومي
+  const addWorkLog = async (data) => {
+    if(!data.employeeId||!data.hours||!data.date) return false;
+    const emp = salaryEmployees.find(e=>e.id===data.employeeId);
+    await addDoc(collection(db,"workLogs"),{
+      employeeId: data.employeeId,
+      employeeName: emp?.name||"",
+      hours: Number(data.hours),
+      date: data.date,
+      month: data.date.slice(0,7),
+      note: data.note||"",
+      submittedBy: "foreman",
+      ratePerHour: 1, // 1 دولار ثابت
+      amount: Number(data.hours) * 1,
+      currency: "دولار",
+      createdAt: new Date().toISOString(),
+    });
+    return true;
+  };
+
+  const delWorkLog = async id=>{
+    if(window.confirm("تحذف هذا السجل؟")) await deleteDoc(doc(db,"workLogs",id));
+  };
+
   const saveExchangeRate = async () => {
     const rate = Number(exchInput);
     if(!rate||rate<=0) return;
@@ -505,7 +534,7 @@ export default function App() {
   const navWorker = user?.role==="accountant"
     ? [{icon:"🏠",label:"الرئيسية",v:"home"},{icon:"➕",label:"استلام/سلفة",v:"add"},{icon:"💵",label:"الرواتب",v:"salaries"}]
     : user?.role==="foreman"
-    ? [{icon:"🏠",label:"Home",v:"home"},{icon:"⏰",label:"Overtime",v:"overtime"}]
+    ? [{icon:"🏠",label:"Home",v:"home"},{icon:"⏱️",label:"Log Hours",v:"logHours"},{icon:"📊",label:"Report",v:"hoursReport"}]
     : [{icon:"🏠",label:"الرئيسية",v:"home"},{icon:"➕",label:"تسجيل صرف",v:"add"}];
   const navItems  = user?.role==="manager" ? navMgr : navWorker;
 
@@ -686,111 +715,128 @@ export default function App() {
 
     // FOREMAN HOME
     if(user.role==="foreman"&&view==="home") {
-      const myOTs = overtimePayments.filter(t=>t.submittedBy===user.id);
-      const totalHours = myOTs.reduce((s,t)=>s+(t.hours||0),0);
       const thisMonth = new Date().toISOString().slice(0,7);
-      const thisMonthOTs = myOTs.filter(t=>t.month===thisMonth);
+      const myLogs = workLogs.filter(t=>t.submittedBy==="foreman");
+      const thisMonthLogs = myLogs.filter(t=>t.month===thisMonth);
+      const totalHoursThisMonth = thisMonthLogs.reduce((s,t)=>s+(t.hours||0),0);
+      const totalAmtThisMonth = totalHoursThisMonth * 1; // $1/hr
+
+      // تجميع الساعات لكل عامل هذا الشهر
+      const empSummary = salaryEmployees.map(e=>{
+        const empLogs = thisMonthLogs.filter(l=>l.employeeId===e.id);
+        const hrs = empLogs.reduce((s,l)=>s+(l.hours||0),0);
+        return {...e, hrs, amt:hrs*1, days:empLogs.length};
+      }).filter(e=>e.hrs>0);
+
       return (
         <div style={{fontFamily:"'Segoe UI',Arial,sans-serif",direction:"ltr",color:C.text}}>
-          {/* Welcome */}
-          <div style={{background:"linear-gradient(135deg,#0f766e,#0d9488)",borderRadius:20,padding:"22px 20px",marginBottom:16,color:"#fff",boxShadow:C.shadowMd}}>
-            <div style={{fontSize:13,color:"rgba(255,255,255,0.8)",marginBottom:4}}>Welcome back 👋</div>
-            <div style={{fontSize:26,fontWeight:900,letterSpacing:-0.5}}>Foreman Dashboard</div>
-            <div style={{fontSize:13,color:"rgba(255,255,255,0.8)",marginTop:4}}>Log overtime for your workers below</div>
+          {/* Header */}
+          <div style={{background:"linear-gradient(135deg,#0f766e,#0d9488)",borderRadius:20,padding:"20px",marginBottom:16,color:"#fff",boxShadow:C.shadowMd}}>
+            <div style={{fontSize:12,color:"rgba(255,255,255,0.8)",marginBottom:4}}>Welcome 👷</div>
+            <div style={{fontSize:24,fontWeight:900}}>Foreman Dashboard</div>
+            <div style={{fontSize:12,color:"rgba(255,255,255,0.8)",marginTop:2}}>{thisMonth}</div>
           </div>
 
           {/* Stats */}
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:16}}>
-            <div style={{background:C.card,border:`1px solid ${C.cardBorder}`,borderRadius:16,padding:16,boxShadow:C.shadow}}>
-              <div style={{fontSize:11,color:C.textSm,fontWeight:700,marginBottom:6}}>THIS MONTH</div>
-              <div style={{fontSize:22,fontWeight:900,color:"#0f766e"}}>{thisMonthOTs.length}</div>
-              <div style={{fontSize:12,color:C.textMd}}>OT Records</div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:16}}>
+            <div style={{background:C.card,border:`1px solid ${C.cardBorder}`,borderRadius:14,padding:14,boxShadow:C.shadow}}>
+              <div style={{fontSize:10,color:C.textSm,fontWeight:700,marginBottom:4}}>THIS MONTH HOURS</div>
+              <div style={{fontSize:26,fontWeight:900,color:"#0f766e"}}>{totalHoursThisMonth}</div>
+              <div style={{fontSize:11,color:C.textMd}}>Total hours logged</div>
             </div>
-            <div style={{background:C.card,border:`1px solid ${C.cardBorder}`,borderRadius:16,padding:16,boxShadow:C.shadow}}>
-              <div style={{fontSize:11,color:C.textSm,fontWeight:700,marginBottom:6}}>TOTAL HOURS</div>
-              <div style={{fontSize:22,fontWeight:900,color:"#0f766e"}}>{totalHours}</div>
-              <div style={{fontSize:12,color:C.textMd}}>Hours logged</div>
+            <div style={{background:C.card,border:`1px solid ${C.cardBorder}`,borderRadius:14,padding:14,boxShadow:C.shadow}}>
+              <div style={{fontSize:10,color:C.textSm,fontWeight:700,marginBottom:4}}>TOTAL AMOUNT</div>
+              <div style={{fontSize:26,fontWeight:900,color:"#1A7A4A"}}>${totalAmtThisMonth}</div>
+              <div style={{fontSize:11,color:C.textMd}}>@ $1/hour</div>
             </div>
           </div>
 
-          {/* Log OT button */}
-          {!D&&<button style={{...S.goldBtn,background:"linear-gradient(135deg,#0f766e,#0d9488)",color:"#fff",marginBottom:20}}
-            onClick={()=>setView("overtime")}>⏰ Log Overtime</button>}
-
-          {/* Recent */}
-          <div style={{fontWeight:800,fontSize:16,color:C.text,marginBottom:12}}>Recent Overtime</div>
-          {myOTs.length===0?(
-            <div style={{...S.empty,background:C.card,borderRadius:16,border:`1px solid ${C.cardBorder}`}}>
-              <div style={{fontSize:36,marginBottom:8}}>⏰</div>
-              <div style={{fontWeight:700,color:C.textMd}}>No overtime logged yet</div>
-              <div style={{fontSize:13,color:C.textSm,marginTop:4}}>Tap "Log Overtime" to get started</div>
-            </div>
-          ):(
-            myOTs.slice(0,10).map(t=>(
-              <div key={t.id} style={{background:C.card,border:`1px solid ${C.cardBorder}`,borderRadius:14,padding:"14px 16px",marginBottom:8,boxShadow:C.shadow}}>
-                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
-                  <div style={{fontWeight:800,fontSize:15,color:C.text}}>{t.employeeName}</div>
-                  <div style={{fontWeight:900,fontSize:15,color:"#0f766e"}}>{t.hours} hrs × {t.ratePerHour} = {t.amount}</div>
+          {/* Monthly Worker Summary */}
+          {empSummary.length>0&&(
+            <div style={{background:C.card,border:`1px solid ${C.cardBorder}`,borderRadius:16,padding:16,marginBottom:16,boxShadow:C.shadow}}>
+              <div style={{fontWeight:800,fontSize:14,color:C.text,marginBottom:12}}>📊 This Month Summary</div>
+              {empSummary.map(e=>(
+                <div key={e.id} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"8px 0",borderBottom:`1px solid ${C.bg2}`}}>
+                  <div style={{display:"flex",alignItems:"center",gap:8}}>
+                    <div style={{width:32,height:32,borderRadius:8,background:"linear-gradient(135deg,#0f766e,#0d9488)",display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontSize:13,fontWeight:800}}>{e.name[0]}</div>
+                    <div>
+                      <div style={{fontWeight:700,fontSize:13,color:C.text}}>{e.name}</div>
+                      <div style={{fontSize:11,color:C.textSm}}>{e.days} days logged</div>
+                    </div>
+                  </div>
+                  <div style={{textAlign:"right"}}>
+                    <div style={{fontWeight:900,fontSize:15,color:"#0f766e"}}>{e.hrs} hrs</div>
+                    <div style={{fontSize:12,color:"#1A7A4A",fontWeight:700}}>${e.amt}</div>
+                  </div>
                 </div>
-                <div style={{display:"flex",gap:12,fontSize:12,color:C.textSm}}>
-                  <span>📅 {t.date}</span>
-                  <span>📆 {t.month}</span>
-                  {t.note&&<span>💬 {t.note}</span>}
+              ))}
+            </div>
+          )}
+
+          {/* Buttons */}
+          {!D&&(
+            <div style={{display:"flex",gap:10,marginBottom:16}}>
+              <button style={{flex:1,...S.goldBtn,background:"linear-gradient(135deg,#0f766e,#0d9488)",color:"#fff",marginBottom:0}}
+                onClick={()=>setView("logHours")}>⏱️ Log Hours</button>
+              <button style={{flex:1,...S.goldBtn,background:"linear-gradient(135deg,#1d4ed8,#2563eb)",color:"#fff",marginBottom:0}}
+                onClick={()=>setView("hoursReport")}>📊 Report</button>
+            </div>
+          )}
+
+          {/* Recent logs */}
+          <div style={{fontWeight:800,fontSize:14,color:C.text,marginBottom:10}}>Recent Logs</div>
+          {myLogs.slice(0,8).map(t=>(
+            <div key={t.id} style={{background:C.card,border:`1px solid ${C.cardBorder}`,borderRadius:12,padding:"12px 14px",marginBottom:8,boxShadow:C.shadow}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                <div>
+                  <div style={{fontWeight:700,fontSize:14,color:C.text}}>{t.employeeName}</div>
+                  <div style={{fontSize:11,color:C.textSm,marginTop:2}}>📅 {t.date} {t.note&&`· ${t.note}`}</div>
+                </div>
+                <div style={{textAlign:"right"}}>
+                  <div style={{fontWeight:900,fontSize:16,color:"#0f766e"}}>{t.hours} hrs</div>
+                  <div style={{fontSize:12,color:"#1A7A4A",fontWeight:700}}>${t.amount}</div>
                 </div>
               </div>
-            ))
+            </div>
+          ))}
+          {myLogs.length===0&&(
+            <div style={{textAlign:"center",padding:30,color:C.textSm}}>
+              <div style={{fontSize:36}}>📋</div>
+              <div style={{fontWeight:700,marginTop:8}}>No logs yet</div>
+            </div>
           )}
         </div>
       );
     }
 
-    // FOREMAN OVERTIME
-    if(user.role==="foreman"&&view==="overtime") {
-      return (
-        <div style={{fontFamily:"'Segoe UI',Arial,sans-serif",direction:"ltr",color:C.text}}>
-          <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:20}}>
-            {!D&&<button style={S.backBtn2} onClick={()=>setView("home")}>←</button>}
-            <div style={{fontSize:20,fontWeight:900,color:C.text}}>⏰ Log Overtime</div>
-          </div>
-          <ForemanOTForm
-            employees={salaryEmployees}
-            onSubmit={async(data)=>{
-              const emp=salaryEmployees.find(e=>e.id===data.employeeId);
-              const amt=data.hours&&data.ratePerHour?Number(data.hours)*Number(data.ratePerHour):Number(data.amount);
-              if(!amt||!data.employeeId)return false;
-              await addDoc(collection(db,"overtimePayments"),{
-                employeeId:data.employeeId,
-                employeeName:emp?.name||"",
-                hours:Number(data.hours)||0,
-                ratePerHour:Number(data.ratePerHour)||0,
-                amount:amt,
-                currency:emp?.currency||"دينار",
-                month:data.month,
-                date:data.date,
-                note:data.note||"",
-                submittedBy:user.id,
-                submittedByName:user.name,
-                createdAt:new Date().toISOString(),
-              });
-              const accountant=USERS.find(u=>u.role==="accountant");
-              if(accountant){
-                await addDoc(collection(db,"transactions"),{
-                  userId:accountant.id,userName:accountant.name,
-                  projectId:"",projectName:"",
-                  type:"صرف",amount:amt,
-                  currency:emp?.currency||"دينار",
-                  note:`Overtime — ${emp?.name||""} — ${data.month}${data.hours?" ("+data.hours+" hrs)":""}`,
-                  date:data.date,image:null,isPersonal:false,isAdvance:false,
-                  isOvertime:true,
-                  createdAt:new Date().toISOString(),
-                });
-              }
-              return true;
-            }}
-          />
+    // FOREMAN LOG HOURS
+    if(user.role==="foreman"&&view==="logHours") return (
+      <div style={{fontFamily:"'Segoe UI',Arial,sans-serif",direction:"ltr",color:C.text}}>
+        <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:20}}>
+          {!D&&<button style={S.backBtn2} onClick={()=>setView("home")}>←</button>}
+          <div style={{fontSize:20,fontWeight:900,color:C.text}}>⏱️ Log Daily Hours</div>
         </div>
-      );
-    }
+        <ForemanLogForm
+          employees={salaryEmployees}
+          onSubmit={addWorkLog}
+        />
+      </div>
+    );
+
+    // FOREMAN HOURS REPORT
+    if(user.role==="foreman"&&view==="hoursReport") return (
+      <div style={{fontFamily:"'Segoe UI',Arial,sans-serif",direction:"ltr",color:C.text}}>
+        <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:16}}>
+          {!D&&<button style={S.backBtn2} onClick={()=>setView("home")}>←</button>}
+          <div style={{fontSize:20,fontWeight:900,color:C.text}}>📊 Hours Report</div>
+        </div>
+        <ForemanReport
+          workLogs={workLogs}
+          employees={salaryEmployees}
+          onDelete={delWorkLog}
+        />
+      </div>
+    );
 
     // WORKER HOME
     if(user.role!=="manager"&&view==="home") return (
@@ -1815,6 +1861,7 @@ export default function App() {
             <Tab id="dollar" label="دولار 🇺🇸" icon=""/>
             <Tab id="advances" label="السلف" icon="💳"/>
             <Tab id="overtime" label="الأوفر تايم" icon="⏰"/>
+            <Tab id="worklogs" label="ساعات الورشة" icon="⏱️"/>
           </div>
 
           {/* تبويبة المجمل */}
@@ -2306,6 +2353,81 @@ export default function App() {
             </div>
           )}
 
+          {/* ساعات الورشة */}
+          {salTab==="worklogs"&&(
+            <div>
+              {(()=>{
+                const wlMonth = salFilterMonth||new Date().toISOString().slice(0,7);
+                const monthLogs = workLogs.filter(l=>l.month===wlMonth);
+                const months2 = [...new Set(workLogs.map(l=>l.month))].sort().reverse();
+                const empSummary = salaryEmployees.map(e=>{
+                  const logs = monthLogs.filter(l=>l.employeeId===e.id).sort((a,b)=>a.date.localeCompare(b.date));
+                  const totalHrs = logs.reduce((s,l)=>s+(l.hours||0),0);
+                  return{...e,logs,totalHrs,totalAmt:totalHrs*1};
+                }).filter(e=>e.totalHrs>0);
+                const totalAllHrs = empSummary.reduce((s,e)=>s+e.totalHrs,0);
+                return(<>
+                  <div style={{...S.formCard,padding:16,marginBottom:16,display:"flex",alignItems:"center",gap:16,flexWrap:"wrap"}}>
+                    <div style={{fontWeight:700,fontSize:14,color:C.text}}>⏱️ جرد ساعات الورشة</div>
+                    <select style={{...S.sel,width:"auto",padding:"8px 14px",fontSize:13}} value={salFilterMonth} onChange={e=>setSalFilterMonth(e.target.value)}>
+                      <option value="">الشهر الحالي</option>
+                      {months2.map(m=><option key={m} value={m}>{m}</option>)}
+                    </select>
+                    <div style={{marginRight:"auto",background:"linear-gradient(135deg,#0f766e,#0d9488)",borderRadius:10,padding:"8px 16px",color:"#fff",fontSize:13,fontWeight:700}}>
+                      الإجمالي: {toAr(totalAllHrs)} ساعة = ${totalAllHrs}
+                    </div>
+                  </div>
+                  {empSummary.length===0?<div style={S.empty}>ما في سجلات لهذا الشهر</div>:empSummary.map(e=>(
+                    <div key={e.id} style={{...S.formCard,padding:0,overflow:"hidden",marginBottom:14}}>
+                      <div style={{background:"linear-gradient(135deg,#0f766e,#0d9488)",padding:"12px 16px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                        <div style={{display:"flex",alignItems:"center",gap:10}}>
+                          <div style={{width:36,height:36,borderRadius:10,background:"rgba(255,255,255,0.2)",display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontSize:16,fontWeight:800}}>{e.name[0]}</div>
+                          <div>
+                            <div style={{fontWeight:800,fontSize:15,color:"#fff"}}>{e.name}</div>
+                            <div style={{fontSize:11,color:"rgba(255,255,255,0.8)"}}>{toAr(e.logs.length)} يوم</div>
+                          </div>
+                        </div>
+                        <div style={{textAlign:"left"}}>
+                          <div style={{fontWeight:900,fontSize:20,color:"#fff"}}>{toAr(e.totalHrs)} ساعة</div>
+                          <div style={{fontSize:13,color:"rgba(255,255,255,0.9)",fontWeight:700}}>${e.totalAmt}</div>
+                        </div>
+                      </div>
+                      <div style={{overflowX:"auto"}}>
+                        <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+                          <thead><tr style={{background:C.bg2}}>
+                            {["التاريخ","الساعات","المبلغ","التراكمي","ملاحظة",""].map(h=>(
+                              <th key={h} style={{padding:"8px 12px",textAlign:"center",fontWeight:700,color:C.textMd,fontSize:11,borderBottom:`1px solid ${C.cardBorder}`}}>{h}</th>
+                            ))}
+                          </tr></thead>
+                          <tbody>{(()=>{let cum=0;return e.logs.map((l,i)=>{cum+=l.hours||0;return(
+                            <tr key={l.id} style={{borderBottom:`1px solid ${C.cardBorder}`,background:i%2===0?"#fff":C.bg}}>
+                              <td style={{padding:"8px 12px",fontWeight:700,textAlign:"center"}}>📅 {l.date}</td>
+                              <td style={{padding:"8px 12px",textAlign:"center",fontWeight:900,color:"#0f766e",fontSize:15}}>{toAr(l.hours)}</td>
+                              <td style={{padding:"8px 12px",textAlign:"center",fontWeight:700,color:"#1A7A4A"}}>${l.amount||l.hours}</td>
+                              <td style={{padding:"8px 12px",textAlign:"center"}}>
+                                <span style={{background:"rgba(15,118,110,0.1)",color:"#0f766e",padding:"3px 10px",borderRadius:8,fontWeight:800,fontSize:12}}>{toAr(cum)} س</span>
+                              </td>
+                              <td style={{padding:"8px 12px",textAlign:"center",color:C.textSm,fontSize:11}}>{l.note||"—"}</td>
+                              <td style={{padding:"8px 12px",textAlign:"center"}}>
+                                <button onClick={()=>delWorkLog(l.id)} style={{background:"transparent",border:"none",color:C.red,cursor:"pointer"}}>🗑️</button>
+                              </td>
+                            </tr>
+                          );});})()}</tbody>
+                          <tfoot><tr style={{background:"#f0fdf4",borderTop:`2px solid #0f766e`}}>
+                            <td style={{padding:"10px 12px",fontWeight:800,color:"#0f766e"}}>الإجمالي</td>
+                            <td style={{padding:"10px 12px",textAlign:"center",fontWeight:900,color:"#0f766e",fontSize:15}}>{toAr(e.totalHrs)} س</td>
+                            <td style={{padding:"10px 12px",textAlign:"center",fontWeight:900,color:"#1A7A4A"}}>${e.totalAmt}</td>
+                            <td colSpan={3}/>
+                          </tr></tfoot>
+                        </table>
+                      </div>
+                    </div>
+                  ))}
+                </>);
+              })()}
+            </div>
+          )}
+
           {!D&&<button style={S.canBtn} onClick={()=>setView("home")}>← رجوع</button>}
         </div>
       );
@@ -2656,6 +2778,205 @@ export default function App() {
 
     return null;
   }
+}
+
+function ForemanLogForm({employees, onSubmit}) {
+  const today2 = () => new Date().toISOString().split("T")[0];
+  const [entries, setEntries] = useState([{employeeId:"",hours:""}]);
+  const [date, setDate] = useState(today2());
+  const [note, setNote] = useState("");
+  const [ok, setOk] = useState(false);
+  const [loading, setLoading] = useState(false);
+
+  const inp = {width:"100%",background:"#F8FAFC",border:"1px solid #E2E8F0",borderRadius:10,padding:"11px 14px",color:"#1a1a2e",fontSize:15,outline:"none",fontFamily:"'Segoe UI',Arial,sans-serif"};
+  const lbl = {fontSize:11,color:"#64748b",fontWeight:800,letterSpacing:1,textTransform:"uppercase",marginBottom:6,marginTop:14,display:"block"};
+
+  const addEntry = () => setEntries(e=>[...e,{employeeId:"",hours:""}]);
+  const removeEntry = i => setEntries(e=>e.filter((_,idx)=>idx!==i));
+  const updateEntry = (i,k,v) => setEntries(e=>e.map((en,idx)=>idx===i?{...en,[k]:v}:en));
+
+  const submit = async () => {
+    const valid = entries.filter(e=>e.employeeId&&e.hours&&Number(e.hours)>0);
+    if(!valid.length||!date) return;
+    setLoading(true);
+    for(const entry of valid){
+      await onSubmit({employeeId:entry.employeeId, hours:entry.hours, date, note});
+    }
+    setLoading(false);
+    setOk(true);
+    setTimeout(()=>{setOk(false);setEntries([{employeeId:"",hours:""}]);setNote("");setDate(today2());},2500);
+  };
+
+  if(ok) return (
+    <div style={{textAlign:"center",padding:"60px 20px",background:"#fff",borderRadius:20,border:"1px solid #E2E8F0"}}>
+      <div style={{fontSize:64,marginBottom:12}}>✅</div>
+      <div style={{fontSize:22,fontWeight:900,color:"#0f766e"}}>Hours Logged!</div>
+      <div style={{fontSize:14,color:"#64748b",marginTop:4}}>{entries.filter(e=>e.employeeId&&e.hours).length} workers recorded</div>
+    </div>
+  );
+
+  return (
+    <div style={{background:"#fff",border:"1px solid #E2E8F0",borderRadius:20,padding:20,boxShadow:"0 2px 12px rgba(0,0,0,0.06)",direction:"ltr",fontFamily:"'Segoe UI',Arial,sans-serif"}}>
+
+      {/* Date */}
+      <label style={lbl}>📅 Date</label>
+      <input style={inp} type="date" value={date} onChange={e=>setDate(e.target.value)}/>
+
+      {/* Workers */}
+      <label style={{...lbl,marginTop:20}}>👷 Workers & Hours</label>
+      {entries.map((entry,i)=>(
+        <div key={i} style={{display:"flex",gap:8,alignItems:"center",marginBottom:8}}>
+          <select style={{...inp,flex:2}} value={entry.employeeId} onChange={e=>updateEntry(i,"employeeId",e.target.value)}>
+            <option value="">Select worker...</option>
+            {employees.map(e=><option key={e.id} value={e.id}>{e.name}</option>)}
+          </select>
+          <div style={{position:"relative",flex:1}}>
+            <input style={{...inp,textAlign:"center",fontWeight:800,fontSize:17,paddingLeft:30}} type="number" min="0" max="24" placeholder="0" value={entry.hours} onChange={e=>updateEntry(i,"hours",e.target.value)}/>
+            <span style={{position:"absolute",left:10,top:"50%",transform:"translateY(-50%)",fontSize:11,color:"#94a3b8",pointerEvents:"none"}}>hrs</span>
+          </div>
+          {entries.length>1&&(
+            <button onClick={()=>removeEntry(i)} style={{width:36,height:36,borderRadius:8,border:"1px solid #fee2e2",background:"#fef2f2",color:"#ef4444",cursor:"pointer",fontSize:16,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>×</button>
+          )}
+        </div>
+      ))}
+
+      <button onClick={addEntry} style={{width:"100%",background:"transparent",border:"2px dashed #e2e8f0",borderRadius:10,padding:"10px",color:"#94a3b8",fontSize:13,cursor:"pointer",marginBottom:4,fontWeight:600}}>
+        + Add Worker
+      </button>
+
+      {/* Preview */}
+      {entries.some(e=>e.employeeId&&e.hours)&&(
+        <div style={{background:"rgba(15,118,110,0.06)",border:"1px solid rgba(15,118,110,0.2)",borderRadius:12,padding:"12px 14px",marginTop:12}}>
+          <div style={{fontWeight:700,fontSize:12,color:"#0f766e",marginBottom:8}}>📋 Summary for {date}</div>
+          {entries.filter(e=>e.employeeId&&Number(e.hours)>0).map((e,i)=>{
+            const emp=employees.find(x=>x.id===e.employeeId);
+            return <div key={i} style={{display:"flex",justifyContent:"space-between",fontSize:13,marginBottom:4}}>
+              <span style={{color:"#374151",fontWeight:600}}>{emp?.name}</span>
+              <span style={{color:"#0f766e",fontWeight:800}}>{e.hours} hrs = ${Number(e.hours).toFixed(2)}</span>
+            </div>;
+          })}
+          <div style={{borderTop:"1px solid rgba(15,118,110,0.2)",marginTop:8,paddingTop:8,display:"flex",justifyContent:"space-between",fontWeight:900,fontSize:14}}>
+            <span>Total</span>
+            <span style={{color:"#0f766e"}}>{entries.filter(e=>e.employeeId&&e.hours).reduce((s,e)=>s+Number(e.hours),0)} hrs = ${entries.filter(e=>e.employeeId&&e.hours).reduce((s,e)=>s+Number(e.hours),0).toFixed(2)}</span>
+          </div>
+        </div>
+      )}
+
+      {/* Note */}
+      <label style={lbl}>📝 Note (optional)</label>
+      <input style={inp} placeholder="e.g. Extra shift, finishing work..." value={note} onChange={e=>setNote(e.target.value)}/>
+
+      <button style={{
+        width:"100%",marginTop:16,padding:16,borderRadius:14,border:"none",
+        background:loading?"#e2e8f0":"linear-gradient(135deg,#0f766e,#0d9488)",
+        color:loading?"#94a3b8":"#fff",fontSize:17,fontWeight:800,cursor:loading?"not-allowed":"pointer",
+        boxShadow:loading?"none":"0 6px 20px rgba(15,118,110,0.3)",
+      }} onClick={submit} disabled={loading}>
+        {loading?"Saving...":"✅ Submit Hours"}
+      </button>
+    </div>
+  );
+}
+
+function ForemanReport({workLogs, employees, onDelete}) {
+  const [selMonth, setSelMonth] = useState(new Date().toISOString().slice(0,7));
+  const months = [...new Set(workLogs.map(l=>l.month))].sort().reverse();
+  const filtered = workLogs.filter(l=>l.month===selMonth);
+
+  // تجميع تراكمي لكل عامل
+  const empSummary = employees.map(e=>{
+    const logs = filtered.filter(l=>l.employeeId===e.id).sort((a,b)=>a.date.localeCompare(b.date));
+    const totalHrs = logs.reduce((s,l)=>s+(l.hours||0),0);
+    return {...e, logs, totalHrs, totalAmt:totalHrs*1};
+  }).filter(e=>e.totalHrs>0);
+
+  const totalAllHrs = empSummary.reduce((s,e)=>s+e.totalHrs,0);
+
+  const inp = {background:"#F8FAFC",border:"1px solid #E2E8F0",borderRadius:10,padding:"8px 14px",color:"#1a1a2e",fontSize:14,outline:"none",fontFamily:"'Segoe UI',Arial,sans-serif"};
+
+  return (
+    <div style={{direction:"ltr",fontFamily:"'Segoe UI',Arial,sans-serif"}}>
+      {/* Month selector */}
+      <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:16,flexWrap:"wrap"}}>
+        <label style={{fontSize:12,fontWeight:700,color:"#64748b"}}>MONTH:</label>
+        <select style={inp} value={selMonth} onChange={e=>setSelMonth(e.target.value)}>
+          {months.map(m=><option key={m} value={m}>{m}</option>)}
+          {!months.includes(selMonth)&&<option value={selMonth}>{selMonth}</option>}
+        </select>
+        <div style={{marginLeft:"auto",background:"linear-gradient(135deg,#0f766e,#0d9488)",borderRadius:10,padding:"8px 16px",color:"#fff",fontSize:13,fontWeight:700}}>
+          Total: {totalAllHrs} hrs = ${totalAllHrs}
+        </div>
+      </div>
+
+      {empSummary.length===0?(
+        <div style={{textAlign:"center",padding:40,color:"#94a3b8"}}>
+          <div style={{fontSize:40}}>📋</div>
+          <div style={{fontWeight:700,marginTop:8}}>No records for {selMonth}</div>
+        </div>
+      ):empSummary.map(e=>(
+        <div key={e.id} style={{background:"#fff",border:"1px solid #E2E8F0",borderRadius:16,marginBottom:14,overflow:"hidden",boxShadow:"0 2px 8px rgba(0,0,0,0.06)"}}>
+          {/* Worker header */}
+          <div style={{background:"linear-gradient(135deg,#0f766e,#0d9488)",padding:"12px 16px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+            <div style={{display:"flex",alignItems:"center",gap:10}}>
+              <div style={{width:36,height:36,borderRadius:10,background:"rgba(255,255,255,0.2)",display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontSize:16,fontWeight:800}}>{e.name[0]}</div>
+              <div>
+                <div style={{fontWeight:800,fontSize:15,color:"#fff"}}>{e.name}</div>
+                <div style={{fontSize:11,color:"rgba(255,255,255,0.8)"}}>{e.logs.length} days worked</div>
+              </div>
+            </div>
+            <div style={{textAlign:"right"}}>
+              <div style={{fontWeight:900,fontSize:20,color:"#fff"}}>{e.totalHrs} hrs</div>
+              <div style={{fontSize:13,color:"rgba(255,255,255,0.9)",fontWeight:700}}>${e.totalAmt}</div>
+            </div>
+          </div>
+
+          {/* Daily breakdown */}
+          <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
+            <thead>
+              <tr style={{background:"#f8fafc"}}>
+                <th style={{padding:"8px 14px",textAlign:"left",fontWeight:700,color:"#64748b",fontSize:11,borderBottom:"1px solid #e2e8f0"}}>DATE</th>
+                <th style={{padding:"8px 14px",textAlign:"center",fontWeight:700,color:"#64748b",fontSize:11,borderBottom:"1px solid #e2e8f0"}}>HOURS</th>
+                <th style={{padding:"8px 14px",textAlign:"center",fontWeight:700,color:"#64748b",fontSize:11,borderBottom:"1px solid #e2e8f0"}}>AMOUNT</th>
+                <th style={{padding:"8px 14px",textAlign:"center",fontWeight:700,color:"#64748b",fontSize:11,borderBottom:"1px solid #e2e8f0"}}>CUMULATIVE</th>
+                <th style={{padding:"8px 14px",textAlign:"center",fontWeight:700,color:"#64748b",fontSize:11,borderBottom:"1px solid #e2e8f0"}}>NOTE</th>
+                <th style={{padding:"8px 14px",borderBottom:"1px solid #e2e8f0"}}></th>
+              </tr>
+            </thead>
+            <tbody>
+              {(()=>{
+                let cumHrs=0;
+                return e.logs.map((l,i)=>{
+                  cumHrs+=l.hours||0;
+                  return(
+                    <tr key={l.id} style={{borderBottom:"1px solid #f1f5f9",background:i%2===0?"#fff":"#f8fafc"}}>
+                      <td style={{padding:"8px 14px",fontWeight:700,color:"#1a1a2e"}}>📅 {l.date}</td>
+                      <td style={{padding:"8px 14px",textAlign:"center",fontWeight:800,color:"#0f766e",fontSize:15}}>{l.hours}</td>
+                      <td style={{padding:"8px 14px",textAlign:"center",fontWeight:700,color:"#1A7A4A"}}>${l.amount||l.hours}</td>
+                      <td style={{padding:"8px 14px",textAlign:"center"}}>
+                        <span style={{background:"rgba(15,118,110,0.1)",color:"#0f766e",padding:"3px 10px",borderRadius:8,fontWeight:800,fontSize:13}}>{cumHrs} hrs</span>
+                      </td>
+                      <td style={{padding:"8px 14px",textAlign:"center",color:"#64748b",fontSize:12}}>{l.note||"—"}</td>
+                      <td style={{padding:"8px 14px",textAlign:"center"}}>
+                        <button onClick={()=>onDelete(l.id)} style={{background:"transparent",border:"none",color:"#ef4444",cursor:"pointer",fontSize:14}}>🗑️</button>
+                      </td>
+                    </tr>
+                  );
+                });
+              })()}
+            </tbody>
+            <tfoot>
+              <tr style={{background:"#f0fdf4",borderTop:"2px solid #0f766e"}}>
+                <td style={{padding:"10px 14px",fontWeight:800,color:"#0f766e"}}>Total for {selMonth}</td>
+                <td style={{padding:"10px 14px",textAlign:"center",fontWeight:900,color:"#0f766e",fontSize:16}}>{e.totalHrs}</td>
+                <td style={{padding:"10px 14px",textAlign:"center",fontWeight:900,color:"#1A7A4A",fontSize:16}}>${e.totalAmt}</td>
+                <td colSpan={3}/>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      ))}
+    </div>
+  );
 }
 
 function ForemanOTForm({employees, onSubmit}) {
