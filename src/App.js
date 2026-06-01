@@ -13,6 +13,14 @@ const USERS = [
   { id: "ihab", name: "إيهاب", role: "employee", pin: "5555" },
 ];
 
+const SPECIALIZATIONS = ["مقاولات", "ديكور", "واجهات"];
+
+const PROVINCES = [
+  "بغداد","البصرة","نينوى","أربيل","النجف","كربلاء","الأنبار","ديالى",
+  "صلاح الدين","بابل","واسط","ذي قار","المثنى","القادسية","ميسان",
+  "كركوك","السليمانية","دهوك","حلبجة"
+];
+
 const toArabicNums = (n) => String(n).replace(/\d/g, d => "٠١٢٣٤٥٦٧٨٩"[d]);
 const fmt = (n, currency) => toArabicNums(Number(n || 0).toLocaleString("ar-IQ")) + (currency === "دولار" ? " $" : " د.ع");
 
@@ -33,9 +41,9 @@ export default function App() {
   const [transactions, setTransactions] = useState([]);
   const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [form, setForm] = useState({ type: "استلام", projectId: "", amount: "", currency: "دينار", note: "", date: new Date().toISOString().split("T")[0], image: null });
+  const [form, setForm] = useState({ type:"استلام", projectId:"", amount:"", currency:"دينار", note:"", date:new Date().toISOString().split("T")[0], image:null });
   const [formSuccess, setFormSuccess] = useState(false);
-  const [newProject, setNewProject] = useState("");
+  const [newProject, setNewProject] = useState({ name:"", specialization:"مقاولات", province:"بغداد" });
   const [filterUser, setFilterUser] = useState("all");
   const [filterProject, setFilterProject] = useState("all");
   const [filterFrom, setFilterFrom] = useState("");
@@ -77,7 +85,8 @@ export default function App() {
     const proj = projects.find(p => p.id === form.projectId);
     await addDoc(collection(db, "transactions"), {
       userId: user.id, userName: user.name,
-      projectId: form.projectId, projectName: proj?.name || "",
+      projectId: form.projectId,
+      projectName: proj ? `${proj.name} - ${proj.specialization} - ${proj.province}` : "",
       type: form.type, amount: Number(form.amount),
       currency: form.currency,
       note: form.note, date: form.date,
@@ -87,15 +96,19 @@ export default function App() {
     setFormSuccess(true);
     setTimeout(() => {
       setFormSuccess(false);
-      setForm({ type: "استلام", projectId: "", amount: "", currency: "دينار", note: "", date: new Date().toISOString().split("T")[0], image: null });
+      setForm({ type:"استلام", projectId:"", amount:"", currency:"دينار", note:"", date:new Date().toISOString().split("T")[0], image:null });
       setView("home");
     }, 1500);
   };
 
   const addProject = async () => {
-    if (!newProject.trim()) return;
-    await addDoc(collection(db, "projects"), { name: newProject.trim() });
-    setNewProject("");
+    if (!newProject.name.trim()) return;
+    await addDoc(collection(db, "projects"), {
+      name: newProject.name.trim(),
+      specialization: newProject.specialization,
+      province: newProject.province,
+    });
+    setNewProject({ name:"", specialization:"مقاولات", province:"بغداد" });
   };
 
   const deleteProject = async (id) => {
@@ -144,13 +157,14 @@ export default function App() {
   });
 
   const exportPDF = () => {
-    const projName = filterProject !== "all" ? projects.find(p => p.id === filterProject)?.name : "كل المشاريع";
+    const projName = filterProject !== "all" ? projects.find(p => p.id === filterProject) : null;
+    const projLabel = projName ? `${projName.name} - ${projName.specialization} - ${projName.province}` : "كل المشاريع";
     const rows = statementTx.map(t => `
       <tr>
         <td>${t.date}</td>
         <td>${t.projectName}</td>
         <td style="color:${t.type==='استلام'?'green':'red'}">${t.type}</td>
-        <td>${toArabicNums(Number(t.amount).toLocaleString("ar-IQ"))}</td>
+        <td>${toArabicNums(Number(t.amount).toLocaleString("ar-IQ"))} ${t.currency==="دولار"?"$":"د.ع"}</td>
         <td>${t.note || "-"}</td>
         ${t.image ? `<td><img src="${t.image}" style="width:60px;height:60px;object-fit:cover;border-radius:6px"/></td>` : "<td>-</td>"}
       </tr>
@@ -166,7 +180,7 @@ export default function App() {
       .box{border:1px solid #ddd;border-radius:10px;padding:14px 20px;flex:1;text-align:center}
       .box .label{font-size:12px;color:#888}
       .box .val{font-size:18px;font-weight:bold;margin-top:4px}
-      .green{color:#047857}.red{color:#991b1b}.blue{color:#1d4ed8}
+      .green{color:#047857}.red{color:#991b1b}
       table{width:100%;border-collapse:collapse;font-size:13px}
       th{background:#1d4ed8;color:white;padding:10px}
       td{padding:9px 10px;border-bottom:1px solid #eee;text-align:center}
@@ -175,11 +189,11 @@ export default function App() {
     </style></head>
     <body>
       <h1>كشف حساب - ${statementUser?.name}</h1>
-      <div class="info">العملة: ${filterCurrency} | المشروع: ${projName} | من: ${filterFrom||"البداية"} | إلى: ${filterTo||"الآن"}</div>
+      <div class="info">العملة: ${filterCurrency} | المشروع: ${projLabel} | من: ${filterFrom||"البداية"} | إلى: ${filterTo||"الآن"}</div>
       <div class="summary">
-        <div class="box"><div class="label">إجمالي الاستلام</div><div class="val green">${fmt(stStats.received, filterCurrency)}</div></div>
-        <div class="box"><div class="label">إجمالي الصرف</div><div class="val red">${fmt(stStats.spent, filterCurrency)}</div></div>
-        <div class="box"><div class="label">الرصيد</div><div class="val ${stStats.balance>=0?'green':'red'}">${fmt(Math.abs(stStats.balance), filterCurrency)} ${stStats.balance>=0?'متبقي':'عليه'}</div></div>
+        <div class="box"><div class="label">إجمالي الاستلام</div><div class="val green">${fmt(stStats.received,filterCurrency)}</div></div>
+        <div class="box"><div class="label">إجمالي الصرف</div><div class="val red">${fmt(stStats.spent,filterCurrency)}</div></div>
+        <div class="box"><div class="label">الرصيد</div><div class="val ${stStats.balance>=0?'green':'red'}">${fmt(Math.abs(stStats.balance),filterCurrency)} ${stStats.balance>=0?'متبقي':'عليه'}</div></div>
       </div>
       <table>
         <thead><tr><th>التاريخ</th><th>المشروع</th><th>النوع</th><th>المبلغ</th><th>ملاحظات</th><th>صورة</th></tr></thead>
@@ -209,7 +223,7 @@ export default function App() {
               {USERS.map(u => (
                 <button key={u.id} style={{ ...S.userBtn, ...(u.role==="manager"?S.managerBtn:{}) }}
                   onClick={() => { setLoginId(u.id); setPin(""); setPinError(false); }}>
-                  <div style={{ ...S.avatar, background: u.role==="manager"?"linear-gradient(135deg,#1d4ed8,#2563eb)":"linear-gradient(135deg,#f59e0b,#d97706)" }}>{u.name[0]}</div>
+                  <div style={{ ...S.avatar, background:u.role==="manager"?"linear-gradient(135deg,#1d4ed8,#2563eb)":"linear-gradient(135deg,#f59e0b,#d97706)" }}>{u.name[0]}</div>
                   <div style={S.userBtnName}>{u.name}</div>
                   <div style={S.userBtnRole}>{u.role==="manager"?"مدير مالي":"حسابات"}</div>
                 </button>
@@ -219,7 +233,7 @@ export default function App() {
         ) : (
           <>
             <div style={S.selectedUser}>
-              <div style={{ ...S.avatar, background: USERS.find(u=>u.id===loginId)?.role==="manager"?"linear-gradient(135deg,#1d4ed8,#2563eb)":"linear-gradient(135deg,#f59e0b,#d97706)" }}>
+              <div style={{ ...S.avatar, background:USERS.find(u=>u.id===loginId)?.role==="manager"?"linear-gradient(135deg,#1d4ed8,#2563eb)":"linear-gradient(135deg,#f59e0b,#d97706)" }}>
                 {USERS.find(u=>u.id===loginId)?.name[0]}
               </div>
               <div>
@@ -229,7 +243,7 @@ export default function App() {
             </div>
             <div style={S.label}>أدخل الرمز السري</div>
             <div style={S.pinDots}>
-              {[0,1,2,3].map(i => <div key={i} style={{ ...S.dot, background: pin.length>i?"#f59e0b":"rgba(255,255,255,0.15)" }} />)}
+              {[0,1,2,3].map(i => <div key={i} style={{ ...S.dot, background:pin.length>i?"#f59e0b":"rgba(255,255,255,0.15)" }} />)}
             </div>
             {pinError && <div style={S.pinError}>رمز خاطئ، حاول مرة ثانية</div>}
             <div style={S.numpad}>
@@ -271,20 +285,18 @@ export default function App() {
           {/* EMPLOYEE HOME */}
           {!loading && user.role==="employee" && view==="home" && (
             <div>
-              {/* دينار */}
               <div style={{ ...S.balCard, background:"linear-gradient(135deg,#065f46,#047857)", marginBottom:10 }}>
-                <div style={S.balLabel}>دينار عراقي</div>
-                <div style={S.balAmount}>{fmt(Math.abs(dinarStats.balance), "دينار")}</div>
+                <div style={S.balLabel}>🇮🇶 دينار عراقي</div>
+                <div style={S.balAmount}>{fmt(Math.abs(dinarStats.balance),"دينار")}</div>
                 <div style={S.balSub}>{dinarStats.balance>=0?"متبقي معك":"عليك"}</div>
                 <div style={S.balRow}>
                   <span style={S.balStat}>↓ {fmt(dinarStats.received,"دينار")}</span>
                   <span style={S.balStat}>↑ {fmt(dinarStats.spent,"دينار")}</span>
                 </div>
               </div>
-              {/* دولار */}
               <div style={{ ...S.balCard, background:"linear-gradient(135deg,#1d4ed8,#2563eb)", marginBottom:16 }}>
-                <div style={S.balLabel}>دولار أمريكي</div>
-                <div style={S.balAmount}>{fmt(Math.abs(dollarStats.balance), "دولار")}</div>
+                <div style={S.balLabel}>🇺🇸 دولار أمريكي</div>
+                <div style={S.balAmount}>{fmt(Math.abs(dollarStats.balance),"دولار")}</div>
                 <div style={S.balSub}>{dollarStats.balance>=0?"متبقي معك":"عليك"}</div>
                 <div style={S.balRow}>
                   <span style={S.balStat}>↓ {fmt(dollarStats.received,"دولار")}</span>
@@ -315,7 +327,6 @@ export default function App() {
                       </button>
                     ))}
                   </div>
-
                   <div style={S.fieldLabel}>العملة</div>
                   <div style={S.typeRow}>
                     {["دينار","دولار"].map(c => (
@@ -325,29 +336,23 @@ export default function App() {
                       </button>
                     ))}
                   </div>
-
                   <div style={S.fieldLabel}>المشروع</div>
                   <select style={S.select} value={form.projectId} onChange={e=>setForm(f=>({...f,projectId:e.target.value}))}>
                     <option value="">اختر المشروع</option>
-                    {projects.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}
+                    {projects.map(p=><option key={p.id} value={p.id}>{p.name} - {p.specialization} - {p.province}</option>)}
                   </select>
-
                   <div style={S.fieldLabel}>المبلغ</div>
                   <input style={S.input} type="number" placeholder="٠" value={form.amount} onChange={e=>setForm(f=>({...f,amount:e.target.value}))} />
-
                   <div style={S.fieldLabel}>التاريخ</div>
                   <input style={S.input} type="date" value={form.date} onChange={e=>setForm(f=>({...f,date:e.target.value}))} />
-
                   <div style={S.fieldLabel}>ملاحظات</div>
                   <textarea style={S.textarea} placeholder="اكتب تفاصيل..." value={form.note} onChange={e=>setForm(f=>({...f,note:e.target.value}))} rows={2} />
-
                   <div style={S.fieldLabel}>صورة الوصل (اختياري)</div>
                   <input ref={imgRef} type="file" accept="image/*" capture="environment" style={{ display:"none" }} onChange={handleImageChange} />
                   <button style={S.imgBtn} onClick={() => imgRef.current.click()}>
-                    {form.image ? "✓ تم اختيار الصورة" : "📷 التقط أو اختر صورة"}
+                    {form.image?"✓ تم اختيار الصورة":"📷 التقط أو اختر صورة"}
                   </button>
                   {form.image && <img src={form.image} style={S.imgPreview} alt="preview" onClick={() => setViewImage(form.image)} />}
-
                   <button style={S.submitBtn} onClick={submitTransaction}>حفظ</button>
                   <button style={S.cancelBtn} onClick={() => setView("home")}>إلغاء</button>
                 </div>
@@ -398,28 +403,23 @@ export default function App() {
                 <div style={S.fieldLabel}>المشروع</div>
                 <select style={S.select} value={filterProject} onChange={e=>setFilterProject(e.target.value)}>
                   <option value="all">كل المشاريع</option>
-                  {projects.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}
+                  {projects.map(p=><option key={p.id} value={p.id}>{p.name} - {p.specialization} - {p.province}</option>)}
                 </select>
                 <div style={S.fieldLabel}>من تاريخ</div>
                 <input style={S.input} type="date" value={filterFrom} onChange={e=>setFilterFrom(e.target.value)} />
                 <div style={S.fieldLabel}>إلى تاريخ</div>
                 <input style={S.input} type="date" value={filterTo} onChange={e=>setFilterTo(e.target.value)} />
               </div>
-
               <div style={{ ...S.balCard, background:stStats.balance>=0?"linear-gradient(135deg,#065f46,#047857)":"linear-gradient(135deg,#7f1d1d,#991b1b)", marginBottom:16 }}>
                 <div style={S.balLabel}>الرصيد - {filterCurrency}</div>
-                <div style={S.balAmount}>{fmt(Math.abs(stStats.balance), filterCurrency)}</div>
+                <div style={S.balAmount}>{fmt(Math.abs(stStats.balance),filterCurrency)}</div>
                 <div style={S.balSub}>{stStats.balance>=0?"متبقي معه":"عليه"}</div>
                 <div style={S.balRow}>
-                  <span style={S.balStat}>↓ استلم {fmt(stStats.received, filterCurrency)}</span>
-                  <span style={S.balStat}>↑ صرف {fmt(stStats.spent, filterCurrency)}</span>
+                  <span style={S.balStat}>↓ استلم {fmt(stStats.received,filterCurrency)}</span>
+                  <span style={S.balStat}>↑ صرف {fmt(stStats.spent,filterCurrency)}</span>
                 </div>
               </div>
-
-              <button style={{ ...S.addBtn, background:"linear-gradient(135deg,#1d4ed8,#2563eb)", marginBottom:16 }} onClick={exportPDF}>
-                📄 تصدير PDF
-              </button>
-
+              <button style={{ ...S.addBtn, background:"linear-gradient(135deg,#1d4ed8,#2563eb)", marginBottom:16 }} onClick={exportPDF}>📄 تصدير PDF</button>
               {statementTx.length===0 && <div style={S.empty}>ما في معاملات</div>}
               {statementTx.map(t => <TxCard key={t.id} t={t} onDelete={() => deleteTransaction(t.id)} onViewImage={setViewImage} />)}
               <button style={S.cancelBtn} onClick={() => setView("home")}>← رجوع</button>
@@ -439,7 +439,7 @@ export default function App() {
                 <div style={S.fieldLabel}>المشروع</div>
                 <select style={S.select} value={filterProject} onChange={e=>setFilterProject(e.target.value)}>
                   <option value="all">الكل</option>
-                  {projects.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}
+                  {projects.map(p=><option key={p.id} value={p.id}>{p.name} - {p.specialization} - {p.province}</option>)}
                 </select>
                 <div style={S.fieldLabel}>من تاريخ</div>
                 <input style={S.input} type="date" value={filterFrom} onChange={e=>setFilterFrom(e.target.value)} />
@@ -458,15 +458,31 @@ export default function App() {
             <div>
               <div style={S.secTitle}>إدارة المشاريع</div>
               <div style={S.formCard}>
-                <div style={S.fieldLabel}>إضافة مشروع جديد</div>
-                <input style={S.input} placeholder="اسم المشروع" value={newProject} onChange={e=>setNewProject(e.target.value)} />
-                <button style={{ ...S.submitBtn, marginTop:12 }} onClick={addProject}>+ إضافة</button>
+                <div style={S.fieldLabel}>اسم المشروع</div>
+                <input style={S.input} placeholder="مثال: برج الأمل" value={newProject.name} onChange={e=>setNewProject(p=>({...p,name:e.target.value}))} />
+                <div style={S.fieldLabel}>التخصص</div>
+                <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
+                  {SPECIALIZATIONS.map(s => (
+                    <button key={s} style={{ ...S.specBtn, ...(newProject.specialization===s?S.specBtnActive:{}) }}
+                      onClick={() => setNewProject(p=>({...p,specialization:s}))}>
+                      {s}
+                    </button>
+                  ))}
+                </div>
+                <div style={S.fieldLabel}>المحافظة</div>
+                <select style={S.select} value={newProject.province} onChange={e=>setNewProject(p=>({...p,province:e.target.value}))}>
+                  {PROVINCES.map(pr=><option key={pr} value={pr}>{pr}</option>)}
+                </select>
+                <button style={{ ...S.submitBtn, marginTop:16 }} onClick={addProject}>+ إضافة المشروع</button>
               </div>
               <div style={{ height:16 }} />
               {projects.length===0 && <div style={S.empty}>ما في مشاريع بعد</div>}
               {projects.map(p => (
                 <div key={p.id} style={S.projCard}>
-                  <div style={S.projName}>🏗️ {p.name}</div>
+                  <div>
+                    <div style={S.projName}>{p.name}</div>
+                    <div style={S.projMeta}>{p.specialization} · {p.province}</div>
+                  </div>
                   <button style={S.deleteBtn} onClick={() => deleteProject(p.id)}>حذف</button>
                 </div>
               ))}
@@ -538,7 +554,7 @@ const S = {
   headerRole:{ fontSize:12, color:"#f59e0b", marginTop:2 },
   logoutBtn:{ background:"rgba(255,255,255,0.06)", border:"1px solid rgba(255,255,255,0.1)", borderRadius:10, padding:"8px 14px", color:"#9ca3af", fontSize:13, cursor:"pointer" },
   content:{ flex:1, padding:"20px 16px 100px", overflowY:"auto" },
-  balCard:{ borderRadius:20, padding:"20px", marginBottom:16 },
+  balCard:{ borderRadius:20, padding:"20px", marginBottom:10 },
   balLabel:{ fontSize:13, color:"rgba(255,255,255,0.7)", marginBottom:8 },
   balAmount:{ fontSize:28, fontWeight:900 },
   balSub:{ fontSize:13, color:"rgba(255,255,255,0.6)", marginBottom:12 },
@@ -565,6 +581,8 @@ const S = {
   typeBtnGreen:{ background:"rgba(6,95,70,0.3)", border:"1px solid #047857", color:"#34d399" },
   typeBtnRed:{ background:"rgba(127,29,29,0.3)", border:"1px solid #991b1b", color:"#f87171" },
   typeBtnBlue:{ background:"rgba(29,78,216,0.3)", border:"1px solid #2563eb", color:"#60a5fa" },
+  specBtn:{ background:"rgba(255,255,255,0.06)", border:"1px solid rgba(255,255,255,0.1)", borderRadius:10, padding:"10px 16px", color:"#9ca3af", fontSize:14, cursor:"pointer" },
+  specBtnActive:{ background:"rgba(245,158,11,0.2)", border:"1px solid #f59e0b", color:"#f59e0b" },
   select:{ width:"100%", background:"#1a1a2e", border:"1px solid rgba(255,255,255,0.12)", borderRadius:12, padding:"12px 14px", color:"#fff", fontSize:15, outline:"none", boxSizing:"border-box" },
   input:{ width:"100%", background:"#1a1a2e", border:"1px solid rgba(255,255,255,0.12)", borderRadius:12, padding:"12px 14px", color:"#fff", fontSize:15, outline:"none", boxSizing:"border-box" },
   textarea:{ width:"100%", background:"#1a1a2e", border:"1px solid rgba(255,255,255,0.12)", borderRadius:12, padding:"12px 14px", color:"#fff", fontSize:14, outline:"none", resize:"none", boxSizing:"border-box" },
@@ -580,6 +598,7 @@ const S = {
   empSub:{ fontSize:12, color:"#6b7280", marginTop:2 },
   projCard:{ background:"rgba(255,255,255,0.04)", border:"1px solid rgba(255,255,255,0.07)", borderRadius:12, padding:"12px 16px", marginBottom:8, display:"flex", justifyContent:"space-between", alignItems:"center" },
   projName:{ fontSize:14, fontWeight:600, color:"#fff" },
+  projMeta:{ fontSize:12, color:"#6b7280", marginTop:3 },
   deleteBtn:{ background:"rgba(127,29,29,0.3)", border:"1px solid rgba(239,68,68,0.3)", borderRadius:8, padding:"6px 14px", color:"#f87171", fontSize:13, cursor:"pointer" },
   bottomNav:{ position:"fixed", bottom:0, left:"50%", transform:"translateX(-50%)", width:"100%", maxWidth:420, background:"rgba(10,10,15,0.97)", borderTop:"1px solid rgba(255,255,255,0.08)", display:"flex", padding:"10px 20px 20px" },
   navBtn:{ flex:1, background:"transparent", border:"none", color:"#6b7280", cursor:"pointer", padding:"8px", borderRadius:12, display:"flex", flexDirection:"column", alignItems:"center", gap:4, fontSize:12 },
