@@ -135,10 +135,46 @@ export default function App() {
 
   const addTx = async () => {
     if(!form.amount||!form.date)return;
+
+    // فورمن
+    if(form.isForeman){
+      if(!form.foremanId)return;
+      const amt=Number(form.amount);
+      const foreman=foremen.find(f=>f.id===form.foremanId);
+      // صرف على أحمد مرتبط بالفورمن
+      await addDoc(collection(db,"transactions"),{
+        userId:user.id, userName:user.name,
+        projectId:form.projectId||foreman?.projectId||"",
+        projectName:projs.find(p=>p.id==(form.projectId||foreman?.projectId))?.name||"",
+        type:"صرف", amount:amt,
+        currency:form.currency,
+        note:`دفعة للفورمن ${foreman?.name||""}${form.note?" — "+form.note:""}`,
+        date:form.date, image:null,
+        isPersonal:false, isAdvance:false, isForeman:true,
+        foremanId:form.foremanId, foremanName:foreman?.name||"",
+        createdAt:new Date().toISOString(),
+      });
+      // استلام عند الفورمن (مرتبط به)
+      await addDoc(collection(db,"transactions"),{
+        userId:"foreman", userName:foreman?.name||"Foreman",
+        projectId:form.projectId||foreman?.projectId||"",
+        projectName:projs.find(p=>p.id==(form.projectId||foreman?.projectId))?.name||"",
+        type:"استلام", amount:amt,
+        currency:form.currency,
+        note:`استلام من أحمد${form.note?" — "+form.note:""}`,
+        date:form.date, image:null,
+        isPersonal:false, isAdvance:false, isForeman:true,
+        foremanId:form.foremanId, foremanName:foreman?.name||"",
+        createdAt:new Date().toISOString(),
+      });
+      setFormOK(true);
+      setTimeout(()=>{setFormOK(false);setForm({type:"استلام",projectId:"",amount:"",currency:"دينار",note:"",date:today(),image:null,isPersonal:false,isAdvance:false,advanceTo:"",advanceIsPersonal:false,receiveType:"",generalLabel:"",isForeman:false,foremanId:"",foremanName:""});setView("home");},1500);
+      return;
+    }
+
     // التحقق حسب النوع
     if(!form.isPersonal&&!form.isAdvance){
       if(user.role==="accountant"){
-        // أحمد يستلم: مشروع يحتاج projectId، عام يحتاج generalLabel
         if(form.receiveType==="project"&&!form.projectId)return;
         if(form.receiveType==="general"&&!form.generalLabel?.trim())return;
         if(!form.receiveType)return;
@@ -221,7 +257,7 @@ export default function App() {
     setFormOK(true);
     setTimeout(()=>{
       setFormOK(false);
-      setForm({type:"استلام",projectId:"",amount:"",currency:"دينار",note:"",date:today(),image:null,isPersonal:false,isAdvance:false,advanceTo:"",advanceIsPersonal:false,receiveType:"",generalLabel:""});
+      setForm({type:"استلام",projectId:"",amount:"",currency:"دينار",note:"",date:today(),image:null,isPersonal:false,isAdvance:false,advanceTo:"",advanceIsPersonal:false,receiveType:"",generalLabel:"",isForeman:false,foremanId:"",foremanName:""});
       setView("home");
     },1500);
   };
@@ -948,13 +984,53 @@ export default function App() {
               <>
                 <div style={S.fLbl}>نوع المعاملة</div>
                 <div style={S.tRow}>
-                  <button style={{...S.tBtn,...(!form.isAdvance?{background:"rgba(26,122,74,0.15)",border:`1px solid #1A7A4A`,color:"#1A7A4A"}:{})}} onClick={()=>setForm(f=>({...f,isAdvance:false,type:"استلام",isPersonal:false}))}>
+                  <button style={{...S.tBtn,...(!form.isAdvance&&!form.isForeman?{background:"rgba(26,122,74,0.15)",border:`1px solid #1A7A4A`,color:"#1A7A4A"}:{})}} onClick={()=>setForm(f=>({...f,isAdvance:false,isForeman:false,type:"استلام",isPersonal:false}))}>
                     ↓ استلام
                   </button>
-                  <button style={{...S.tBtn,...(form.isAdvance?{background:"rgba(193,123,47,0.15)",border:`1px solid ${C.gold}`,color:C.gold}:{})}} onClick={()=>setForm(f=>({...f,isAdvance:true,type:"صرف",isPersonal:false,projectId:""}))}>
+                  <button style={{...S.tBtn,...(form.isAdvance?{background:"rgba(193,123,47,0.15)",border:`1px solid ${C.gold}`,color:C.gold}:{})}} onClick={()=>setForm(f=>({...f,isAdvance:true,isForeman:false,type:"صرف",isPersonal:false,projectId:""}))}>
                     💸 سلفة لشخص
                   </button>
+                  <button style={{...S.tBtn,...(form.isForeman?{background:"rgba(180,83,9,0.15)",border:`1px solid #b45309`,color:"#b45309"}:{})}} onClick={()=>setForm(f=>({...f,isForeman:true,isAdvance:false,type:"صرف",isPersonal:false,projectId:"",advanceTo:""}))}>
+                    👷 دفع لفورمن
+                  </button>
                 </div>
+
+                {/* دفع لفورمن */}
+                {form.isForeman&&(
+                  <>
+                    <div style={S.fLbl}>اختر الفورمن</div>
+                    {foremen.length===0?(
+                      <div style={{background:`rgba(180,83,9,0.08)`,border:`1px solid rgba(180,83,9,0.2)`,borderRadius:10,padding:"12px 14px",fontSize:13,color:"#b45309",fontWeight:600}}>
+                        ما في فورمنية مسجلين — اذهب لصفحة الفورمنية وأضف أولاً
+                      </div>
+                    ):(
+                      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+                        {foremen.map(f=>{
+                          const proj=projs.find(p=>p.id===f.projectId);
+                          return(
+                            <button key={f.id} style={{
+                              display:"flex",alignItems:"center",gap:8,padding:"10px 12px",
+                              borderRadius:12,border:`2px solid ${form.foremanId===f.id?"#b45309":C.cardBorder}`,
+                              background:form.foremanId===f.id?"rgba(180,83,9,0.08)":C.bg2,
+                              cursor:"pointer",textAlign:"right",
+                            }} onClick={()=>setForm(x=>({...x,foremanId:f.id,foremanName:f.name,projectId:f.projectId||""}))}>
+                              <div style={{width:30,height:30,borderRadius:9,background:"linear-gradient(135deg,#b45309,#92400e)",display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontSize:13,fontWeight:800,flexShrink:0}}>{f.name[0]}</div>
+                              <div style={{textAlign:"right"}}>
+                                <div style={{fontSize:13,fontWeight:700,color:form.foremanId===f.id?"#b45309":C.text}}>{f.name}</div>
+                                {proj&&<div style={{fontSize:10,color:C.textSm}}>{proj.name}</div>}
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                    {form.foremanId&&(
+                      <div style={{background:"rgba(180,83,9,0.08)",border:`1px solid rgba(180,83,9,0.2)`,borderRadius:10,padding:"10px 14px",marginTop:8,fontSize:13,color:"#b45309",fontWeight:600}}>
+                        💡 ستتسجل كدفعة لـ {form.foremanName} وتنقص من رصيد أحمد
+                      </div>
+                    )}
+                  </>
+                )}
 
                 {form.isAdvance&&(
                   <>
@@ -2047,8 +2123,8 @@ function ForemenPage({D,foremen,projs,txs,onAdd,onDel,S,C,fmt,fmtD,toAr,today,Ba
   const getForemanStats = (f) => {
     const proj = projs.find(p=>p.id===f.projectId);
     // المبالغ المستلمة من أحمد (استلام في معاملات التحويل لهذا الفورمن)
-    const received = txs.filter(t=>t.foremanId===f.id&&t.type==="استلام").reduce((s,t)=>s+t.amount,0);
-    const spent    = txs.filter(t=>t.foremanId===f.id&&t.type==="صرف").reduce((s,t)=>s+t.amount,0);
+    const received = txs.filter(t=>t.foremanId===f.id&&t.type==="استلام"&&t.userId==="foreman").reduce((s,t)=>s+t.amount,0);
+    const spent    = txs.filter(t=>t.foremanId===f.id&&t.type==="صرف"&&t.userId==="foreman").reduce((s,t)=>s+t.amount,0);
     return {proj, received, spent, balance: received-spent};
   };
 
@@ -2143,9 +2219,9 @@ function ForemenPage({D,foremen,projs,txs,onAdd,onDel,S,C,fmt,fmtD,toAr,today,Ba
                 {selForeman?.id===f.id&&(
                   <div style={{marginTop:14,borderTop:`1px solid ${C.cardBorder}`,paddingTop:14}}>
                     <div style={{fontWeight:800,fontSize:14,color:C.text,marginBottom:10}}>📋 كشف حساب الفورمن</div>
-                    {txs.filter(t=>t.foremanId===f.id).length===0?(
+                    {txs.filter(t=>t.foremanId===f.id&&t.userId==="foreman").length===0?(
                       <div style={{textAlign:"center",color:C.textSm,padding:16,fontSize:13}}>ما في معاملات مرتبطة بهذا الفورمن</div>
-                    ):txs.filter(t=>t.foremanId===f.id).map(t=>(
+                    ):txs.filter(t=>t.foremanId===f.id&&t.userId==="foreman").map(t=>(
                       <div key={t.id} style={{background:C.bg2,borderRadius:10,padding:"10px 12px",marginBottom:6,display:"flex",justifyContent:"space-between"}}>
                         <div>
                           <div style={{fontSize:13,fontWeight:700,color:C.text}}>{t.type}</div>
@@ -2162,10 +2238,7 @@ function ForemenPage({D,foremen,projs,txs,onAdd,onDel,S,C,fmt,fmtD,toAr,today,Ba
         </div>
       )}
 
-      {/* تنبيه */}
-      <div style={{background:`rgba(37,87,167,0.06)`,border:`1px solid rgba(37,87,167,0.15)`,borderRadius:14,padding:"12px 16px",marginTop:16,fontSize:13,color:"#2557A7",fontWeight:600}}>
-        💡 لربط معاملة بفورمن: عند تسجيل المعاملة اختر "فورمن" من حقل التوجيه (قريباً)
-      </div>
+
     </div>
   );
 }
