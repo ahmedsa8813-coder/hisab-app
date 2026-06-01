@@ -3,16 +3,17 @@ import { db } from "./firebase";
 import { collection, addDoc, onSnapshot, query, orderBy, deleteDoc, doc, setDoc } from "firebase/firestore";
 
 const USERS = [
-  { id: "manager",  name: "المدير المالي", role: "manager",  pin: "0000" },
-  { id: "noor",     name: "نور",           role: "partner",  pin: "0000", share: 35 },
-  { id: "mohammed", name: "محمد",          role: "partner",  pin: "0000", share: 15 },
-  { id: "hussein",  name: "حسين",          role: "employee", pin: "0000" },
-  { id: "ahmed",    name: "أحمد",          role: "partner",  pin: "0000", share: 15 },
-  { id: "ihab",     name: "إيهاب",         role: "partner",  pin: "0000", share: 35 },
+  { id: "manager",  name: "المدير المالي", role: "manager",   pin: "0000" },
+  { id: "noor",     name: "نور",           role: "partner",   pin: "0000", share: 35, canReceive: false },
+  { id: "mohammed", name: "محمد",          role: "partner",   pin: "0000", share: 15, canReceive: false },
+  { id: "hussein",  name: "حسين",          role: "employee",  pin: "0000",            canReceive: false },
+  { id: "ahmed",    name: "أحمد",          role: "accountant",pin: "0000", share: 15, canReceive: true  },
+  { id: "ihab",     name: "إيهاب",         role: "partner",   pin: "0000", share: 35, canReceive: false },
 ];
 
-const PARTNERS  = USERS.filter(u => u.role === "partner");
-const WORKERS   = USERS.filter(u => u.role !== "manager");
+const PARTNERS    = USERS.filter(u => u.share && u.role !== "manager");
+const WORKERS     = USERS.filter(u => u.role !== "manager");
+const ACCOUNTANT  = USERS.find(u => u.role === "accountant"); // أحمد
 const SPECS     = ["مقاولات","ديكور","واجهات"];
 const PROVINCES = ["بغداد","البصرة","نينوى","أربيل","النجف","كربلاء","الأنبار","ديالى","صلاح الدين","بابل","واسط","ذي قار","المثنى","القادسية","ميسان","كركوك","السليمانية","دهوك","حلبجة"];
 
@@ -96,19 +97,51 @@ export default function App() {
 
   const addTx = async () => {
     if(!form.amount||!form.date)return;
-    if(!form.isPersonal&&!form.projectId)return;
+    // السلفة والشخصي ما تحتاج مشروع، الباقي يحتاج
+    if(!form.isPersonal&&!form.isAdvance&&!form.projectId)return;
     const p=projs.find(p=>p.id===form.projectId);
-    await addDoc(collection(db,"transactions"),{
-      userId:user.id, userName:user.name,
-      projectId:form.projectId||"",
-      projectName:p?`${p.name} - ${p.spec||p.specialization} - ${p.province}`:"",
-      type:form.type, amount:Number(form.amount),
-      currency:form.currency, note:form.note, date:form.date,
-      image:form.image||null, isPersonal:form.isPersonal||false,
-      createdAt:new Date().toISOString(),
-    });
+    const projName=p?`${p.name} - ${p.spec||p.specialization} - ${p.province}`:"";
+    const amt=Number(form.amount);
+
+    // لو سلفة: سجل صرف على أحمد + استلام على الشخص الآخر
+    if(form.isAdvance&&form.advanceTo){
+      const receiver=USERS.find(u=>u.id===form.advanceTo);
+      // صرف من أحمد
+      await addDoc(collection(db,"transactions"),{
+        userId:user.id, userName:user.name,
+        projectId:"", projectName:"",
+        type:"صرف", amount:amt,
+        currency:form.currency, note:`سلفة إلى ${receiver?.name||""}${form.note?" — "+form.note:""}`,
+        date:form.date, image:null, isPersonal:false, isAdvance:true,
+        advanceTo:form.advanceTo, advanceToName:receiver?.name||"",
+        createdAt:new Date().toISOString(),
+      });
+      // استلام للشخص الآخر
+      await addDoc(collection(db,"transactions"),{
+        userId:form.advanceTo, userName:receiver?.name||"",
+        projectId:"", projectName:"",
+        type:"استلام", amount:amt,
+        currency:form.currency, note:`سلفة من أحمد${form.note?" — "+form.note:""}`,
+        date:form.date, image:null, isPersonal:false, isAdvance:true,
+        advanceFrom:user.id, advanceFromName:user.name,
+        createdAt:new Date().toISOString(),
+      });
+    } else {
+      await addDoc(collection(db,"transactions"),{
+        userId:user.id, userName:user.name,
+        projectId:form.projectId||"", projectName:projName,
+        type:form.type, amount:amt,
+        currency:form.currency, note:form.note, date:form.date,
+        image:form.image||null, isPersonal:form.isPersonal||false, isAdvance:false,
+        createdAt:new Date().toISOString(),
+      });
+    }
     setFormOK(true);
-    setTimeout(()=>{setFormOK(false);setForm({type:"استلام",projectId:"",amount:"",currency:"دينار",note:"",date:today(),image:null,isPersonal:false});setView("home");},1500);
+    setTimeout(()=>{
+      setFormOK(false);
+      setForm({type:"استلام",projectId:"",amount:"",currency:"دينار",note:"",date:today(),image:null,isPersonal:false,isAdvance:false,advanceTo:""});
+      setView("home");
+    },1500);
   };
 
   const saveOBs = async () => {
@@ -213,10 +246,12 @@ export default function App() {
   const pr = selProj ? projRep(selProj,pfFrom,pfTo) : null;
 
   const navMgr    = [{icon:"📊",label:"الملخص",v:"home"},{icon:"📄",label:"الكشوفات",v:"statements"},{icon:"📋",label:"المعاملات",v:"allTx"},{icon:"🏗️",label:"المشاريع",v:"projects"},{icon:"💰",label:"المالية",v:"projReport"},{icon:"🏢",label:"الشركة",v:"company"},{icon:"💳",label:"الديون",v:"debts"},{icon:"⚖️",label:"افتتاحي",v:"opening"}];
-  const navWorker = [{icon:"🏠",label:"الرئيسية",v:"home"},{icon:"➕",label:"تسجيل",v:"add"}];
+  const navWorker = user?.role==="accountant"
+    ? [{icon:"🏠",label:"الرئيسية",v:"home"},{icon:"➕",label:"استلام/سلفة",v:"add"}]
+    : [{icon:"🏠",label:"الرئيسية",v:"home"},{icon:"➕",label:"تسجيل صرف",v:"add"}];
   const navItems  = user?.role==="manager" ? navMgr : navWorker;
 
-  const avatarBg = r => r==="manager"?"linear-gradient(135deg,#1d4ed8,#2563eb)":r==="partner"?"linear-gradient(135deg,#7c3aed,#6d28d9)":"linear-gradient(135deg,#f59e0b,#d97706)";
+  const avatarBg = r => r==="manager"?"linear-gradient(135deg,#1d4ed8,#2563eb)":r==="partner"?"linear-gradient(135deg,#7c3aed,#6d28d9)":r==="accountant"?"linear-gradient(135deg,#1A7A4A,#147A40)":"linear-gradient(135deg,#f59e0b,#d97706)";
 
   // PDF helpers
   const pdfPerson = () => {
@@ -257,7 +292,7 @@ export default function App() {
                 <button key={u.id} style={{...S.userBtn,...(u.role==="manager"?S.mgrBtn:{}), ...(u.role==="partner"?S.partnerBtnStyle:{})}} onClick={()=>{setLoginId(u.id);setPin("");setPinErr(false);}}>
                   <div style={{...S.av,background:avatarBg(u.role),margin:"0 auto 10px",width:50,height:50,fontSize:22,borderRadius:16}}>{u.name[0]}</div>
                   <div style={S.uName}>{u.name}</div>
-                  <div style={S.uRole}>{u.role==="manager"?"مدير مالي":"موظف"}</div>
+                  <div style={S.uRole}>{u.role==="manager"?"مدير مالي":u.role==="accountant"?"محاسب 🏦":"موظف"}</div>
                 </button>
               ))}
             </div>
@@ -301,7 +336,7 @@ export default function App() {
           <div style={{...S.av,width:38,height:38,fontSize:16,borderRadius:12,background:avatarBg(user.role)}}>{user.name[0]}</div>
           <div>
             <div style={S.hName}>{user.name}</div>
-            <div style={S.hRole}>{user.role==="manager"?"مدير مالي":"موظف"}</div>
+            <div style={S.hRole}>{user.role==="manager"?"مدير مالي":user.role==="accountant"?"محاسب":"موظف"}</div>
           </div>
         </div>
         <div style={{display:"flex",gap:8}}>
@@ -347,7 +382,7 @@ export default function App() {
 
         <div style={D?{display:"flex",gap:12,marginBottom:4}:{}}>
           <div style={{...S.balCard,background:dinSt.b>=0?"linear-gradient(135deg,#065f46,#047857)":"linear-gradient(135deg,#7f1d1d,#991b1b)",flex:D?1:undefined,marginBottom:D?0:12}}>
-            <div style={S.balLbl}>🇮🇶 صندوقك — دينار عراقي</div>
+            <div style={S.balLbl}>{user.role==="accountant"?"🏦 صندوق أحمد — دينار":"🇮🇶 صندوقك — دينار عراقي"}</div>
             <div style={S.balAmt}>{fmt(Math.abs(dinSt.b),"دينار")}</div>
             <div style={{fontSize:14,fontWeight:800,color:"rgba(255,255,255,0.9)",margin:"4px 0 10px"}}>
               {dinSt.b>0?"✅ مطلوب منك":dinSt.b<0?"⚠️ أنت طالب":"◼️ متوازن"}
@@ -366,7 +401,7 @@ export default function App() {
             )}
           </div>
           <div style={{...S.balCard,background:dolSt.b>=0?"linear-gradient(135deg,#1e40af,#2563eb)":"linear-gradient(135deg,#7f1d1d,#991b1b)",flex:D?1:undefined,marginBottom:16}}>
-            <div style={S.balLbl}>🇺🇸 صندوقك — دولار أمريكي</div>
+            <div style={S.balLbl}>{user.role==="accountant"?"🏦 صندوق أحمد — دولار":"🇺🇸 صندوقك — دولار أمريكي"}</div>
             <div style={S.balAmt}>{fmt(Math.abs(dolSt.b),"دولار")}</div>
             <div style={{fontSize:14,fontWeight:800,color:"rgba(255,255,255,0.9)",margin:"4px 0 10px"}}>
               {dolSt.b>0?"✅ مطلوب منك":dolSt.b<0?"⚠️ أنت طالب":"◼️ متوازن"}
@@ -377,8 +412,33 @@ export default function App() {
             </div>
           </div>
         </div>
-        {!D&&<button style={S.goldBtn} onClick={()=>{setView("add");setForm({type:"استلام",projectId:"",amount:"",currency:"دينار",note:"",date:today(),image:null,isPersonal:false});}}>➕ تسجيل معاملة جديدة</button>}
+        {!D&&<button style={S.goldBtn} onClick={()=>{setView("add");setForm({type:user.role==="accountant"?"استلام":"صرف",projectId:"",amount:"",currency:"دينار",note:"",date:today(),image:null,isPersonal:false,isAdvance:false,advanceTo:""});}}>
+          {user.role==="accountant"?"💰 استلام أو سلفة":"➕ تسجيل مصروف"}
+        </button>}
         <div style={S.secTitle}>سجل المعاملات</div>
+        {/* ملخص السلف لأحمد */}
+        {user.role==="accountant"&&(()=>{
+          const advances = myTxs.filter(t=>t.isAdvance&&t.type==="صرف");
+          if(advances.length===0)return null;
+          const totalAdv = advances.reduce((s,t)=>s+t.amount,0);
+          return(
+            <div style={{background:`rgba(193,123,47,0.08)`,border:`1px solid rgba(193,123,47,0.25)`,borderRadius:14,padding:"14px 16px",marginBottom:16}}>
+              <div style={{fontSize:13,fontWeight:700,color:C.gold,marginBottom:10}}>💸 السلف الممنوحة</div>
+              <div style={{display:"flex",flexWrap:"wrap",gap:8,marginBottom:8}}>
+                {WORKERS.filter(u=>u.id!=="ahmed").map(u=>{
+                  const uAdv=advances.filter(t=>t.advanceTo===u.id).reduce((s,t)=>s+t.amount,0);
+                  if(!uAdv)return null;
+                  return(
+                    <div key={u.id} style={{background:C.card,border:`1px solid ${C.cardBorder}`,borderRadius:10,padding:"6px 12px",fontSize:12,fontWeight:700}}>
+                      {u.name}: {fmtD(uAdv)}
+                    </div>
+                  );
+                })}
+              </div>
+              <div style={{fontSize:12,color:C.textMd,fontWeight:600}}>إجمالي السلف: {fmtD(totalAdv)}</div>
+            </div>
+          );
+        })()}
         {myTxs.length===0?<div style={S.empty}>ما عندك معاملات بعد</div>:(
           <div style={D?S.txGrid:{}}>{myTxs.map(t=><TxCard key={t.id} t={t} onImg={setViewImg}/>)}</div>
         )}
@@ -393,48 +453,84 @@ export default function App() {
           <div style={{textAlign:"center",padding:60,color:"#34d399"}}><div style={{fontSize:60,marginBottom:12}}>✅</div><div style={{fontSize:20,fontWeight:800}}>تم التسجيل بنجاح!</div></div>
         ):(
           <div style={S.formCard}>
-            <div style={S.fLbl}>نوع المعاملة</div>
-            <div style={S.tRow}>
-              <button style={{...S.tBtn,...(form.type==="استلام"?{background:"rgba(26,122,74,0.15)",border:`1px solid #1A7A4A`,color:"#1A7A4A"}:{})}} onClick={()=>setForm(f=>({...f,type:"استلام",isPersonal:false}))}>↓ استلام</button>
-              <button style={{...S.tBtn,...(form.type==="صرف"?{background:"rgba(192,57,43,0.15)",border:`1px solid #C0392B`,color:"#C0392B"}:{})}} onClick={()=>setForm(f=>({...f,type:"صرف"}))}>↑ صرف</button>
-            </div>
 
-            {form.type==="صرف"&&user.role==="partner"&&(
+            {/* أحمد المحاسب - يستلم فقط أو يعطي سلفة */}
+            {user.role==="accountant"&&(
+              <>
+                <div style={S.fLbl}>نوع المعاملة</div>
+                <div style={S.tRow}>
+                  <button style={{...S.tBtn,...(!form.isAdvance?{background:"rgba(26,122,74,0.15)",border:`1px solid #1A7A4A`,color:"#1A7A4A"}:{})}} onClick={()=>setForm(f=>({...f,isAdvance:false,type:"استلام",isPersonal:false}))}>
+                    ↓ استلام
+                  </button>
+                  <button style={{...S.tBtn,...(form.isAdvance?{background:"rgba(193,123,47,0.15)",border:`1px solid ${C.gold}`,color:C.gold}:{})}} onClick={()=>setForm(f=>({...f,isAdvance:true,type:"صرف",isPersonal:false,projectId:""}))}>
+                    💸 سلفة لشخص
+                  </button>
+                </div>
+
+                {form.isAdvance&&(
+                  <>
+                    <div style={S.fLbl}>اختر الشخص</div>
+                    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+                      {WORKERS.filter(u=>u.id!=="ahmed").map(u=>(
+                        <button key={u.id} style={{
+                          display:"flex",alignItems:"center",gap:8,padding:"10px 12px",
+                          borderRadius:12,border:`2px solid ${form.advanceTo===u.id?C.gold:C.cardBorder}`,
+                          background:form.advanceTo===u.id?`rgba(193,123,47,0.08)`:C.bg2,
+                          cursor:"pointer",textAlign:"right",
+                        }} onClick={()=>setForm(f=>({...f,advanceTo:u.id}))}>
+                          <div style={{...S.av,width:30,height:30,fontSize:13,borderRadius:9,background:avatarBg(u.role),flexShrink:0}}>{u.name[0]}</div>
+                          <div style={{fontSize:13,fontWeight:700,color:form.advanceTo===u.id?C.gold:C.text}}>{u.name}</div>
+                        </button>
+                      ))}
+                    </div>
+                    <div style={{background:"rgba(193,123,47,0.08)",border:`1px solid rgba(193,123,47,0.2)`,borderRadius:10,padding:"10px 14px",marginTop:8,fontSize:13,color:C.gold,fontWeight:600}}>
+                      💡 السلفة ستنقص من رصيدك وتضاف لرصيد الشخص تلقائياً
+                    </div>
+                  </>
+                )}
+
+                {!form.isAdvance&&(
+                  <>
+                    <div style={S.fLbl}>المشروع</div>
+                    <select style={S.sel} value={form.projectId} onChange={e=>setForm(f=>({...f,projectId:e.target.value}))}>
+                      <option value="">اختر المشروع</option>
+                      {projs.map(p=><option key={p.id} value={p.id}>{p.name} - {p.spec||p.specialization} - {p.province}</option>)}
+                    </select>
+                  </>
+                )}
+              </>
+            )}
+
+            {/* باقي الأشخاص - يصرفون فقط */}
+            {user.role!=="accountant"&&(
               <>
                 <div style={S.fLbl}>وجهة الصرف</div>
                 <div style={S.tRow}>
-                  <button style={{...S.tBtn,...(!form.isPersonal?{background:"rgba(37,87,167,0.15)",border:`1px solid #2557A7`,color:"#2557A7"}:{})}} onClick={()=>setForm(f=>({...f,isPersonal:false,projectId:""}))}>
-                    🏗️ مشروع
+                  <button style={{...S.tBtn,...(!form.isPersonal?{background:"rgba(192,57,43,0.15)",border:`1px solid #C0392B`,color:"#C0392B"}:{})}} onClick={()=>setForm(f=>({...f,isPersonal:false,isAdvance:false,projectId:""}))}>
+                    🏗️ مصروف مشروع
                   </button>
-                  <button style={{...S.tBtn,...(form.isPersonal?{background:"rgba(107,63,160,0.15)",border:`1px solid #6B3FA0`,color:"#6B3FA0"}:{})}} onClick={()=>setForm(f=>({...f,isPersonal:true,projectId:""}))}>
-                    👤 شخصي
-                  </button>
+                  {user.role==="partner"&&(
+                    <button style={{...S.tBtn,...(form.isPersonal?{background:"rgba(107,63,160,0.15)",border:`1px solid #6B3FA0`,color:"#6B3FA0"}:{})}} onClick={()=>setForm(f=>({...f,isPersonal:true,isAdvance:false,projectId:""}))}>
+                      👤 شخصي
+                    </button>
+                  )}
                 </div>
+
+                {!form.isPersonal&&(
+                  <>
+                    <div style={S.fLbl}>المشروع</div>
+                    <select style={S.sel} value={form.projectId} onChange={e=>setForm(f=>({...f,projectId:e.target.value}))}>
+                      <option value="">اختر المشروع</option>
+                      {projs.map(p=><option key={p.id} value={p.id}>{p.name} - {p.spec||p.specialization} - {p.province}</option>)}
+                    </select>
+                  </>
+                )}
+
                 {form.isPersonal&&(
                   <div style={{background:"rgba(107,63,160,0.08)",border:"1px solid rgba(107,63,160,0.2)",borderRadius:10,padding:"10px 14px",marginTop:8,fontSize:13,color:"#6B3FA0",fontWeight:600}}>
                     ⚠️ هذا المبلغ سينقص من رصيدك الشخصي
                   </div>
                 )}
-              </>
-            )}
-
-            {form.type==="صرف"&&!form.isPersonal&&(
-              <>
-                <div style={S.fLbl}>المشروع</div>
-                <select style={S.sel} value={form.projectId} onChange={e=>setForm(f=>({...f,projectId:e.target.value}))}>
-                  <option value="">اختر المشروع</option>
-                  {projs.map(p=><option key={p.id} value={p.id}>{p.name} - {p.spec||p.specialization} - {p.province}</option>)}
-                </select>
-              </>
-            )}
-
-            {form.type==="استلام"&&(
-              <>
-                <div style={S.fLbl}>المشروع</div>
-                <select style={S.sel} value={form.projectId} onChange={e=>setForm(f=>({...f,projectId:e.target.value}))}>
-                  <option value="">اختر المشروع</option>
-                  {projs.map(p=><option key={p.id} value={p.id}>{p.name} - {p.spec||p.specialization} - {p.province}</option>)}
-                </select>
               </>
             )}
 
@@ -452,14 +548,20 @@ export default function App() {
             <div style={S.fLbl}>ملاحظات</div>
             <textarea style={S.ta} placeholder="اكتب تفاصيل..." value={form.note} onChange={e=>setForm(f=>({...f,note:e.target.value}))} rows={2}/>
 
-            {!form.isPersonal&&(<>
-              <div style={S.fLbl}>صورة الوصل (اختياري)</div>
-              <input ref={imgRef} type="file" accept="image/*" capture="environment" style={{display:"none"}} onChange={pickImg}/>
-              <button style={S.imgBtn} onClick={()=>imgRef.current.click()}>{form.image?"✅ تم اختيار الصورة":"📷 التقط أو اختر صورة"}</button>
-              {form.image&&<img src={form.image} style={S.imgPrev} alt="preview" onClick={()=>setViewImg(form.image)}/>}
-            </>)}
+            {!form.isPersonal&&!form.isAdvance&&(
+              <>
+                <div style={S.fLbl}>صورة الوصل (اختياري)</div>
+                <input ref={imgRef} type="file" accept="image/*" capture="environment" style={{display:"none"}} onChange={pickImg}/>
+                <button style={S.imgBtn} onClick={()=>imgRef.current.click()}>{form.image?"✅ تم اختيار الصورة":"📷 التقط أو اختر صورة"}</button>
+                {form.image&&<img src={form.image} style={S.imgPrev} alt="preview" onClick={()=>setViewImg(form.image)}/>}
+              </>
+            )}
 
-            <button style={{...S.subBtn,...(form.isPersonal?{background:`linear-gradient(135deg,#6B3FA0,#5B21B6)`,color:"#fff"}:{})}} onClick={addTx}>💾 حفظ المعاملة</button>
+            <button style={{
+              ...S.subBtn,
+              ...(form.isPersonal?{background:`linear-gradient(135deg,#6B3FA0,#5B21B6)`,color:"#fff"}:{}),
+              ...(form.isAdvance?{background:`linear-gradient(135deg,${C.gold},${C.goldD})`,color:"#000"}:{}),
+            }} onClick={addTx}>💾 حفظ</button>
             <button style={S.canBtn} onClick={()=>setView("home")}>إلغاء</button>
           </div>
         )}
