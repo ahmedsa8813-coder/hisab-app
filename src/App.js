@@ -576,32 +576,35 @@ export default function App() {
             <div style={S.hRole}>{user.role==="manager"?"مدير مالي":user.role==="accountant"?"محاسب":"موظف"}</div>
           </div>
         </div>
-
-        {/* Module Switcher - للمدير فقط */}
-        {user.role==="manager"&&(
-          <div style={{display:"flex",background:C.bg2,borderRadius:10,padding:3,gap:2}}>
-            <button onClick={()=>{setModule("finance");setView("home");}} style={{
-              padding:"7px 14px",borderRadius:8,border:"none",cursor:"pointer",
-              fontWeight:700,fontSize:12,transition:"all 0.2s",
-              background:module==="finance"?"linear-gradient(135deg,#C17B2F,#A8641A)":"transparent",
-              color:module==="finance"?"#fff":C.textMd,
-              boxShadow:module==="finance"?C.shadow:"none",
-            }}>💰 المالية</button>
-            <button onClick={()=>{setModule("admin");setView("adminHome");}} style={{
-              padding:"7px 14px",borderRadius:8,border:"none",cursor:"pointer",
-              fontWeight:700,fontSize:12,transition:"all 0.2s",
-              background:module==="admin"?"linear-gradient(135deg,#2557A7,#1d4ed8)":"transparent",
-              color:module==="admin"?"#fff":C.textMd,
-              boxShadow:module==="admin"?C.shadow:"none",
-            }}>💼 الإدارة</button>
-          </div>
-        )}
-
         <div style={{display:"flex",gap:8}}>
           <button style={S.iconBtn} onClick={()=>setManL(D?"mobile":"desktop")}>{D?"📱":"🖥️"}</button>
           <button style={S.outBtn} onClick={()=>{setUser(null);setScreen("login");setPin("");setView("home");setModule("finance");}}>خروج</button>
         </div>
       </div>
+
+      {/* شريط تبديل القسم - للمدير فقط */}
+      {user.role==="manager"&&(
+        <div style={{background:C.bg2,borderBottom:`1px solid ${C.cardBorder}`,padding:"8px 20px",display:"flex",gap:6,alignItems:"center"}}>
+          <span style={{fontSize:11,color:C.textSm,fontWeight:700,marginLeft:8}}>القسم:</span>
+          <button onClick={()=>{setModule("finance");setView("home");}} style={{
+            padding:"8px 20px",borderRadius:10,border:"none",cursor:"pointer",
+            fontWeight:800,fontSize:13,transition:"all 0.2s",letterSpacing:-0.3,
+            background:module==="finance"?`linear-gradient(135deg,${C.gold},${C.goldD})`:"transparent",
+            color:module==="finance"?"#fff":C.textMd,
+            boxShadow:module==="finance"?C.shadow:"none",
+          }}>💰 المالية</button>
+          <button onClick={()=>{setModule("admin");setView("adminHome");}} style={{
+            padding:"8px 20px",borderRadius:10,border:"none",cursor:"pointer",
+            fontWeight:800,fontSize:13,transition:"all 0.2s",letterSpacing:-0.3,
+            background:module==="admin"?"linear-gradient(135deg,#2557A7,#1d4ed8)":"transparent",
+            color:module==="admin"?"#fff":C.textMd,
+            boxShadow:module==="admin"?C.shadow:"none",
+          }}>💼 الإدارة</button>
+          <div style={{marginRight:"auto",fontSize:11,color:C.textSm,fontWeight:600}}>
+            {module==="finance"?"الحسابات والماليات":"متابعة الأعمال والمشاريع"}
+          </div>
+        </div>
+      )}
 
       {D ? (
         <div style={{display:"flex",flex:1,overflow:"hidden"}}>
