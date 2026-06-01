@@ -349,6 +349,15 @@ export default function App() {
               <button style={{...S.tBtn,...(form.type==="صرف"?{background:"rgba(127,29,29,0.3)",border:"1px solid #991b1b",color:"#f87171"}:{})}} onClick={()=>setForm(f=>({...f,type:"صرف"}))}>↑ صرف</button>
             </div>
 
+            {user.role==="partner"&&form.type==="صرف"&&(
+              <>
+                <div style={S.fLbl}>نوع الصرف</div>
+                <div style={S.tRow}>
+                  <button style={{...S.tBtn,...(!form.isPersonal?{background:"rgba(127,29,29,0.3)",border:"1px solid #991b1b",color:"#f87171"}:{})}} onClick={()=>setForm(f=>({...f,isPersonal:false}))}>🏗️ تشغيلي</button>
+                  <button style={{...S.tBtn,...(form.isPersonal?{background:"rgba(124,58,237,0.3)",border:"1px solid #7c3aed",color:"#c4b5fd"}:{})}} onClick={()=>setForm(f=>({...f,isPersonal:true}))}>👤 سحب شخصي</button>
+                </div>
+              </>
+            )}
             <div style={S.fLbl}>العملة</div>
             <div style={S.tRow}>
               <button style={{...S.tBtn,...(form.currency==="دينار"?{background:"rgba(29,78,216,0.3)",border:"1px solid #2563eb",color:"#60a5fa"}:{})}} onClick={()=>setForm(f=>({...f,currency:"دينار"}))}>🇮🇶 دينار</button>
