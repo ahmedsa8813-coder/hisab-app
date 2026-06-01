@@ -444,11 +444,28 @@ export default function App() {
     const allOBdinS = WORKERS.reduce((s,u)=>s+(OBs[u.id]?.dinarSpent||0),0);
     const allOBdolR = WORKERS.reduce((s,u)=>s+(OBs[u.id]?.dollarReceived||0),0);
     const allOBdolS = WORKERS.reduce((s,u)=>s+(OBs[u.id]?.dollarSpent||0),0);
-    const dinR = txs.filter(t=>t.type==="استلام"&&(t.currency==="دينار"||!t.currency)).reduce((s,t)=>s+t.amount,0)+allOBdinR;
-    const dinS = txs.filter(t=>t.type==="صرف"&&(t.currency==="دينار"||!t.currency)).reduce((s,t)=>s+t.amount,0)+allOBdinS;
-    const dolR = txs.filter(t=>t.type==="استلام"&&t.currency==="دولار").reduce((s,t)=>s+t.amount,0)+allOBdolR;
-    const dolS = txs.filter(t=>t.type==="صرف"&&t.currency==="دولار").reduce((s,t)=>s+t.amount,0)+allOBdolS;
-    return{dinR,dinS,dinB:dinR-dinS,dolR,dolS,dolB:dolR-dolS};
+
+    // الكاش الحقيقي: معاملات العمل فقط (بدون السلف الشخصية)
+    const dinR = txs.filter(t=>t.type==="استلام"&&(t.currency==="دينار"||!t.currency)&&!t.isPersonal).reduce((s,t)=>s+t.amount,0)+allOBdinR;
+    const dinS = txs.filter(t=>t.type==="صرف"&&(t.currency==="دينار"||!t.currency)&&!t.isPersonal).reduce((s,t)=>s+t.amount,0)+allOBdinS;
+    const dolR = txs.filter(t=>t.type==="استلام"&&t.currency==="دولار"&&!t.isPersonal).reduce((s,t)=>s+t.amount,0)+allOBdolR;
+    const dolS = txs.filter(t=>t.type==="صرف"&&t.currency==="دولار"&&!t.isPersonal).reduce((s,t)=>s+t.amount,0)+allOBdolS;
+
+    // الديون الخارجية غير المسددة (شركة + شخصية)
+    const externalDebts = debts.filter(d=>d.status!=="مسدد كامل").reduce((s,d)=>s+(d.amount||0),0);
+    const personalDebtsTotal = personalDebts.filter(d=>d.status!=="مسدد كامل").reduce((s,d)=>s+(d.remaining||d.amount||0),0);
+    const totalDebts = externalDebts + personalDebtsTotal;
+
+    // الكاش الكلي = الكاش الحقيقي + الديون المستحقة
+    const realDinB = dinR-dinS;
+    const realDolB = dolR-dolS;
+    const totalDinB = realDinB + totalDebts; // الديون بالدينار فقط للتبسيط
+
+    return{
+      dinR, dinS, dinB:realDinB,
+      dolR, dolS, dolB:realDolB,
+      totalDinB, totalDebts, externalDebts, personalDebtsTotal,
+    };
   };
 
   const compRep = () => {
@@ -1060,38 +1077,72 @@ export default function App() {
               {module==="admin"&&<div style={{marginTop:10,background:"rgba(255,255,255,0.2)",borderRadius:8,padding:"4px 10px",fontSize:11,color:"#fff",fontWeight:700,display:"inline-block"}}>✓ نشط</div>}
             </button>
           </div>
-          <div style={S.secTitle}>الصندوق العام للشركة</div>
-          <div style={D?{display:"flex",gap:12,marginBottom:20}:{marginBottom:20}}>
-            {/* دينار */}
-            <div style={{...S.balCard,background:GF.dinB>=0?"linear-gradient(135deg,#065f46,#047857)":"linear-gradient(135deg,#7f1d1d,#991b1b)",flex:D?1:undefined,marginBottom:D?0:12}}>
-              <div style={S.balLbl}>🇮🇶 الصندوق — دينار عراقي</div>
+          <div style={S.secTitle}>الصناديق العامة للشركة</div>
+
+          {/* الصندوقان الرئيسيان */}
+          <div style={D?{display:"flex",gap:14,marginBottom:14}:{marginBottom:14}}>
+            {/* الكاش الحقيقي */}
+            <div style={{...S.balCard,background:"linear-gradient(135deg,#065f46,#047857)",flex:D?1:undefined,marginBottom:D?0:12}}>
+              <div style={S.balLbl}>💵 الكاش الحقيقي — دينار</div>
               <div style={S.balAmt}>{fmt(Math.abs(GF.dinB),"دينار")}</div>
-              <div style={{fontSize:14,fontWeight:800,color:"rgba(255,255,255,0.9)",margin:"6px 0 12px"}}>
-                {GF.dinB>0?"✅ رصيد موجب":GF.dinB<0?"⚠️ رصيد سالب":"◼️ متوازن"}
+              <div style={{fontSize:13,fontWeight:700,color:"rgba(255,255,255,0.85)",margin:"4px 0 10px"}}>
+                {GF.dinB>0?"✅ موجب":GF.dinB<0?"⚠️ سالب":"◼️ متوازن"}
               </div>
               <div style={S.balRow}>
-                <span style={S.balSt}>↓ إجمالي الاستلام: {fmt(GF.dinR,"دينار")}</span>
-                <span style={S.balSt}>↑ إجمالي الصرف: {fmt(GF.dinS,"دينار")}</span>
+                <span style={S.balSt}>↓ {fmt(GF.dinR,"دينار")}</span>
+                <span style={S.balSt}>↑ {fmt(GF.dinS,"دينار")}</span>
+              </div>
+              <div style={{marginTop:8,paddingTop:8,borderTop:"1px solid rgba(255,255,255,0.2)",fontSize:12,color:"rgba(255,255,255,0.7)"}}>
+                معاملات العمل فقط، بدون السلف الشخصية
               </div>
             </div>
             {/* دولار */}
-            <div style={{...S.balCard,background:GF.dolB>=0?"linear-gradient(135deg,#1e40af,#2563eb)":"linear-gradient(135deg,#7f1d1d,#991b1b)",flex:D?1:undefined,marginBottom:16}}>
-              <div style={S.balLbl}>🇺🇸 الصندوق — دولار أمريكي</div>
+            <div style={{...S.balCard,background:"linear-gradient(135deg,#1e40af,#2563eb)",flex:D?1:undefined,marginBottom:D?0:12}}>
+              <div style={S.balLbl}>💵 الكاش الحقيقي — دولار</div>
               <div style={S.balAmt}>{fmt(Math.abs(GF.dolB),"دولار")}</div>
-              <div style={{fontSize:14,fontWeight:800,color:"rgba(255,255,255,0.9)",margin:"6px 0 12px"}}>
-                {GF.dolB>0?"✅ رصيد موجب":GF.dolB<0?"⚠️ رصيد سالب":"◼️ متوازن"}
+              <div style={{fontSize:13,fontWeight:700,color:"rgba(255,255,255,0.85)",margin:"4px 0 10px"}}>
+                {GF.dolB>0?"✅ موجب":GF.dolB<0?"⚠️ سالب":"◼️ متوازن"}
               </div>
               <div style={S.balRow}>
-                <span style={S.balSt}>↓ إجمالي الاستلام: {fmt(GF.dolR,"دولار")}</span>
-                <span style={S.balSt}>↑ إجمالي الصرف: {fmt(GF.dolS,"دولار")}</span>
+                <span style={S.balSt}>↓ {fmt(GF.dolR,"دولار")}</span>
+                <span style={S.balSt}>↑ {fmt(GF.dolS,"دولار")}</span>
               </div>
+              <div style={{marginTop:8,paddingTop:8,borderTop:"1px solid rgba(255,255,255,0.2)",fontSize:12,color:"rgba(255,255,255,0.7)"}}>
+                معاملات العمل فقط، بدون السلف الشخصية
+              </div>
+            </div>
+          </div>
+
+          {/* الكاش الكلي */}
+          <div style={{...S.balCard,background:"linear-gradient(135deg,#1e3a5f,#1d4ed8)",marginBottom:20}}>
+            <div style={S.balLbl}>📊 الكاش الكلي (الكاش الحقيقي + الديون المستحقة)</div>
+            <div style={S.balAmt}>{fmtD(GF.totalDinB)}</div>
+            <div style={{marginTop:12,display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10}}>
+              <div style={{background:"rgba(255,255,255,0.1)",borderRadius:10,padding:"10px 12px",textAlign:"center"}}>
+                <div style={{fontSize:11,color:"rgba(255,255,255,0.7)",marginBottom:4}}>💵 الكاش الحقيقي</div>
+                <div style={{fontSize:15,fontWeight:800,color:"#fff"}}>{fmtD(GF.dinB)}</div>
+              </div>
+              <div style={{background:"rgba(255,255,255,0.1)",borderRadius:10,padding:"10px 12px",textAlign:"center"}}>
+                <div style={{fontSize:11,color:"rgba(255,255,255,0.7)",marginBottom:4}}>🏢 ديون خارجية</div>
+                <div style={{fontSize:15,fontWeight:800,color:"#fde68a"}}>{fmtD(GF.externalDebts)}</div>
+              </div>
+              <div style={{background:"rgba(255,255,255,0.1)",borderRadius:10,padding:"10px 12px",textAlign:"center"}}>
+                <div style={{fontSize:11,color:"rgba(255,255,255,0.7)",marginBottom:4}}>💳 سلف شخصية</div>
+                <div style={{fontSize:15,fontWeight:800,color:"#fde68a"}}>{fmtD(GF.personalDebtsTotal)}</div>
+              </div>
+            </div>
+            <div style={{marginTop:10,fontSize:12,color:"rgba(255,255,255,0.65)",textAlign:"center"}}>
+              {fmtD(GF.dinB)} + {fmtD(GF.totalDebts)} ديون = {fmtD(GF.totalDinB)}
             </div>
           </div>
 
           {/* حسابات الأشخاص */}
           <div style={S.secTitle}>صناديق الأشخاص</div>
           <div style={D?S.empGrid:{}}>
-            {workerBals.map(e=>(
+            {workerBals.map(e=>{
+              const empPersonalDebt = personalDebts.filter(d=>d.debtorId===e.id&&d.status!=="مسدد كامل");
+              const empDebtTotal = empPersonalDebt.reduce((s,d)=>s+(d.remaining||d.amount||0),0);
+              return(
               <button key={e.id} style={{...S.empCard,...(e.role==="partner"?{border:"1px solid rgba(124,58,237,0.3)",background:"rgba(124,58,237,0.05)"}:{})}} onClick={()=>{setStUser(e.id);setFuFrom("");setFuTo("");setFuProj("all");setFuCur("دينار");setView("statement");}}>
                 <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:10}}>
                   <div style={{...S.av,width:42,height:42,fontSize:18,borderRadius:14,background:avatarBg(e.role)}}>{e.name[0]}</div>
@@ -1105,7 +1156,7 @@ export default function App() {
                 {/* الرصيد الكلي - دينار */}
                 <div style={{background:e.din.b>=0?"rgba(6,95,70,0.2)":"rgba(127,29,29,0.2)",border:`1px solid ${e.din.b>=0?"rgba(6,95,70,0.4)":"rgba(127,29,29,0.4)"}`,borderRadius:10,padding:"10px 12px",marginBottom:8}}>
                   <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
-                    <div style={{fontSize:11,color:"rgba(255,255,255,0.6)"}}>🇮🇶 الرصيد الكلي — دينار</div>
+                    <div style={{fontSize:11,color:"rgba(255,255,255,0.6)"}}>🇮🇶 صندوق العمل — دينار</div>
                     <div style={{fontSize:12,fontWeight:700,color:e.din.b>=0?"#34d399":"#f87171"}}>{e.din.b>0?"مطلوب منه":e.din.b<0?"طالب":"متوازن"}</div>
                   </div>
                   <div style={{fontSize:17,fontWeight:900,color:e.din.b>=0?"#34d399":"#f87171",letterSpacing:-0.5,marginBottom:6}}>{fmt(Math.abs(e.din.b),"دينار")}</div>
@@ -1113,13 +1164,6 @@ export default function App() {
                     <span>↓ استلم {fmt(e.din.r,"دينار")}</span>
                     <span>↑ صرف {fmt(e.din.s,"دينار")}</span>
                   </div>
-                  {/* السحب الشخصي للشركاء */}
-                  {e.role==="partner"&&e.personalW>0&&(
-                    <div style={{marginTop:8,paddingTop:8,borderTop:"1px solid rgba(255,255,255,0.08)",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                      <span style={{fontSize:11,color:"#c4b5fd"}}>👤 منها سحب شخصي</span>
-                      <span style={{fontSize:12,fontWeight:700,color:"#c4b5fd"}}>{fmtD(e.personalW)}</span>
-                    </div>
-                  )}
                 </div>
 
                 {/* دولار */}
@@ -1136,8 +1180,20 @@ export default function App() {
                     </div>
                   </div>
                 )}
+
+                {/* السلفة الشخصية — منفصلة عن صندوق العمل */}
+                {empDebtTotal>0&&(
+                  <div style={{background:"rgba(192,57,43,0.12)",border:"1px solid rgba(192,57,43,0.3)",borderRadius:10,padding:"10px 12px",marginTop:6}}>
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                      <div style={{fontSize:11,color:"#f87171",fontWeight:700}}>💳 سلفة شخصية مستحقة</div>
+                      <div style={{fontSize:14,fontWeight:900,color:"#f87171"}}>{fmtD(empDebtTotal)}</div>
+                    </div>
+                    {empPersonalDebt.length>1&&<div style={{fontSize:10,color:"rgba(248,113,113,0.7)",marginTop:3}}>{toAr(empPersonalDebt.length)} سلف</div>}
+                  </div>
+                )}
               </button>
-            ))}
+              );
+            })}
           </div>
 
           {!D&&module==="finance"&&(
