@@ -62,6 +62,8 @@ export default function App() {
   const [fuFrom,  setFuFrom]  = useState("");
   const [fuTo,    setFuTo]    = useState("");
   const [fuCur,   setFuCur]   = useState("دينار");
+  const [fuType,  setFuType]  = useState("all"); // all | استلام | صرف
+  const [fuName,  setFuName]  = useState(""); // بحث بالاسم
   const [stUser,  setStUser]  = useState(null);
   const [selProj, setSelProj] = useState(null);
   const [pfFrom,  setPfFrom]  = useState("");
@@ -1617,6 +1619,8 @@ export default function App() {
         if(fuProj!=="all"&&t.projectId!==fuProj)return false;
         if(fuFrom&&t.date<fuFrom)return false;
         if(fuTo&&t.date>fuTo)return false;
+        if(fuType!=="all"&&t.type!==fuType)return false;
+        if(fuName.trim()&&!(t.projectName||"").includes(fuName.trim())&&!(t.note||"").includes(fuName.trim()))return false;
         return true;
       }) : [];
       const stObR2 = (!fuFrom&&fuProj==="all")?(fuCur==="دينار"?(stOBobj.dinarReceived||0):(stOBobj.dollarReceived||0)):0;
@@ -1662,6 +1666,16 @@ export default function App() {
                   <button style={{...S.tBtn,...(fuCur==="دولار"?{background:"rgba(37,87,167,0.15)",border:`1px solid #2557A7`,color:"#2557A7"}:{})}} onClick={()=>setFuCur("دولار")}>🇺🇸 دولار</button>
                 </div>
 
+                <div style={S.fLbl}>نوع المعاملة</div>
+                <div style={S.tRow}>
+                  <button style={{...S.tBtn,...(fuType==="all"?{background:`rgba(193,123,47,0.15)`,border:`1px solid ${C.gold}`,color:C.gold}:{})}} onClick={()=>setFuType("all")}>الكل</button>
+                  <button style={{...S.tBtn,...(fuType==="استلام"?{background:"rgba(26,122,74,0.15)",border:`1px solid #1A7A4A`,color:"#1A7A4A"}:{})}} onClick={()=>setFuType("استلام")}>↓ استلام</button>
+                  <button style={{...S.tBtn,...(fuType==="صرف"?{background:"rgba(192,57,43,0.15)",border:`1px solid #C0392B`,color:"#C0392B"}:{})}} onClick={()=>setFuType("صرف")}>↑ صرف</button>
+                </div>
+
+                <div style={S.fLbl}>بحث (مشروع أو ملاحظة)</div>
+                <input style={S.inp} placeholder="ابحث..." value={fuName} onChange={e=>setFuName(e.target.value)}/>
+
                 <div style={S.fLbl}>المشروع</div>
                 <select style={S.sel} value={fuProj} onChange={e=>setFuProj(e.target.value)}>
                   <option value="all">كل المشاريع</option>
@@ -1675,7 +1689,7 @@ export default function App() {
                 <input style={S.inp} type="date" value={fuTo} onChange={e=>setFuTo(e.target.value)}/>
 
                 {stUser&&<button style={{...S.subBtn,background:`linear-gradient(135deg,${C.blue},${C.blueL})`,color:"#fff"}} onClick={pdfSt}>📄 تصدير PDF</button>}
-                <button style={{...S.canBtn,marginTop:8}} onClick={()=>{setFuFrom("");setFuTo("");setFuProj("all");setStUser(null);}}>↺ إعادة تعيين</button>
+                <button style={{...S.canBtn,marginTop:8}} onClick={()=>{setFuFrom("");setFuTo("");setFuProj("all");setStUser(null);setFuType("all");setFuName("");}}>↺ إعادة تعيين</button>
               </div>
             </div>
 
@@ -1709,7 +1723,14 @@ export default function App() {
                   </div>
 
                   {/* المعاملات */}
-                  <div style={{fontSize:13,color:C.textMd,marginBottom:12,fontWeight:600}}>{toAr(stTxsAll.length)} معاملة</div>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12,flexWrap:"wrap",gap:8}}>
+                    <div style={{fontSize:13,color:C.textMd,fontWeight:600}}>{toAr(stTxsAll.length)} معاملة</div>
+                    <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+                      {fuType!=="all"&&<span style={{fontSize:11,fontWeight:700,padding:"3px 10px",borderRadius:8,background:fuType==="استلام"?"rgba(26,122,74,0.1)":"rgba(192,57,43,0.1)",color:fuType==="استلام"?"#1A7A4A":"#C0392B"}}>نوع: {fuType}</span>}
+                      {fuName&&<span style={{fontSize:11,fontWeight:700,padding:"3px 10px",borderRadius:8,background:`rgba(193,123,47,0.1)`,color:C.gold}}>بحث: {fuName}</span>}
+                      {fuCur&&<span style={{fontSize:11,fontWeight:700,padding:"3px 10px",borderRadius:8,background:"rgba(37,87,167,0.1)",color:"#2557A7"}}>{fuCur==="دينار"?"🇮🇶":"🇺🇸"} {fuCur}</span>}
+                    </div>
+                  </div>
                   {stTxsAll.length===0?(
                     <div style={S.empty}>ما في معاملات بهذه الفلاتر</div>
                   ):(
