@@ -1627,810 +1627,22 @@ export default function App() {
 
     // SALARIES
     if((user.role==="manager"||user.role==="accountant")&&view==="salaries") {
-      const months = [...new Set([...salaryPayments,...overtimePayments].map(p=>p.month))].sort().reverse();
-      const currentMonth = new Date().toISOString().slice(0,7);
-      const dinarEmps   = salaryEmployees.filter(e=>e.currency==="دينار"||!e.currency);
-      const dollarEmps  = salaryEmployees.filter(e=>e.currency==="دولار");
-      const totalDinarBase  = dinarEmps.reduce((s,e)=>s+e.baseSalary,0);
-      const totalDollarBase = dollarEmps.reduce((s,e)=>s+e.baseSalary,0);
-
-      // حسابات الشهر المختار
-      const filtPay = salaryPayments.filter(p=>!salFilterMonth||p.month===salFilterMonth);
-      const filtOt  = overtimePayments.filter(p=>!salFilterMonth||p.month===salFilterMonth);
-      const filtAdv = salaryAdvances.filter(p=>!salFilterMonth||p.date?.slice(0,7)===salFilterMonth);
-
-      const dinarPaid   = filtPay.filter(p=>p.currency==="دينار"||!p.currency).reduce((s,p)=>s+p.amount,0);
-      const dollarPaid  = filtPay.filter(p=>p.currency==="دولار").reduce((s,p)=>s+p.amount,0);
-      const dinarOT     = filtOt.filter(p=>p.currency==="دينار"||!p.currency).reduce((s,p)=>s+p.amount,0);
-      const dollarOT    = filtOt.filter(p=>p.currency==="دولار").reduce((s,p)=>s+p.amount,0);
-      const dinarAdv    = filtAdv.filter(p=>p.currency==="دينار"||!p.currency).reduce((s,p)=>s+p.amount,0);
-      const dollarAdv   = filtAdv.filter(p=>p.currency==="دولار").reduce((s,p)=>s+p.amount,0);
-
-      // مجمل الرواتب بعملة موحدة
-      const totalDinarAll  = dinarPaid + dinarOT + dinarAdv + (dollarPaid+dollarOT+dollarAdv)*exchangeRate;
-      const totalDollarAll = dollarPaid + dollarOT + dollarAdv + (dinarPaid+dinarOT+dinarAdv)/exchangeRate;
-
-      // حساب الراتب الصافي لكل موظف (الراتب - سلف الشهر)
-      const empNetSalary = (empId, cur) => {
-        const base = salaryEmployees.find(e=>e.id===empId)?.baseSalary||0;
-        const paid = filtPay.filter(p=>p.employeeId===empId).reduce((s,p)=>s+p.amount,0);
-        const ot   = filtOt.filter(p=>p.employeeId===empId).reduce((s,p)=>s+p.amount,0);
-        const adv  = filtAdv.filter(p=>p.employeeId===empId).reduce((s,p)=>s+p.amount,0);
-        return {base, paid, ot, adv, net: base - adv};
-      };
-
-      const Tab = ({id,label,icon}) => (
-        <button onClick={()=>setSalTab(id)} style={{
-          flex:1, padding:"10px 6px", borderRadius:10, border:"none", cursor:"pointer",
-          fontWeight:700, fontSize:D?13:11, transition:"all 0.2s",
-          background:salTab===id?C.gold:"transparent",
-          color:salTab===id?"#000":C.textMd,
-          boxShadow:salTab===id?C.shadow:"none",
-        }}>{icon} {label}</button>
-      );
-
-      return (
-        <div>
-          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16,flexWrap:"wrap",gap:8}}>
-            <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:4}}>{!D&&<BackBtn/>}<div style={S.secTitle}>💵 الرواتب والأوفر تايم</div></div>
-            <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
-              <select style={{...S.sel,width:"auto",padding:"8px 12px",fontSize:13}} value={salFilterMonth} onChange={e=>setSalFilterMonth(e.target.value)}>
-                <option value="">كل الأشهر</option>
-                {months.map(m=><option key={m} value={m}>{m}</option>)}
-              </select>
-              {[["showSalEmpForm","👤 موظف جديد",C.gold,"#000"],["showSalPayForm","💵 صرف راتب",C.blue,"#fff"],["showSalAdvForm","💳 سلفة راتب","#b45309","#fff"],["showOtForm","⏰ أوفر تايم","#6B3FA0","#fff"]].map(([key,lbl,bg,col])=>(
-                <button key={key} style={{...S.goldBtn,width:"auto",padding:"8px 14px",marginBottom:0,fontSize:12,background:bg,color:col}}
-                  onClick={()=>{
-                    setShowSalEmpForm(key==="showSalEmpForm"?v=>!v:false);
-                    setShowSalPayForm(key==="showSalPayForm"?v=>!v:false);
-                    setShowSalAdvForm(key==="showSalAdvForm"?v=>!v:false);
-                    setShowOtForm(key==="showOtForm"?v=>!v:false);
-                  }}>{lbl}</button>
-              ))}
-            </div>
-          </div>
-
-          {/* نموذج إضافة موظف */}
-          {showSalEmpForm&&(
-            <div style={{...S.formCard,marginBottom:16}}>
-              <div style={{fontWeight:700,fontSize:14,color:C.text,marginBottom:12}}>👤 إضافة موظف للرواتب</div>
-              <div style={D?{display:"flex",gap:12}:{}}>
-                <div style={D?{flex:2}:{}}><div style={S.fLbl}>الاسم</div><input style={S.inp} placeholder="مثال: علي حسن" value={salEmpForm.name} onChange={e=>setSalEmpForm(f=>({...f,name:e.target.value}))}/></div>
-                <div style={D?{flex:1}:{}}><div style={S.fLbl}>الراتب الأساسي</div><input style={S.inp} type="number" placeholder="٠" value={salEmpForm.baseSalary} onChange={e=>setSalEmpForm(f=>({...f,baseSalary:e.target.value}))}/></div>
-                <div style={D?{flex:1}:{}}>
-                  <div style={S.fLbl}>العملة</div>
-                  <div style={S.tRow}>
-                    <button style={{...S.tBtn,...(salEmpForm.currency==="دينار"?{background:"rgba(37,87,167,0.15)",border:`1px solid #2557A7`,color:"#2557A7"}:{})}} onClick={()=>setSalEmpForm(f=>({...f,currency:"دينار"}))}>🇮🇶</button>
-                    <button style={{...S.tBtn,...(salEmpForm.currency==="دولار"?{background:"rgba(37,87,167,0.15)",border:`1px solid #2557A7`,color:"#2557A7"}:{})}} onClick={()=>setSalEmpForm(f=>({...f,currency:"دولار"}))}>🇺🇸</button>
-                  </div>
-                </div>
-              </div>
-              <div style={S.fLbl}>ملاحظة</div>
-              <input style={S.inp} placeholder="مثال: دوام كامل..." value={salEmpForm.note} onChange={e=>setSalEmpForm(f=>({...f,note:e.target.value}))}/>
-              <button style={S.subBtn} onClick={addSalaryEmployee}>+ إضافة</button>
-              {salaryEmployees.length>0&&(<>
-                <div style={{fontWeight:700,fontSize:12,color:C.textMd,margin:"14px 0 8px"}}>الموظفون الحاليون</div>
-                {salaryEmployees.map(e=>(
-                  <div key={e.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 12px",background:C.bg2,borderRadius:10,marginBottom:6,border:`1px solid ${C.cardBorder}`}}>
-                    <div><span style={{fontWeight:700,color:C.text}}>{e.name}</span><span style={{fontSize:12,color:C.textMd,marginRight:8}}>— {fmt(e.baseSalary,e.currency)}</span>{e.note&&<span style={{fontSize:11,color:C.textSm}}>{e.note}</span>}</div>
-                    <button style={{background:"transparent",border:"none",color:C.red,cursor:"pointer",fontSize:16}} onClick={()=>delSalaryEmployee(e.id)}>🗑️</button>
-                  </div>
-                ))}
-              </>)}
-            </div>
-          )}
-
-          {/* نموذج صرف راتب */}
-          {showSalPayForm&&(
-            <div style={{...S.formCard,marginBottom:16}}>
-              <div style={{fontWeight:700,fontSize:14,color:C.text,marginBottom:12}}>💵 صرف راتب</div>
-              <div style={D?{display:"flex",gap:12}:{}}>
-                <div style={D?{flex:2}:{}}>
-                  <div style={S.fLbl}>الموظف</div>
-                  <select style={S.sel} value={salPayForm.employeeId} onChange={e=>{const emp=salaryEmployees.find(x=>x.id===e.target.value);setSalPayForm(f=>({...f,employeeId:e.target.value,amount:emp?.baseSalary||""}));}}>
-                    <option value="">اختر الموظف</option>
-                    {salaryEmployees.map(e=><option key={e.id} value={e.id}>{e.name} — {fmt(e.baseSalary,e.currency)}</option>)}
-                  </select>
-                </div>
-                <div style={D?{flex:1}:{}}><div style={S.fLbl}>الشهر</div><input style={S.inp} type="month" value={salPayForm.month} onChange={e=>setSalPayForm(f=>({...f,month:e.target.value}))}/></div>
-                <div style={D?{flex:1}:{}}><div style={S.fLbl}>المبلغ</div><input style={S.inp} type="number" placeholder="٠" value={salPayForm.amount} onChange={e=>setSalPayForm(f=>({...f,amount:e.target.value}))}/></div>
-                <div style={D?{flex:1}:{}}><div style={S.fLbl}>تاريخ الدفع</div><input style={S.inp} type="date" value={salPayForm.date} onChange={e=>setSalPayForm(f=>({...f,date:e.target.value}))}/></div>
-              </div>
-              <div style={S.fLbl}>ملاحظة</div>
-              <input style={S.inp} placeholder="مثال: راتب كامل..." value={salPayForm.note} onChange={e=>setSalPayForm(f=>({...f,note:e.target.value}))}/>
-              <button style={S.subBtn} onClick={paySalary}>💾 تسجيل</button>
-            </div>
-          )}
-
-          {/* نموذج سلفة راتب */}
-          {showSalAdvForm&&(
-            <div style={{...S.formCard,marginBottom:16,border:`1px solid rgba(180,83,9,0.2)`}}>
-              <div style={{fontWeight:700,fontSize:14,color:"#b45309",marginBottom:12}}>💳 سلفة من الراتب</div>
-              <div style={D?{display:"flex",gap:12}:{}}>
-                <div style={D?{flex:2}:{}}>
-                  <div style={S.fLbl}>الموظف</div>
-                  <select style={S.sel} value={salAdvForm.employeeId} onChange={e=>setSalAdvForm(f=>({...f,employeeId:e.target.value}))}>
-                    <option value="">اختر الموظف</option>
-                    {salaryEmployees.map(e=><option key={e.id} value={e.id}>{e.name} — راتب {fmt(e.baseSalary,e.currency)}</option>)}
-                  </select>
-                </div>
-                <div style={D?{flex:1}:{}}><div style={S.fLbl}>مبلغ السلفة</div><input style={S.inp} type="number" placeholder="٠" value={salAdvForm.amount} onChange={e=>setSalAdvForm(f=>({...f,amount:e.target.value}))}/></div>
-                <div style={D?{flex:1}:{}}><div style={S.fLbl}>التاريخ</div><input style={S.inp} type="date" value={salAdvForm.date} onChange={e=>setSalAdvForm(f=>({...f,date:e.target.value}))}/></div>
-              </div>
-              <div style={S.fLbl}>ملاحظة</div>
-              <input style={S.inp} placeholder="سبب السلفة..." value={salAdvForm.note} onChange={e=>setSalAdvForm(f=>({...f,note:e.target.value}))}/>
-              {salAdvForm.employeeId&&salAdvForm.amount&&(()=>{
-                const emp=salaryEmployees.find(e=>e.id===salAdvForm.employeeId);
-                const advThisMonth=salaryAdvances.filter(a=>a.employeeId===salAdvForm.employeeId&&a.date?.slice(0,7)===today().slice(0,7)).reduce((s,a)=>s+a.amount,0);
-                const netAfter=(emp?.baseSalary||0)-(advThisMonth+Number(salAdvForm.amount));
-                return <div style={{background:`rgba(180,83,9,0.06)`,border:`1px solid rgba(180,83,9,0.2)`,borderRadius:10,padding:"10px 14px",marginTop:8,fontSize:13,color:"#b45309",fontWeight:600}}>
-                  سلف هذا الشهر: {fmt(advThisMonth,emp?.currency)} · الصافي بعد السلفة: {fmt(Math.max(0,netAfter),emp?.currency)}
-                </div>;
-              })()}
-              <button style={{...S.subBtn,background:"linear-gradient(135deg,#b45309,#92400e)",color:"#fff"}} onClick={addSalaryAdvance}>💾 تسجيل السلفة</button>
-            </div>
-          )}
-
-          {/* نموذج أوفر تايم */}
-          {showOtForm&&(
-            <div style={{...S.formCard,marginBottom:16,border:`1px solid rgba(107,63,160,0.2)`}}>
-              <div style={{fontWeight:700,fontSize:14,color:"#6B3FA0",marginBottom:16}}>⏰ تسجيل أوفر تايم</div>
-
-              {/* الصف الأول: الموظف والشهر والتاريخ */}
-              <div style={D?{display:"flex",gap:12}:{}}>
-                <div style={D?{flex:2}:{}}>
-                  <div style={S.fLbl}>الموظف</div>
-                  <select style={S.sel} value={otForm.employeeId} onChange={e=>setOtForm(f=>({...f,employeeId:e.target.value,hours:"",ratePerHour:"",amount:""}))}>
-                    <option value="">اختر الموظف</option>
-                    {salaryEmployees.map(e=><option key={e.id} value={e.id}>{e.name} ({e.currency==="دولار"?"🇺🇸":"🇮🇶"})</option>)}
-                  </select>
-                </div>
-                <div style={D?{flex:1}:{}}>
-                  <div style={S.fLbl}>الشهر</div>
-                  <input style={S.inp} type="month" value={otForm.month} onChange={e=>setOtForm(f=>({...f,month:e.target.value}))}/>
-                </div>
-                <div style={D?{flex:1}:{}}>
-                  <div style={S.fLbl}>التاريخ</div>
-                  <input style={S.inp} type="date" value={otForm.date} onChange={e=>setOtForm(f=>({...f,date:e.target.value}))}/>
-                </div>
-              </div>
-
-              {/* الصف الثاني: الساعات والسعر والمجموع */}
-              <div style={{...D?{display:"flex",gap:12}:{},marginTop:4}}>
-                <div style={D?{flex:1}:{}}>
-                  <div style={S.fLbl}>عدد الساعات ⏱️</div>
-                  <input style={{...S.inp,fontWeight:700,fontSize:16,textAlign:"center"}}
-                    type="number" placeholder="٠" value={otForm.hours}
-                    onChange={e=>{
-                      const h=e.target.value;
-                      setOtForm(f=>({...f,hours:h,amount:h&&f.ratePerHour?String(Number(h)*Number(f.ratePerHour)):f.amount}));
-                    }}/>
-                </div>
-                <div style={D?{flex:1}:{}}>
-                  <div style={S.fLbl}>سعر الساعة 💰</div>
-                  <input style={{...S.inp,fontWeight:700,fontSize:16,textAlign:"center"}}
-                    type="number" placeholder="٠" value={otForm.ratePerHour}
-                    onChange={e=>{
-                      const r=e.target.value;
-                      setOtForm(f=>({...f,ratePerHour:r,amount:f.hours&&r?String(Number(f.hours)*Number(r)):f.amount}));
-                    }}/>
-                </div>
-                <div style={D?{flex:1}:{}}>
-                  <div style={S.fLbl}>المبلغ الكلي 🧾</div>
-                  <input style={{...S.inp,fontWeight:900,fontSize:18,textAlign:"center",
-                    background:otForm.hours&&otForm.ratePerHour?"rgba(107,63,160,0.08)":C.bg2,
-                    border:otForm.hours&&otForm.ratePerHour?`2px solid #6B3FA0`:`1px solid ${C.cardBorder}`,
-                    color:"#6B3FA0"}}
-                    type="number" placeholder="أو أدخل مباشرة"
-                    value={otForm.amount}
-                    onChange={e=>setOtForm(f=>({...f,amount:e.target.value}))}/>
-                </div>
-              </div>
-
-              {/* معاينة الحساب */}
-              {otForm.hours&&otForm.ratePerHour&&(
-                <div style={{background:"rgba(107,63,160,0.08)",border:"1px solid rgba(107,63,160,0.2)",borderRadius:12,padding:"12px 16px",marginTop:12,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                  <div style={{fontSize:13,color:"#6B3FA0",fontWeight:600}}>
-                    {toAr(otForm.hours)} ساعة × {toAr(otForm.ratePerHour)} = 
-                  </div>
-                  <div style={{fontSize:18,fontWeight:900,color:"#6B3FA0"}}>
-                    {fmtD(Number(otForm.hours)*Number(otForm.ratePerHour))}
-                  </div>
-                </div>
-              )}
-
-              <div style={S.fLbl}>ملاحظة</div>
-              <input style={S.inp} placeholder="مثال: عمل ليلي، إجازة رسمية..." value={otForm.note} onChange={e=>setOtForm(f=>({...f,note:e.target.value}))}/>
-
-              {/* تحذير الصرف */}
-              {otForm.amount&&otForm.employeeId&&(()=>{
-                const emp=salaryEmployees.find(e=>e.id===otForm.employeeId);
-                return <div style={{background:`rgba(107,63,160,0.06)`,border:`1px solid rgba(107,63,160,0.2)`,borderRadius:10,padding:"10px 14px",marginTop:8,fontSize:13,color:"#6B3FA0",fontWeight:600}}>
-                  ⚠️ سيُصرف {fmt(Number(otForm.amount),emp?.currency||"دينار")} من رصيد أحمد
-                </div>;
-              })()}
-
-              <button style={{...S.subBtn,background:"linear-gradient(135deg,#6B3FA0,#5B21B6)",color:"#fff"}} onClick={payOvertime}>💾 تسجيل الأوفر تايم</button>
-            </div>
-          )}
-
-          {/* تبويبات */}
-          <div style={{display:"flex",background:C.bg2,borderRadius:12,padding:4,marginBottom:20,gap:3,flexWrap:"wrap"}}>
-            <Tab id="summary" label="المجمل" icon="📊"/>
-            <Tab id="dinar" label="دينار 🇮🇶" icon=""/>
-            <Tab id="dollar" label="دولار 🇺🇸" icon=""/>
-            <Tab id="advances" label="السلف" icon="💳"/>
-            <Tab id="overtime" label="الأوفر تايم" icon="⏰"/>
-            <Tab id="worklogs" label="ساعات الورشة" icon="⏱️"/>
-          </div>
-
-          {/* تبويبة المجمل */}
-          {salTab==="summary"&&(
-            <div>
-              {/* سعر الصرف + زر الطباعة */}
-              <div style={{...S.formCard,marginBottom:20,padding:16}}>
-                <div style={{display:"flex",alignItems:"center",gap:12,flexWrap:"wrap",justifyContent:"space-between"}}>
-                  <div style={{display:"flex",alignItems:"center",gap:12,flexWrap:"wrap"}}>
-                    <div style={{fontSize:14,fontWeight:700,color:C.text}}>💱 سعر الصرف</div>
-                    <div style={{fontSize:13,color:C.textMd}}>1 دولار =</div>
-                    <input style={{...S.inp,width:140,padding:"8px 12px",fontSize:14,fontWeight:700}} type="number" placeholder={toAr(exchangeRate)} value={exchInput} onChange={e=>setExchInput(e.target.value)}/>
-                    <div style={{fontSize:13,color:C.textMd}}>دينار</div>
-                    <button style={{...S.goldBtn,width:"auto",padding:"8px 16px",marginBottom:0,fontSize:13}} onClick={saveExchangeRate}>💾 حفظ</button>
-                    <div style={{fontSize:12,color:C.textSm}}>الحالي: 1$ = {toAr(exchangeRate)} د.ع</div>
-                  </div>
-                  <button style={{...S.goldBtn,width:"auto",padding:"10px 20px",marginBottom:0,fontSize:13,background:"linear-gradient(135deg,#1d4ed8,#1455cc)",color:"#fff"}}
-                    onClick={()=>{
-                      // PDF كشف الرواتب
-                      const period = salFilterMonth||"كل الأشهر";
-                      const printDate = new Date().toLocaleDateString("ar-IQ");
-                      const printTime = new Date().toLocaleTimeString("ar-IQ",{hour:"2-digit",minute:"2-digit"});
-                      const totalDinarBase2=salaryEmployees.filter(e=>e.currency==="دينار"||!e.currency).reduce((s,e)=>s+e.baseSalary,0);
-                      const fmtCell=(v,cur)=>toAr(v.toLocaleString("ar-IQ"))+" "+(cur==="دولار"?"$":"د.ع");
-                      const rows = salaryEmployees.map((e,idx)=>{
-                        const base=e.baseSalary||0;
-                        const ot=filtOt.filter(p=>p.employeeId===e.id).reduce((s,p)=>s+p.amount,0);
-                        const adv=filtAdv.filter(p=>p.employeeId===e.id).reduce((s,p)=>s+p.amount,0);
-                        const paid=filtPay.filter(p=>p.employeeId===e.id).reduce((s,p)=>s+p.amount,0);
-                        const total=base+ot;
-                        const totalRec=adv+paid;
-                        const rem=total-totalRec;
-                        const cur=e.currency||"دينار";
-                        const rowBg=idx%2===0?"#ffffff":"#f8fafc";
-                        return `<tr style="background:${rowBg}">
-                          <td style="text-align:right;font-weight:800;color:#1a1a2e;padding-right:14px">${e.name}</td>
-                          <td><span class="currency-badge">${cur==="دولار"?"🇺🇸 دولار":"🇮🇶 دينار"}</span></td>
-                          <td style="color:#374151;font-weight:600">${fmtCell(base,cur)}</td>
-                          <td style="color:#6B3FA0;font-weight:700">${ot>0?fmtCell(ot,cur):'<span style="color:#cbd5e1">—</span>'}</td>
-                          <td style="color:#1d4ed8;font-weight:900;background:#eff6ff">${fmtCell(total,cur)}</td>
-                          <td style="color:#b45309;font-weight:700">${adv>0?fmtCell(adv,cur):'<span style="color:#cbd5e1">—</span>'}</td>
-                          <td style="color:#1A7A4A;font-weight:700">${paid>0?fmtCell(paid,cur):'<span style="color:#cbd5e1">—</span>'}</td>
-                          <td style="color:#C17B2F;font-weight:900">${fmtCell(totalRec,cur)}</td>
-                          <td style="background:${rem>=0?"#f0fdf4":"#fef2f2"}"><span class="${rem>=0?"badge-g":"badge-r"}">${fmtCell(Math.abs(rem),cur)} ${rem<0?"⚠️":""}</span></td>
-                        </tr>`;
-                      }).join("");
-                      const html=`<!DOCTYPE html>
-<html dir="rtl" lang="ar">
-<head>
-<meta charset="UTF-8"/>
-<title>كشف رواتب — ${period}</title>
-<style>
-  @import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@400;700;800;900&display=swap');
-  *{margin:0;padding:0;box-sizing:border-box}
-  body{font-family:'Tajawal',Tahoma,sans-serif;background:#fff;color:#1a1a2e;direction:rtl;font-size:13px}
-  .page{max-width:900px;margin:0 auto;padding:32px 36px}
-
-  /* الترويسة */
-  .header{border-bottom:3px solid #1d4ed8;padding-bottom:18px;margin-bottom:24px;display:flex;justify-content:space-between;align-items:flex-start}
-  .company-block{display:flex;align-items:center;gap:14px}
-  .logo-circle{width:56px;height:56px;border-radius:50%;background:linear-gradient(135deg,#1d4ed8,#3b82f6);display:flex;align-items:center;justify-content:center;color:#fff;font-size:24px;font-weight:900;flex-shrink:0}
-  .company-name{font-size:22px;font-weight:900;color:#1d4ed8;letter-spacing:-0.5px}
-  .company-sub{font-size:12px;color:#6b7280;margin-top:2px}
-  .doc-info{text-align:left;font-size:12px;color:#6b7280;line-height:1.8}
-  .doc-number{font-size:16px;font-weight:900;color:#1d4ed8;margin-bottom:4px}
-
-  /* عنوان الكشف */
-  .doc-title{background:linear-gradient(135deg,#1d4ed8,#2563eb);color:#fff;border-radius:12px;padding:16px 22px;margin-bottom:20px;display:flex;justify-content:space-between;align-items:center}
-  .doc-title h1{font-size:20px;font-weight:900;letter-spacing:-0.5px}
-  .doc-title .period{font-size:13px;opacity:0.85;margin-top:3px}
-  .doc-title .rate{font-size:12px;background:rgba(255,255,255,0.2);padding:4px 12px;border-radius:20px}
-
-  /* بطاقات الملخص */
-  .summary{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:24px}
-  .box{border:1px solid #e2e8f0;border-radius:10px;padding:12px 10px;text-align:center;background:#f8fafc}
-  .box-icon{font-size:20px;margin-bottom:4px}
-  .box-label{font-size:10px;color:#64748b;font-weight:700;margin-bottom:4px;line-height:1.3}
-  .box-val{font-size:14px;font-weight:900}
-  .box-cur{font-size:10px;color:#94a3b8}
-  .blue{color:#1d4ed8}.green{color:#1A7A4A}.red{color:#C0392B}.gold{color:#C17B2F}.purple{color:#6B3FA0}
-
-  /* الجدول */
-  .table-wrap{border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;margin-bottom:20px}
-  .table-title{background:#f1f5f9;padding:10px 16px;font-size:12px;font-weight:800;color:#1d4ed8;border-bottom:1px solid #e2e8f0;display:flex;justify-content:space-between}
-  table{width:100%;border-collapse:collapse;font-size:11.5px}
-  thead tr{background:#1d4ed8}
-  thead th{padding:10px 10px;color:#fff;font-weight:700;text-align:center;font-size:11px;white-space:nowrap}
-  thead th:first-child{text-align:right;padding-right:14px}
-  tbody tr:nth-child(even){background:#f8fafc}
-  tbody tr:hover{background:#eff6ff}
-  tbody td{padding:10px 10px;border-bottom:1px solid #f1f5f9;text-align:center;vertical-align:middle}
-  tbody td:first-child{text-align:right;font-weight:800;color:#1a1a2e;padding-right:14px}
-  tfoot tr{background:#dbeafe}
-  tfoot td{padding:11px 10px;font-weight:900;text-align:center;border-top:2px solid #1d4ed8;color:#1d4ed8;font-size:12px}
-  tfoot td:first-child{text-align:right;padding-right:14px;color:#1a1a2e}
-
-  /* باقي له */
-  .badge-g{background:#dcfce7;color:#166534;padding:3px 8px;border-radius:6px;font-size:10px;font-weight:800;white-space:nowrap}
-  .badge-r{background:#fee2e2;color:#991b1b;padding:3px 8px;border-radius:6px;font-size:10px;font-weight:800;white-space:nowrap}
-  .currency-badge{font-size:10px;background:#eff6ff;color:#1d4ed8;padding:2px 7px;border-radius:5px;font-weight:700}
-
-  /* التوقيعات */
-  .signatures{display:flex;justify-content:space-between;margin-top:30px;padding-top:20px;border-top:1px solid #e2e8f0}
-  .sig-box{text-align:center;width:160px}
-  .sig-line{border-top:1px solid #94a3b8;margin-bottom:8px;margin-top:40px}
-  .sig-label{font-size:11px;color:#64748b;font-weight:700}
-
-  /* التذييل */
-  .footer{margin-top:20px;padding-top:14px;border-top:2px solid #e2e8f0;display:flex;justify-content:space-between;align-items:center}
-  .footer-left{font-size:10px;color:#94a3b8}
-  .footer-right{font-size:10px;color:#94a3b8;text-align:left}
-  .footer-brand{font-size:12px;font-weight:900;color:#1d4ed8}
-
-  @media print{
-    body{-webkit-print-color-adjust:exact;print-color-adjust:exact}
-    .page{padding:20px 24px}
-    thead tr{-webkit-print-color-adjust:exact}
-  }
-</style>
-</head>
-<body>
-<div class="page">
-
-  <!-- الترويسة -->
-  <div class="header">
-    <div class="company-block">
-      <div class="logo-circle">⚡</div>
-      <div>
-        <div class="company-name">نظام حساب</div>
-        <div class="company-sub">إدارة الرواتب والموارد البشرية</div>
-      </div>
-    </div>
-    <div class="doc-info">
-      <div class="doc-number">كشف رواتب رقم #${toAr(new Date().getTime().toString().slice(-4))}</div>
-      <div>تاريخ الإصدار: ${printDate}</div>
-      <div>وقت الطباعة: ${printTime}</div>
-      <div>الفترة: ${period}</div>
-    </div>
-  </div>
-
-  <!-- عنوان الكشف -->
-  <div class="doc-title">
-    <div>
-      <h1>كشف رواتب الموظفين</h1>
-      <div class="period">الفترة المالية: ${period}</div>
-    </div>
-    <div class="rate">💱 1$ = ${toAr(exchangeRate)} د.ع</div>
-  </div>
-
-  <!-- بطاقات الملخص -->
-  <div class="summary">
-    <div class="box">
-      <div class="box-icon">🇮🇶</div>
-      <div class="box-label">رواتب الدينار الأساسية</div>
-      <div class="box-val blue">${toAr(totalDinarBase2.toLocaleString("ar-IQ"))}</div>
-      <div class="box-cur">دينار عراقي</div>
-    </div>
-    <div class="box">
-      <div class="box-icon">🇺🇸</div>
-      <div class="box-label">رواتب الدولار الأساسية</div>
-      <div class="box-val green">${toAr(totalDollarBase.toLocaleString("ar-IQ"))}</div>
-      <div class="box-cur">دولار أمريكي</div>
-    </div>
-    <div class="box">
-      <div class="box-icon">📊</div>
-      <div class="box-label">المجمل الكلي بالدينار</div>
-      <div class="box-val gold">${toAr(Math.round(totalDinarAll).toLocaleString("ar-IQ"))}</div>
-      <div class="box-cur">دينار عراقي</div>
-    </div>
-    <div class="box">
-      <div class="box-icon">✅</div>
-      <div class="box-label">إجمالي المدفوع دينار</div>
-      <div class="box-val red">${toAr((dinarPaid+dinarAdv+dinarOT).toLocaleString("ar-IQ"))}</div>
-      <div class="box-cur">دينار عراقي</div>
-    </div>
-    <div class="box">
-      <div class="box-icon">✅</div>
-      <div class="box-label">إجمالي المدفوع دولار</div>
-      <div class="box-val red">${toAr((dollarPaid+dollarAdv+dollarOT).toLocaleString("ar-IQ"))}</div>
-      <div class="box-cur">دولار أمريكي</div>
-    </div>
-  </div>
-
-  <!-- جدول الرواتب -->
-  <div class="table-wrap">
-    <div class="table-title">
-      <span>📋 تفصيل رواتب الموظفين — ${period}</span>
-      <span style="color:#64748b;font-weight:400">جميع المبالغ بالعملة المحددة لكل موظف</span>
-    </div>
-    <table>
-      <thead>
-        <tr>
-          <th style="width:14%">الموظف</th>
-          <th style="width:7%">العملة</th>
-          <th>الراتب الأساسي</th>
-          <th>الأوفر تايم</th>
-          <th>الإجمالي المستحق</th>
-          <th>السلف المستلمة</th>
-          <th>الرواتب المدفوعة</th>
-          <th>إجمالي المستلم</th>
-          <th>الباقي له</th>
-        </tr>
-      </thead>
-      <tbody>${rows}</tbody>
-      <tfoot>
-        <tr>
-          <td colspan="2">الإجمالي الكلي (دينار)</td>
-          <td>${toAr(totalDinarBase2.toLocaleString("ar-IQ"))} د.ع</td>
-          <td style="color:#6B3FA0">${toAr(dinarOT.toLocaleString("ar-IQ"))} د.ع</td>
-          <td>${toAr((totalDinarBase2+dinarOT).toLocaleString("ar-IQ"))} د.ع</td>
-          <td style="color:#b45309">${toAr(dinarAdv.toLocaleString("ar-IQ"))} د.ع</td>
-          <td style="color:#1A7A4A">${toAr(dinarPaid.toLocaleString("ar-IQ"))} د.ع</td>
-          <td style="color:#C17B2F">${toAr((dinarPaid+dinarAdv).toLocaleString("ar-IQ"))} د.ع</td>
-          <td>${toAr(Math.abs(totalDinarBase2+dinarOT-(dinarPaid+dinarAdv)).toLocaleString("ar-IQ"))} د.ع</td>
-        </tr>
-      </tfoot>
-    </table>
-  </div>
-
-  <!-- خانات التوقيع -->
-  <div class="signatures">
-    <div class="sig-box">
-      <div class="sig-line"></div>
-      <div class="sig-label">المدير المالي</div>
-    </div>
-    <div class="sig-box">
-      <div class="sig-line"></div>
-      <div class="sig-label">المحاسب المسؤول</div>
-    </div>
-    <div class="sig-box">
-      <div class="sig-line"></div>
-      <div class="sig-label">مدير الشركة</div>
-    </div>
-  </div>
-
-  <!-- التذييل -->
-  <div class="footer">
-    <div class="footer-left">
-      <div class="footer-brand">⚡ نظام حساب</div>
-      <div>نظام إدارة الرواتب والحسابات</div>
-    </div>
-    <div class="footer-right">
-      <div>تم الإصدار بتاريخ: ${printDate} الساعة ${printTime}</div>
-      <div>هذه الوثيقة صادرة إلكترونياً وتعتبر رسمية</div>
-    </div>
-  </div>
-
-</div>
-</body>
-</html>`;
-                      const w=window.open("","_blank");w.document.write(html);w.document.close();setTimeout(()=>w.print(),600);
-                    }}>
-                    🖨️ طباعة كشف الرواتب
-                  </button>
-                </div>
-              </div>
-
-              {/* بطاقات الملخص */}
-              <div style={{display:"grid",gridTemplateColumns:D?"repeat(3,1fr)":"1fr",gap:14,marginBottom:20}}>
-                {/* دينار */}
-                <div style={{background:C.card,border:`1px solid ${C.cardBorder}`,borderRadius:18,padding:18,boxShadow:C.shadow}}>
-                  <div style={{fontSize:13,fontWeight:700,color:"#2557A7",marginBottom:12}}>🇮🇶 الرواتب بالدينار</div>
-                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
-                    {[["رواتب أساسية",totalDinarBase],["مدفوع رواتب",dinarPaid],["سلف الشهر",dinarAdv],["أوفر تايم",dinarOT],].map(([l,v])=>(
-                      <div key={l} style={{background:C.bg2,borderRadius:10,padding:"10px 12px"}}>
-                        <div style={{fontSize:10,color:C.textSm,fontWeight:600}}>{l}</div>
-                        <div style={{fontSize:14,fontWeight:800,color:C.text,marginTop:3}}>{fmtD(v)}</div>
-                      </div>
-                    ))}
-                  </div>
-                  <div style={{marginTop:12,paddingTop:12,borderTop:`1px solid ${C.cardBorder}`,display:"flex",justifyContent:"space-between"}}>
-                    <span style={{fontSize:12,fontWeight:700,color:C.textMd}}>الإجمالي المدفوع</span>
-                    <span style={{fontSize:15,fontWeight:900,color:C.red}}>{fmtD(dinarPaid+dinarAdv+dinarOT)}</span>
-                  </div>
-                </div>
-
-                {/* دولار */}
-                <div style={{background:C.card,border:`1px solid ${C.cardBorder}`,borderRadius:18,padding:18,boxShadow:C.shadow}}>
-                  <div style={{fontSize:13,fontWeight:700,color:"#1A7A4A",marginBottom:12}}>🇺🇸 الرواتب بالدولار</div>
-                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
-                    {[["رواتب أساسية",totalDollarBase],["مدفوع رواتب",dollarPaid],["سلف الشهر",dollarAdv],["أوفر تايم",dollarOT],].map(([l,v])=>(
-                      <div key={l} style={{background:C.bg2,borderRadius:10,padding:"10px 12px"}}>
-                        <div style={{fontSize:10,color:C.textSm,fontWeight:600}}>{l}</div>
-                        <div style={{fontSize:14,fontWeight:800,color:C.text,marginTop:3}}>{fmt(v,"دولار")}</div>
-                      </div>
-                    ))}
-                  </div>
-                  <div style={{marginTop:12,paddingTop:12,borderTop:`1px solid ${C.cardBorder}`,display:"flex",justifyContent:"space-between"}}>
-                    <span style={{fontSize:12,fontWeight:700,color:C.textMd}}>الإجمالي المدفوع</span>
-                    <span style={{fontSize:15,fontWeight:900,color:C.red}}>{fmt(dollarPaid+dollarAdv+dollarOT,"دولار")}</span>
-                  </div>
-                </div>
-
-                {/* المجمل */}
-                <div style={{background:"linear-gradient(135deg,#1e3a5f,#1d4ed8)",borderRadius:18,padding:18,boxShadow:C.shadowMd}}>
-                  <div style={{fontSize:13,fontWeight:700,color:"rgba(255,255,255,0.9)",marginBottom:12}}>📊 المجمل الكلي</div>
-                  <div style={{marginBottom:12}}>
-                    <div style={{fontSize:11,color:"rgba(255,255,255,0.7)",marginBottom:4}}>بالدينار (بعد تحويل الدولار)</div>
-                    <div style={{fontSize:22,fontWeight:900,color:"#fff",letterSpacing:-1}}>{fmtD(Math.round(totalDinarAll))}</div>
-                    <div style={{fontSize:11,color:"rgba(255,255,255,0.6)",marginTop:2}}>منها دينار: {fmtD(dinarPaid+dinarAdv+dinarOT)} + دولار محوّل: {fmtD(Math.round((dollarPaid+dollarAdv+dollarOT)*exchangeRate))}</div>
-                  </div>
-                  <div style={{paddingTop:12,borderTop:"1px solid rgba(255,255,255,0.15)"}}>
-                    <div style={{fontSize:11,color:"rgba(255,255,255,0.7)",marginBottom:4}}>بالدولار (بعد تحويل الدينار)</div>
-                    <div style={{fontSize:18,fontWeight:900,color:"#93c5fd",letterSpacing:-0.5}}>{fmt(Math.round(totalDollarAll*100)/100,"دولار")}</div>
-                  </div>
-                  <div style={{paddingTop:12,borderTop:"1px solid rgba(255,255,255,0.15)",marginTop:8,fontSize:11,color:"rgba(255,255,255,0.6)"}}>
-                    سعر الصرف المستخدم: 1$ = {toAr(exchangeRate)} د.ع
-                  </div>
-                </div>
-              </div>
-
-              {/* جدول كل موظف */}
-              <div style={{...S.formCard,padding:0,overflow:"hidden"}}>
-                <div style={{padding:"12px 16px",background:C.bg2,borderBottom:`1px solid ${C.cardBorder}`,fontWeight:700,fontSize:13,color:C.text}}>
-                  📋 كشف راتب كل موظف {salFilterMonth?`— ${salFilterMonth}`:"(كل الأشهر)"}
-                </div>
-                <div style={{overflowX:"auto"}}>
-                  <table style={{width:"100%",borderCollapse:"collapse",fontSize:12,minWidth:700}}>
-                    <thead>
-                      <tr style={{background:"#1d4ed8"}}>
-                        {[
-                          {l:"الموظف",c:"#fff"},
-                          {l:"العملة",c:"#fff"},
-                          {l:"الراتب الأساسي",c:"#bfdbfe"},
-                          {l:"⏰ الأوفر تايم",c:"#c4b5fd"},
-                          {l:"📊 الإجمالي المستحق",c:"#fff"},
-                          {l:"💳 السلف المستلمة",c:"#fde68a"},
-                          {l:"💵 الرواتب المستلمة",c:"#bbf7d0"},
-                          {l:"✅ إجمالي المستلم",c:"#fde68a"},
-                          {l:"🔴 الباقي له",c:"#fff"},
-                        ].map(({l,c})=>(
-                          <th key={l} style={{padding:"10px 12px",textAlign:"center",fontWeight:700,color:c,fontSize:11,borderBottom:"2px solid rgba(255,255,255,0.2)"}}>{l}</th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {salaryEmployees.map((e,i)=>{
-                        const base = e.baseSalary||0;
-                        const ot   = filtOt.filter(p=>p.employeeId===e.id).reduce((s,p)=>s+p.amount,0);
-                        const adv  = filtAdv.filter(p=>p.employeeId===e.id).reduce((s,p)=>s+p.amount,0);
-                        const paid = filtPay.filter(p=>p.employeeId===e.id).reduce((s,p)=>s+p.amount,0);
-                        const total = base + ot;
-                        const totalReceived = adv + paid;
-                        const remaining = total - totalReceived;
-                        const isOver = remaining < 0;
-                        return(
-                          <tr key={e.id} style={{borderTop:`1px solid ${C.cardBorder}`,background:i%2===0?"#fff":C.bg}}>
-                            <td style={{padding:"10px 12px",fontWeight:800,color:C.text,textAlign:"right",minWidth:90}}>{e.name}</td>
-                            <td style={{padding:"10px 12px",textAlign:"center"}}>
-                              <span style={{fontSize:11,fontWeight:700,color:e.currency==="دولار"?"#1A7A4A":"#2557A7",background:e.currency==="دولار"?"rgba(26,122,74,0.1)":"rgba(37,87,167,0.1)",padding:"3px 8px",borderRadius:6}}>
-                                {e.currency==="دولار"?"🇺🇸":"🇮🇶"}
-                              </span>
-                            </td>
-                            <td style={{padding:"10px 12px",textAlign:"center",fontWeight:700,color:C.textMd}}>{fmt(base,e.currency)}</td>
-                            <td style={{padding:"10px 12px",textAlign:"center",fontWeight:700,color:"#6B3FA0"}}>{ot>0?fmt(ot,e.currency):<span style={{color:C.textSm}}>—</span>}</td>
-                            <td style={{padding:"10px 12px",textAlign:"center",fontWeight:800,color:"#1d4ed8",background:"rgba(29,78,216,0.04)"}}>{fmt(total,e.currency)}</td>
-                            <td style={{padding:"10px 12px",textAlign:"center",fontWeight:700,color:"#b45309"}}>{adv>0?fmt(adv,e.currency):<span style={{color:C.textSm}}>—</span>}</td>
-                            <td style={{padding:"10px 12px",textAlign:"center",fontWeight:700,color:"#1A7A4A"}}>{paid>0?fmt(paid,e.currency):<span style={{color:C.textSm}}>—</span>}</td>
-                            <td style={{padding:"10px 12px",textAlign:"center",fontWeight:800,color:C.gold,background:"rgba(193,123,47,0.05)"}}>{fmt(totalReceived,e.currency)}</td>
-                            <td style={{padding:"10px 12px",textAlign:"center",fontWeight:900,minWidth:110,background:isOver?"rgba(192,57,43,0.06)":"rgba(26,122,74,0.06)"}}>
-                              <div style={{color:isOver?C.red:C.green,fontSize:13}}>{fmt(Math.abs(remaining),e.currency)}</div>
-                              <div style={{fontSize:10,color:isOver?C.red:C.green,marginTop:2}}>{isOver?"⚠️ تجاوز":"✅ مستحق"}</div>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                    <tfoot>
-                      <tr style={{background:C.bg2,borderTop:`2px solid #1d4ed8`}}>
-                        <td colSpan={2} style={{padding:"10px 12px",fontWeight:800,color:C.text,fontSize:13}}>الإجمالي</td>
-                        <td style={{padding:"10px 12px",textAlign:"center",fontWeight:800,color:C.textMd}}>
-                          {fmtD(salaryEmployees.filter(e=>e.currency==="دينار"||!e.currency).reduce((s,e)=>s+e.baseSalary,0))}
-                        </td>
-                        <td style={{padding:"10px 12px",textAlign:"center",fontWeight:800,color:"#6B3FA0"}}>{fmtD(dinarOT)}</td>
-                        <td style={{padding:"10px 12px",textAlign:"center",fontWeight:800,color:"#1d4ed8"}}>{fmtD(salaryEmployees.filter(e=>e.currency==="دينار"||!e.currency).reduce((s,e)=>s+e.baseSalary,0)+dinarOT)}</td>
-                        <td style={{padding:"10px 12px",textAlign:"center",fontWeight:800,color:"#b45309"}}>{fmtD(dinarAdv)}</td>
-                        <td style={{padding:"10px 12px",textAlign:"center",fontWeight:800,color:"#1A7A4A"}}>{fmtD(dinarPaid)}</td>
-                        <td style={{padding:"10px 12px",textAlign:"center",fontWeight:800,color:C.gold}}>{fmtD(dinarPaid+dinarAdv)}</td>
-                        <td style={{padding:"10px 12px",textAlign:"center",fontWeight:900,color:C.red}}>{fmtD(salaryEmployees.filter(e=>e.currency==="دينار"||!e.currency).reduce((s,e)=>s+e.baseSalary,0)+dinarOT-(dinarPaid+dinarAdv))}</td>
-                      </tr>
-                    </tfoot>
-                  </table>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* رواتب الدينار */}
-          {salTab==="dinar"&&(
-            <div style={{...S.formCard,padding:0,overflow:"hidden"}}>
-              <div style={{padding:"12px 16px",background:C.bg2,borderBottom:`1px solid ${C.cardBorder}`,fontWeight:700,fontSize:13}}>🇮🇶 سجل دفعات الدينار</div>
-              {filtPay.filter(p=>p.currency==="دينار"||!p.currency).length===0?<div style={{...S.empty,padding:20}}>ما في دفعات</div>:(
-                <div style={{overflowX:"auto"}}><table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
-                  <thead><tr style={{background:C.bg2}}>{["الموظف","الشهر","المبلغ","التاريخ","ملاحظة",""].map(h=><th key={h} style={{padding:"8px 10px",textAlign:"center",fontWeight:700,color:C.textMd,fontSize:11}}>{h}</th>)}</tr></thead>
-                  <tbody>{filtPay.filter(p=>p.currency==="دينار"||!p.currency).map((p,i)=>(
-                    <tr key={p.id} style={{borderTop:`1px solid ${C.cardBorder}`,background:i%2===0?"#fff":C.bg}}>
-                      <td style={{padding:"8px 10px",fontWeight:700,textAlign:"right"}}>{p.employeeName}</td>
-                      <td style={{padding:"8px 10px",textAlign:"center"}}><span style={{background:`rgba(193,123,47,0.1)`,color:C.gold,fontWeight:700,padding:"2px 8px",borderRadius:6,fontSize:11}}>{p.month}</span></td>
-                      <td style={{padding:"8px 10px",textAlign:"center",fontWeight:800,color:"#2557A7"}}>{fmtD(p.amount)}</td>
-                      <td style={{padding:"8px 10px",textAlign:"center",color:C.textSm,fontSize:11}}>📅 {p.date}</td>
-                      <td style={{padding:"8px 10px",textAlign:"center",color:C.textSm}}>{p.note||"-"}</td>
-                      <td style={{padding:"8px 10px",textAlign:"center"}}><button style={{background:"transparent",border:"none",color:C.red,cursor:"pointer"}} onClick={()=>delSalaryPayment(p.id)}>🗑️</button></td>
-                    </tr>
-                  ))}</tbody>
-                  <tfoot><tr style={{background:C.bg2,borderTop:`2px solid ${C.cardBorder}`}}>
-                    <td colSpan={2} style={{padding:"10px 12px",fontWeight:800,color:C.text}}>الإجمالي</td>
-                    <td style={{padding:"10px 12px",textAlign:"center",fontWeight:900,color:C.red}}>{fmtD(filtPay.filter(p=>p.currency==="دينار"||!p.currency).reduce((s,p)=>s+p.amount,0))}</td>
-                    <td colSpan={3}/>
-                  </tr></tfoot>
-                </table></div>
-              )}
-            </div>
-          )}
-
-          {/* رواتب الدولار */}
-          {salTab==="dollar"&&(
-            <div style={{...S.formCard,padding:0,overflow:"hidden"}}>
-              <div style={{padding:"12px 16px",background:C.bg2,borderBottom:`1px solid ${C.cardBorder}`,fontWeight:700,fontSize:13}}>🇺🇸 سجل دفعات الدولار</div>
-              {filtPay.filter(p=>p.currency==="دولار").length===0?<div style={{...S.empty,padding:20}}>ما في دفعات</div>:(
-                <div style={{overflowX:"auto"}}><table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
-                  <thead><tr style={{background:C.bg2}}>{["الموظف","الشهر","المبلغ","التاريخ","ملاحظة",""].map(h=><th key={h} style={{padding:"8px 10px",textAlign:"center",fontWeight:700,color:C.textMd,fontSize:11}}>{h}</th>)}</tr></thead>
-                  <tbody>{filtPay.filter(p=>p.currency==="دولار").map((p,i)=>(
-                    <tr key={p.id} style={{borderTop:`1px solid ${C.cardBorder}`,background:i%2===0?"#fff":C.bg}}>
-                      <td style={{padding:"8px 10px",fontWeight:700,textAlign:"right"}}>{p.employeeName}</td>
-                      <td style={{padding:"8px 10px",textAlign:"center"}}><span style={{background:`rgba(193,123,47,0.1)`,color:C.gold,fontWeight:700,padding:"2px 8px",borderRadius:6,fontSize:11}}>{p.month}</span></td>
-                      <td style={{padding:"8px 10px",textAlign:"center",fontWeight:800,color:"#1A7A4A"}}>{fmt(p.amount,"دولار")}</td>
-                      <td style={{padding:"8px 10px",textAlign:"center",color:C.textSm,fontSize:11}}>📅 {p.date}</td>
-                      <td style={{padding:"8px 10px",textAlign:"center",color:C.textSm}}>{p.note||"-"}</td>
-                      <td style={{padding:"8px 10px",textAlign:"center"}}><button style={{background:"transparent",border:"none",color:C.red,cursor:"pointer"}} onClick={()=>delSalaryPayment(p.id)}>🗑️</button></td>
-                    </tr>
-                  ))}</tbody>
-                  <tfoot><tr style={{background:C.bg2,borderTop:`2px solid ${C.cardBorder}`}}>
-                    <td colSpan={2} style={{padding:"10px 12px",fontWeight:800,color:C.text}}>الإجمالي</td>
-                    <td style={{padding:"10px 12px",textAlign:"center",fontWeight:900,color:C.red}}>{fmt(filtPay.filter(p=>p.currency==="دولار").reduce((s,p)=>s+p.amount,0),"دولار")}</td>
-                    <td colSpan={3}/>
-                  </tr></tfoot>
-                </table></div>
-              )}
-            </div>
-          )}
-
-          {/* السلف */}
-          {salTab==="advances"&&(
-            <div style={{...S.formCard,padding:0,overflow:"hidden"}}>
-              <div style={{padding:"12px 16px",background:C.bg2,borderBottom:`1px solid ${C.cardBorder}`,fontWeight:700,fontSize:13}}>💳 سجل سلف الرواتب</div>
-              {filtAdv.length===0?<div style={{...S.empty,padding:20}}>ما في سلف</div>:(
-                <div style={{overflowX:"auto"}}><table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
-                  <thead><tr style={{background:C.bg2}}>{["الموظف","المبلغ","التاريخ","ملاحظة",""].map(h=><th key={h} style={{padding:"8px 10px",textAlign:"center",fontWeight:700,color:C.textMd,fontSize:11}}>{h}</th>)}</tr></thead>
-                  <tbody>{filtAdv.map((p,i)=>(
-                    <tr key={p.id} style={{borderTop:`1px solid ${C.cardBorder}`,background:i%2===0?"#fff":C.bg}}>
-                      <td style={{padding:"8px 10px",fontWeight:700,textAlign:"right"}}>{p.employeeName}</td>
-                      <td style={{padding:"8px 10px",textAlign:"center",fontWeight:800,color:"#b45309"}}>{fmt(p.amount,p.currency)}</td>
-                      <td style={{padding:"8px 10px",textAlign:"center",color:C.textSm,fontSize:11}}>📅 {p.date}</td>
-                      <td style={{padding:"8px 10px",textAlign:"center",color:C.textSm}}>{p.note||"-"}</td>
-                      <td style={{padding:"8px 10px",textAlign:"center"}}><button style={{background:"transparent",border:"none",color:C.red,cursor:"pointer"}} onClick={()=>delSalaryAdvance(p.id)}>🗑️</button></td>
-                    </tr>
-                  ))}</tbody>
-                  <tfoot><tr style={{background:C.bg2,borderTop:`2px solid ${C.cardBorder}`}}>
-                    <td style={{padding:"10px 12px",fontWeight:800,color:C.text}}>الإجمالي</td>
-                    <td style={{padding:"10px 12px",textAlign:"center",fontWeight:900,color:"#b45309"}}>{fmtD(filtAdv.filter(p=>p.currency==="دينار"||!p.currency).reduce((s,p)=>s+p.amount,0))} + {fmt(filtAdv.filter(p=>p.currency==="دولار").reduce((s,p)=>s+p.amount,0),"دولار")}</td>
-                    <td colSpan={3}/>
-                  </tr></tfoot>
-                </table></div>
-              )}
-            </div>
-          )}
-
-          {/* الأوفر تايم */}
-          {salTab==="overtime"&&(
-            <div style={{...S.formCard,padding:0,overflow:"hidden"}}>
-              <div style={{padding:"12px 16px",background:C.bg2,borderBottom:`1px solid ${C.cardBorder}`,fontWeight:700,fontSize:13}}>⏰ سجل الأوفر تايم</div>
-              {filtOt.length===0?<div style={{...S.empty,padding:20}}>ما في أوفر تايم</div>:(
-                <div style={{overflowX:"auto"}}><table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
-                  <thead><tr style={{background:C.bg2}}>{["الموظف","الشهر","الساعات","سعر الساعة","المبلغ","التاريخ","ملاحظة",""].map(h=><th key={h} style={{padding:"8px 10px",textAlign:"center",fontWeight:700,color:C.textMd,fontSize:11}}>{h}</th>)}</tr></thead>
-                  <tbody>{filtOt.map((p,i)=>(
-                    <tr key={p.id} style={{borderTop:`1px solid ${C.cardBorder}`,background:i%2===0?"#fff":C.bg}}>
-                      <td style={{padding:"8px 10px",fontWeight:700,textAlign:"right"}}>{p.employeeName}</td>
-                      <td style={{padding:"8px 10px",textAlign:"center"}}><span style={{background:`rgba(193,123,47,0.1)`,color:C.gold,fontWeight:700,padding:"2px 8px",borderRadius:6,fontSize:11}}>{p.month}</span></td>
-                      <td style={{padding:"8px 10px",textAlign:"center",color:C.textMd}}>{p.hours?toAr(p.hours)+" س":"-"}</td>
-                      <td style={{padding:"8px 10px",textAlign:"center",color:C.textMd}}>{p.ratePerHour?fmt(p.ratePerHour,p.currency):"-"}</td>
-                      <td style={{padding:"8px 10px",textAlign:"center",fontWeight:800,color:"#6B3FA0"}}>{fmt(p.amount,p.currency)}</td>
-                      <td style={{padding:"8px 10px",textAlign:"center",color:C.textSm,fontSize:11}}>📅 {p.date}</td>
-                      <td style={{padding:"8px 10px",textAlign:"center",color:C.textSm}}>{p.note||"-"}</td>
-                      <td style={{padding:"8px 10px",textAlign:"center"}}><button style={{background:"transparent",border:"none",color:C.red,cursor:"pointer"}} onClick={()=>delOvertimePayment(p.id)}>🗑️</button></td>
-                    </tr>
-                  ))}</tbody>
-                </table></div>
-              )}
-            </div>
-          )}
-
-          {/* ساعات الورشة */}
-          {salTab==="worklogs"&&(
-            <div>
-              {(()=>{
-                const wlMonth = salFilterMonth||new Date().toISOString().slice(0,7);
-                const monthLogs = workLogs.filter(l=>l.month===wlMonth);
-                const months2 = [...new Set(workLogs.map(l=>l.month))].sort().reverse();
-                const empSummary = salaryEmployees.map(e=>{
-                  const logs = monthLogs.filter(l=>l.employeeId===e.id).sort((a,b)=>a.date.localeCompare(b.date));
-                  const totalHrs = logs.reduce((s,l)=>s+(l.hours||0),0);
-                  return{...e,logs,totalHrs,totalAmt:totalHrs*1};
-                }).filter(e=>e.totalHrs>0);
-                const totalAllHrs = empSummary.reduce((s,e)=>s+e.totalHrs,0);
-                return(<>
-                  <div style={{...S.formCard,padding:16,marginBottom:16,display:"flex",alignItems:"center",gap:16,flexWrap:"wrap"}}>
-                    <div style={{fontWeight:700,fontSize:14,color:C.text}}>⏱️ جرد ساعات الورشة</div>
-                    <select style={{...S.sel,width:"auto",padding:"8px 14px",fontSize:13}} value={salFilterMonth} onChange={e=>setSalFilterMonth(e.target.value)}>
-                      <option value="">الشهر الحالي</option>
-                      {months2.map(m=><option key={m} value={m}>{m}</option>)}
-                    </select>
-                    <div style={{marginRight:"auto",background:"linear-gradient(135deg,#0f766e,#0d9488)",borderRadius:10,padding:"8px 16px",color:"#fff",fontSize:13,fontWeight:700}}>
-                      الإجمالي: {toAr(totalAllHrs)} ساعة = ${totalAllHrs}
-                    </div>
-                  </div>
-                  {empSummary.length===0?<div style={S.empty}>ما في سجلات لهذا الشهر</div>:empSummary.map(e=>(
-                    <div key={e.id} style={{...S.formCard,padding:0,overflow:"hidden",marginBottom:14}}>
-                      <div style={{background:"linear-gradient(135deg,#0f766e,#0d9488)",padding:"12px 16px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                        <div style={{display:"flex",alignItems:"center",gap:10}}>
-                          <div style={{width:36,height:36,borderRadius:10,background:"rgba(255,255,255,0.2)",display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontSize:16,fontWeight:800}}>{e.name[0]}</div>
-                          <div>
-                            <div style={{fontWeight:800,fontSize:15,color:"#fff"}}>{e.name}</div>
-                            <div style={{fontSize:11,color:"rgba(255,255,255,0.8)"}}>{toAr(e.logs.length)} يوم</div>
-                          </div>
-                        </div>
-                        <div style={{textAlign:"left"}}>
-                          <div style={{fontWeight:900,fontSize:20,color:"#fff"}}>{toAr(e.totalHrs)} ساعة</div>
-                          <div style={{fontSize:13,color:"rgba(255,255,255,0.9)",fontWeight:700}}>${e.totalAmt}</div>
-                        </div>
-                      </div>
-                      <div style={{overflowX:"auto"}}>
-                        <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
-                          <thead><tr style={{background:C.bg2}}>
-                            {["التاريخ","الساعات","المبلغ","التراكمي","ملاحظة",""].map(h=>(
-                              <th key={h} style={{padding:"8px 12px",textAlign:"center",fontWeight:700,color:C.textMd,fontSize:11,borderBottom:`1px solid ${C.cardBorder}`}}>{h}</th>
-                            ))}
-                          </tr></thead>
-                          <tbody>{(()=>{let cum=0;return e.logs.map((l,i)=>{cum+=l.hours||0;return(
-                            <tr key={l.id} style={{borderBottom:`1px solid ${C.cardBorder}`,background:i%2===0?"#fff":C.bg}}>
-                              <td style={{padding:"8px 12px",fontWeight:700,textAlign:"center"}}>📅 {l.date}</td>
-                              <td style={{padding:"8px 12px",textAlign:"center",fontWeight:900,color:"#0f766e",fontSize:15}}>{toAr(l.hours)}</td>
-                              <td style={{padding:"8px 12px",textAlign:"center",fontWeight:700,color:"#1A7A4A"}}>${l.amount||l.hours}</td>
-                              <td style={{padding:"8px 12px",textAlign:"center"}}>
-                                <span style={{background:"rgba(15,118,110,0.1)",color:"#0f766e",padding:"3px 10px",borderRadius:8,fontWeight:800,fontSize:12}}>{toAr(cum)} س</span>
-                              </td>
-                              <td style={{padding:"8px 12px",textAlign:"center",color:C.textSm,fontSize:11}}>{l.note||"—"}</td>
-                              <td style={{padding:"8px 12px",textAlign:"center"}}>
-                                <button onClick={()=>delWorkLog(l.id)} style={{background:"transparent",border:"none",color:C.red,cursor:"pointer"}}>🗑️</button>
-                              </td>
-                            </tr>
-                          );});})()}</tbody>
-                          <tfoot><tr style={{background:"#f0fdf4",borderTop:`2px solid #0f766e`}}>
-                            <td style={{padding:"10px 12px",fontWeight:800,color:"#0f766e"}}>الإجمالي</td>
-                            <td style={{padding:"10px 12px",textAlign:"center",fontWeight:900,color:"#0f766e",fontSize:15}}>{toAr(e.totalHrs)} س</td>
-                            <td style={{padding:"10px 12px",textAlign:"center",fontWeight:900,color:"#1A7A4A"}}>${e.totalAmt}</td>
-                            <td colSpan={3}/>
-                          </tr></tfoot>
-                        </table>
-                      </div>
-                    </div>
-                  ))}
-                </>);
-              })()}
-            </div>
-          )}
-
-          {!D&&<button style={S.canBtn} onClick={()=>setView("home")}>← رجوع</button>}
-        </div>
-      );
+      return <SalariesPage
+        D={D} user={user} isManager={user.role==="manager"}
+        salaryEmployees={salaryEmployees}
+        salaryPayments={salaryPayments}
+        salaryAdvances={salaryAdvances}
+        overtimePayments={overtimePayments}
+        onBack={()=>setView("home")}
+        onDelEmployee={delSalaryEmployee}
+        onDelPayment={delSalaryPayment}
+        S={S} C={C} fmt={fmt} fmtD={fmtD} toAr={toAr} today={today}
+        BackBtn={BackBtn}
+        USERS={USERS}
+        db={db}
+        collection={collection}
+        addDoc={addDoc}
+      />;
     }
     // DEBTS
     if(user.role==="manager"&&view==="debts") return (
@@ -2778,6 +1990,261 @@ export default function App() {
 
     return null;
   }
+}
+
+function SalariesPage({D,user,isManager,salaryEmployees,salaryPayments,salaryAdvances,overtimePayments,onBack,onDelEmployee,onDelPayment,S,C,fmt,fmtD,toAr,today,BackBtn,USERS,db,collection,addDoc}) {
+  const curMonth = new Date().toISOString().slice(0,7);
+  const [payModal,    setPayModal]    = useState(null);
+  const [payAmt,      setPayAmt]      = useState("");
+  const [payDate,     setPayDate]     = useState(today());
+  const [payNote,     setPayNote]     = useState("");
+  const [payMonth,    setPayMonth]    = useState(curMonth);
+  const [addEmpModal, setAddEmpModal] = useState(false);
+  const [newEmp,      setNewEmp]      = useState({name:"",baseSalary:"",currency:"دينار",note:""});
+  const [saving,      setSaving]      = useState(false);
+
+  // حسابات لكل موظف
+  const empData = salaryEmployees.map(e=>{
+    const advs    = salaryAdvances.filter(a=>a.employeeId===e.id);
+    const pays    = salaryPayments.filter(p=>p.employeeId===e.id);
+    const ots     = overtimePayments.filter(o=>o.employeeId===e.id);
+    const totalAdv= advs.reduce((s,a)=>s+a.amount,0);
+    const totalPay= pays.reduce((s,p)=>s+p.amount,0);
+    const totalOT = ots.reduce((s,o)=>s+o.amount,0);
+    const due     = e.baseSalary + totalOT;
+    const received= totalAdv + totalPay;
+    const remaining=due - received;
+    return{...e,totalAdv,totalPay,totalOT,due,received,remaining};
+  });
+
+  const totalDue  = empData.filter(e=>e.currency==="دينار"||!e.currency).reduce((s,e)=>s+e.due,0);
+  const totalPaid = empData.filter(e=>e.currency==="دينار"||!e.currency).reduce((s,e)=>s+e.received,0);
+  const totalRem  = totalDue - totalPaid;
+
+  const doPaySalary = async () => {
+    if(!payModal||!payAmt||!payDate||saving) return;
+    setSaving(true);
+    const emp = payModal.emp;
+    const amt = Number(payAmt);
+    const col = payModal.type==="salary" ? "salaryPayments" : "salaryAdvances";
+    const data = payModal.type==="salary"
+      ? {employeeId:emp.id,employeeName:emp.name,amount:amt,currency:emp.currency||"دينار",month:payMonth,date:payDate,note:payNote||"",createdAt:new Date().toISOString()}
+      : {employeeId:emp.id,employeeName:emp.name,amount:amt,currency:emp.currency||"دينار",date:payDate,note:payNote||"",createdAt:new Date().toISOString()};
+    await addDoc(collection(db,col),data);
+    // قيد صرف من أحمد
+    const acc = USERS.find(u=>u.role==="accountant");
+    if(acc){
+      await addDoc(collection(db,"transactions"),{
+        userId:acc.id,userName:acc.name,
+        projectId:"",projectName:"",
+        type:"صرف",amount:amt,
+        currency:emp.currency||"دينار",
+        note:`${payModal.type==="salary"?"دفع راتب":"سلفة راتب"} — ${emp.name}${payMonth?" — "+payMonth:""}${payNote?" — "+payNote:""}`,
+        date:payDate,image:null,isPersonal:false,isAdvance:false,
+        isSalary:payModal.type==="salary",isSalaryAdvance:payModal.type==="advance",
+        createdAt:new Date().toISOString(),
+      });
+    }
+    setSaving(false);
+    setPayModal(null);setPayAmt("");setPayNote("");setPayMonth(curMonth);
+  };
+
+  const addEmployee = async () => {
+    if(!newEmp.name.trim()||!newEmp.baseSalary) return;
+    await addDoc(collection(db,"salaryEmployees"),{
+      name:newEmp.name.trim(),baseSalary:Number(newEmp.baseSalary),
+      currency:newEmp.currency,note:newEmp.note||"",
+      createdAt:new Date().toISOString(),
+    });
+    setNewEmp({name:"",baseSalary:"",currency:"دينار",note:""});
+    setAddEmpModal(false);
+  };
+
+  return (
+    <div>
+      {/* Header */}
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20,flexWrap:"wrap",gap:10}}>
+        <div style={{display:"flex",alignItems:"center",gap:12}}>
+          <BackBtn/>
+          <div style={S.secTitle}>💵 الرواتب</div>
+        </div>
+        {isManager&&(
+          <button style={{...S.goldBtn,width:"auto",padding:"9px 18px",marginBottom:0,fontSize:13}}
+            onClick={()=>setAddEmpModal(true)}>+ إضافة موظف</button>
+        )}
+      </div>
+
+      {/* ملخص */}
+      <div style={{display:"grid",gridTemplateColumns:D?"repeat(3,1fr)":"1fr 1fr",gap:12,marginBottom:24}}>
+        {[
+          ["إجمالي المستحق",totalDue,"linear-gradient(135deg,#1d4ed8,#2563eb)"],
+          ["إجمالي المدفوع",totalPaid,"linear-gradient(135deg,#C0392B,#A93226)"],
+          ["الباقي المستحق",totalRem,"linear-gradient(135deg,#065f46,#047857)"],
+        ].map(([l,v,bg],i)=>(
+          <div key={i} style={{background:bg,borderRadius:16,padding:"16px 18px",boxShadow:C.shadowMd,gridColumn:D?"auto":i===2?"1/-1":"auto"}}>
+            <div style={{fontSize:11,color:"rgba(255,255,255,0.8)",fontWeight:700,marginBottom:6}}>{l}</div>
+            <div style={{fontSize:22,fontWeight:900,color:"#fff",letterSpacing:-0.5}}>{fmtD(Math.abs(v))}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* جدول الموظفين */}
+      <div style={{...S.formCard,padding:0,overflow:"hidden",marginBottom:20}}>
+        <div style={{padding:"12px 18px",background:C.bg2,borderBottom:`1px solid ${C.cardBorder}`,fontWeight:800,fontSize:14,color:C.text}}>
+          👥 قائمة الموظفين
+        </div>
+        {empData.length===0?(
+          <div style={{...S.empty,padding:30}}>ما في موظفين — اضغط "+ إضافة موظف"</div>
+        ):(
+          <div style={{overflowX:"auto"}}>
+            <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
+              <thead>
+                <tr style={{background:"#1d4ed8"}}>
+                  {["الموظف","الراتب","الأوفر تايم","المستحق","السلف","المدفوع","الباقي",""].map(h=>(
+                    <th key={h} style={{padding:"10px 12px",color:"#fff",fontWeight:700,fontSize:11,textAlign:"center",whiteSpace:"nowrap"}}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {empData.map((e,i)=>(
+                  <tr key={e.id} style={{borderTop:`1px solid ${C.cardBorder}`,background:i%2===0?"#fff":C.bg}}>
+                    <td style={{padding:"10px 14px",fontWeight:800,color:C.text,textAlign:"right",whiteSpace:"nowrap"}}>
+                      {e.name}
+                      <div style={{fontSize:10,color:C.textSm,fontWeight:500}}>{e.currency==="دولار"?"🇺🇸 دولار":"🇮🇶 دينار"}</div>
+                    </td>
+                    <td style={{padding:"10px 12px",textAlign:"center",fontWeight:700,color:C.textMd}}>{fmt(e.baseSalary,e.currency)}</td>
+                    <td style={{padding:"10px 12px",textAlign:"center",fontWeight:700,color:"#6B3FA0"}}>{e.totalOT>0?fmt(e.totalOT,e.currency):<span style={{color:C.bg3}}>—</span>}</td>
+                    <td style={{padding:"10px 12px",textAlign:"center",fontWeight:900,color:"#1d4ed8",background:"rgba(29,78,216,0.04)"}}>{fmt(e.due,e.currency)}</td>
+                    <td style={{padding:"10px 12px",textAlign:"center",fontWeight:700,color:"#b45309"}}>{e.totalAdv>0?fmt(e.totalAdv,e.currency):<span style={{color:C.bg3}}>—</span>}</td>
+                    <td style={{padding:"10px 12px",textAlign:"center",fontWeight:700,color:"#1A7A4A"}}>{e.totalPay>0?fmt(e.totalPay,e.currency):<span style={{color:C.bg3}}>—</span>}</td>
+                    <td style={{padding:"10px 12px",textAlign:"center",fontWeight:900}}>
+                      {e.remaining>0?(
+                        <span style={{color:C.red}}>{fmt(e.remaining,e.currency)}</span>
+                      ):(
+                        <span style={{color:"#1A7A4A",fontSize:18}}>✅</span>
+                      )}
+                    </td>
+                    <td style={{padding:"10px 12px",textAlign:"center"}}>
+                      <div style={{display:"flex",gap:4,justifyContent:"center"}}>
+                        {e.remaining>0&&(
+                          <button style={{background:"linear-gradient(135deg,#1A7A4A,#147A40)",border:"none",borderRadius:8,padding:"6px 10px",color:"#fff",fontSize:11,fontWeight:700,cursor:"pointer"}}
+                            onClick={()=>{setPayModal({emp:e,type:"salary"});setPayAmt(String(e.remaining));setPayMonth(curMonth);}}>
+                            💵 دفع
+                          </button>
+                        )}
+                        <button style={{background:"linear-gradient(135deg,#b45309,#92400e)",border:"none",borderRadius:8,padding:"6px 10px",color:"#fff",fontSize:11,fontWeight:700,cursor:"pointer"}}
+                          onClick={()=>{setPayModal({emp:e,type:"advance"});setPayAmt("");}}>
+                          💳 سلفة
+                        </button>
+                        {isManager&&(
+                          <button style={{background:"transparent",border:`1px solid rgba(192,57,43,0.25)`,borderRadius:8,padding:"6px 8px",color:C.red,fontSize:13,cursor:"pointer"}}
+                            onClick={()=>onDelEmployee(e.id)}>🗑️</button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {/* سجل الدفعات */}
+      {salaryPayments.length>0&&(
+        <div style={{...S.formCard,padding:0,overflow:"hidden"}}>
+          <div style={{padding:"12px 18px",background:C.bg2,borderBottom:`1px solid ${C.cardBorder}`,fontWeight:800,fontSize:14,color:C.text}}>
+            📋 سجل الدفعات
+          </div>
+          <div style={{overflowX:"auto"}}>
+            <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+              <thead>
+                <tr style={{background:C.bg2}}>
+                  {["الموظف","الشهر","المبلغ","التاريخ","ملاحظة",""].map(h=>(
+                    <th key={h} style={{padding:"8px 12px",textAlign:"center",fontWeight:700,color:C.textMd,fontSize:11,borderBottom:`1px solid ${C.cardBorder}`}}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {salaryPayments.map((p,i)=>(
+                  <tr key={p.id} style={{borderTop:`1px solid ${C.cardBorder}`,background:i%2===0?"#fff":C.bg}}>
+                    <td style={{padding:"8px 12px",fontWeight:700,textAlign:"right"}}>{p.employeeName}</td>
+                    <td style={{padding:"8px 12px",textAlign:"center"}}>
+                      <span style={{background:`rgba(193,123,47,0.1)`,color:C.gold,fontWeight:700,padding:"2px 8px",borderRadius:6,fontSize:11}}>{p.month||"—"}</span>
+                    </td>
+                    <td style={{padding:"8px 12px",textAlign:"center",fontWeight:800,color:"#1A7A4A"}}>{fmt(p.amount,p.currency)}</td>
+                    <td style={{padding:"8px 12px",textAlign:"center",color:C.textSm,fontSize:11}}>📅 {p.date}</td>
+                    <td style={{padding:"8px 12px",textAlign:"center",color:C.textSm}}>{p.note||"—"}</td>
+                    <td style={{padding:"8px 12px",textAlign:"center"}}>
+                      {isManager&&<button style={{background:"transparent",border:"none",color:C.red,cursor:"pointer"}} onClick={()=>onDelPayment(p.id)}>🗑️</button>}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* Modal الدفع */}
+      {payModal&&(
+        <div style={{position:"fixed",inset:0,background:"rgba(44,24,16,0.5)",zIndex:500,display:"flex",alignItems:"center",justifyContent:"center",padding:20}} onClick={()=>setPayModal(null)}>
+          <div style={{background:"#fff",borderRadius:20,padding:24,width:"100%",maxWidth:400,boxShadow:"0 20px 60px rgba(0,0,0,0.2)"}} onClick={ev=>ev.stopPropagation()}>
+            <div style={{fontWeight:900,fontSize:18,color:C.text,marginBottom:4}}>
+              {payModal.type==="salary"?"💵 دفع راتب":"💳 سلفة راتب"}
+            </div>
+            <div style={{fontSize:13,color:C.textMd,marginBottom:16}}>
+              الموظف: <strong>{payModal.emp.name}</strong>
+              {payModal.type==="salary"&&payModal.emp.remaining>0&&<> — الباقي: <strong style={{color:C.red}}>{fmt(payModal.emp.remaining,payModal.emp.currency)}</strong></>}
+            </div>
+            {payModal.type==="salary"&&(<>
+              <div style={S.fLbl}>الشهر</div>
+              <input style={S.inp} type="month" value={payMonth} onChange={e=>setPayMonth(e.target.value)}/>
+            </>)}
+            <div style={S.fLbl}>المبلغ</div>
+            <input style={{...S.inp,fontSize:18,fontWeight:800,textAlign:"center"}} type="number" placeholder="٠" value={payAmt} onChange={e=>setPayAmt(e.target.value)} autoFocus/>
+            <div style={S.fLbl}>التاريخ</div>
+            <input style={S.inp} type="date" value={payDate} onChange={e=>setPayDate(e.target.value)}/>
+            <div style={S.fLbl}>ملاحظة (اختياري)</div>
+            <input style={S.inp} placeholder="..." value={payNote} onChange={e=>setPayNote(e.target.value)}/>
+            <div style={{background:`rgba(192,57,43,0.06)`,border:`1px solid rgba(192,57,43,0.15)`,borderRadius:10,padding:"10px 14px",marginTop:12,fontSize:12,color:C.red,fontWeight:600}}>
+              ⚠️ سيُخصم المبلغ من رصيد أحمد تلقائياً
+            </div>
+            <div style={{display:"flex",gap:10,marginTop:16}}>
+              <button style={{...S.subBtn,flex:2,margin:0,padding:14,opacity:saving?0.7:1}} onClick={doPaySalary} disabled={saving}>
+                {saving?"جاري الحفظ...":"💾 تأكيد الدفع"}
+              </button>
+              <button style={{...S.canBtn,flex:1,margin:0,padding:14}} onClick={()=>setPayModal(null)}>إلغاء</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal إضافة موظف */}
+      {addEmpModal&&(
+        <div style={{position:"fixed",inset:0,background:"rgba(44,24,16,0.5)",zIndex:500,display:"flex",alignItems:"center",justifyContent:"center",padding:20}} onClick={()=>setAddEmpModal(false)}>
+          <div style={{background:"#fff",borderRadius:20,padding:24,width:"100%",maxWidth:400,boxShadow:"0 20px 60px rgba(0,0,0,0.2)"}} onClick={ev=>ev.stopPropagation()}>
+            <div style={{fontWeight:900,fontSize:18,color:C.text,marginBottom:16}}>👤 إضافة موظف جديد</div>
+            <div style={S.fLbl}>الاسم</div>
+            <input style={S.inp} placeholder="اسم الموظف" value={newEmp.name} onChange={e=>setNewEmp(f=>({...f,name:e.target.value}))} autoFocus/>
+            <div style={S.fLbl}>الراتب الأساسي</div>
+            <input style={S.inp} type="number" placeholder="٠" value={newEmp.baseSalary} onChange={e=>setNewEmp(f=>({...f,baseSalary:e.target.value}))}/>
+            <div style={S.fLbl}>العملة</div>
+            <div style={S.tRow}>
+              <button style={{...S.tBtn,...(newEmp.currency==="دينار"?{background:"rgba(37,87,167,0.15)",border:`1px solid #2557A7`,color:"#2557A7"}:{})}} onClick={()=>setNewEmp(f=>({...f,currency:"دينار"}))}>🇮🇶 دينار</button>
+              <button style={{...S.tBtn,...(newEmp.currency==="دولار"?{background:"rgba(26,122,74,0.15)",border:`1px solid #1A7A4A`,color:"#1A7A4A"}:{})}} onClick={()=>setNewEmp(f=>({...f,currency:"دولار"}))}>🇺🇸 دولار</button>
+            </div>
+            <div style={S.fLbl}>ملاحظة (اختياري)</div>
+            <input style={S.inp} placeholder="..." value={newEmp.note} onChange={e=>setNewEmp(f=>({...f,note:e.target.value}))}/>
+            <div style={{display:"flex",gap:10,marginTop:16}}>
+              <button style={{...S.subBtn,flex:2,margin:0,padding:14}} onClick={addEmployee}>+ إضافة</button>
+              <button style={{...S.canBtn,flex:1,margin:0,padding:14}} onClick={()=>setAddEmpModal(false)}>إلغاء</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }
 
 function ForemanLogForm({employees, onSubmit}) {
