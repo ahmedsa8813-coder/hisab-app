@@ -9,6 +9,7 @@ const USERS = [
   { id: "hussein",  name: "حسين",          role: "employee",  pin: "0000",            canReceive: false },
   { id: "ahmed",    name: "أحمد",          role: "accountant",pin: "0000", share: 15, canReceive: true  },
   { id: "ihab",     name: "إيهاب",         role: "partner",   pin: "0000", share: 35, canReceive: false },
+  { id: "foreman",  name: "Foreman",       role: "foreman",   pin: "0000" },
 ];
 
 const PARTNERS    = USERS.filter(u => u.share && u.role !== "manager");
@@ -479,10 +480,12 @@ export default function App() {
   const navMgr = [{icon:"📊",label:"الملخص",v:"home"},{icon:"📄",label:"الكشوفات",v:"statements"},{icon:"📋",label:"المعاملات",v:"allTx"},{icon:"🏗️",label:"المشاريع",v:"projects"},{icon:"💰",label:"المالية",v:"projReport"},{icon:"🏢",label:"الشركة",v:"company"},{icon:"💳",label:"الديون",v:"debts"},{icon:"💵",label:"الرواتب",v:"salaries"},{icon:"⚖️",label:"افتتاحي",v:"opening"}];
   const navWorker = user?.role==="accountant"
     ? [{icon:"🏠",label:"الرئيسية",v:"home"},{icon:"➕",label:"استلام/سلفة",v:"add"},{icon:"💵",label:"الرواتب",v:"salaries"}]
+    : user?.role==="foreman"
+    ? [{icon:"🏠",label:"Home",v:"home"},{icon:"⏰",label:"Overtime",v:"overtime"}]
     : [{icon:"🏠",label:"الرئيسية",v:"home"},{icon:"➕",label:"تسجيل صرف",v:"add"}];
   const navItems  = user?.role==="manager" ? navMgr : navWorker;
 
-  const avatarBg = r => r==="manager"?"linear-gradient(135deg,#1d4ed8,#2563eb)":r==="partner"?"linear-gradient(135deg,#7c3aed,#6d28d9)":r==="accountant"?"linear-gradient(135deg,#1A7A4A,#147A40)":"linear-gradient(135deg,#f59e0b,#d97706)";
+  const avatarBg = r => r==="manager"?"linear-gradient(135deg,#1d4ed8,#2563eb)":r==="partner"?"linear-gradient(135deg,#7c3aed,#6d28d9)":r==="accountant"?"linear-gradient(135deg,#1A7A4A,#147A40)":r==="foreman"?"linear-gradient(135deg,#0f766e,#0d9488)":"linear-gradient(135deg,#f59e0b,#d97706)";
 
   // PDF helpers
   const pdfPerson = () => {
@@ -523,7 +526,7 @@ export default function App() {
                 <button key={u.id} style={{...S.userBtn,...(u.role==="manager"?S.mgrBtn:{}), ...(u.role==="partner"?S.partnerBtnStyle:{})}} onClick={()=>{setLoginId(u.id);setPin("");setPinErr(false);}}>
                   <div style={{...S.av,background:avatarBg(u.role),margin:"0 auto 10px",width:50,height:50,fontSize:22,borderRadius:16}}>{u.name[0]}</div>
                   <div style={S.uName}>{u.name}</div>
-                  <div style={S.uRole}>{u.role==="manager"?"مدير مالي":u.role==="accountant"?"محاسب 🏦":"موظف"}</div>
+                  <div style={S.uRole}>{u.role==="manager"?"مدير مالي":u.role==="accountant"?"محاسب 🏦":u.role==="foreman"?"Foreman 🔧":"موظف"}</div>
                 </button>
               ))}
             </div>
@@ -534,7 +537,7 @@ export default function App() {
               <div style={{...S.av,background:avatarBg(USERS.find(u=>u.id===loginId)?.role)}}>{USERS.find(u=>u.id===loginId)?.name[0]}</div>
               <div>
                 <div style={{fontSize:18,fontWeight:800,letterSpacing:-0.5}}>{USERS.find(u=>u.id===loginId)?.name}</div>
-                <div style={{fontSize:12,color:"#9ca3af",marginTop:2}}>{USERS.find(u=>u.id===loginId)?.role==="manager"?"مدير مالي":"موظف"}</div>
+                <div style={{fontSize:12,color:"#9ca3af",marginTop:2}}>{USERS.find(u=>u.id===loginId)?.role==="manager"?"مدير مالي":USERS.find(u=>u.id===loginId)?.role==="foreman"?"Foreman":"موظف"}</div>
               </div>
             </div>
             <div style={S.lbl}>أدخل الرمز السري</div>
@@ -606,6 +609,115 @@ export default function App() {
 
   function renderView() {
     if(loading) return <div style={{textAlign:"center",color:"#6b7280",padding:60,fontSize:16}}>⏳ جاري التحميل...</div>;
+
+    // FOREMAN HOME
+    if(user.role==="foreman"&&view==="home") {
+      const myOTs = overtimePayments.filter(t=>t.submittedBy===user.id);
+      const totalHours = myOTs.reduce((s,t)=>s+(t.hours||0),0);
+      const thisMonth = new Date().toISOString().slice(0,7);
+      const thisMonthOTs = myOTs.filter(t=>t.month===thisMonth);
+      return (
+        <div style={{fontFamily:"'Segoe UI',Arial,sans-serif",direction:"ltr",color:C.text}}>
+          {/* Welcome */}
+          <div style={{background:"linear-gradient(135deg,#0f766e,#0d9488)",borderRadius:20,padding:"22px 20px",marginBottom:16,color:"#fff",boxShadow:C.shadowMd}}>
+            <div style={{fontSize:13,color:"rgba(255,255,255,0.8)",marginBottom:4}}>Welcome back 👋</div>
+            <div style={{fontSize:26,fontWeight:900,letterSpacing:-0.5}}>Foreman Dashboard</div>
+            <div style={{fontSize:13,color:"rgba(255,255,255,0.8)",marginTop:4}}>Log overtime for your workers below</div>
+          </div>
+
+          {/* Stats */}
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:16}}>
+            <div style={{background:C.card,border:`1px solid ${C.cardBorder}`,borderRadius:16,padding:16,boxShadow:C.shadow}}>
+              <div style={{fontSize:11,color:C.textSm,fontWeight:700,marginBottom:6}}>THIS MONTH</div>
+              <div style={{fontSize:22,fontWeight:900,color:"#0f766e"}}>{thisMonthOTs.length}</div>
+              <div style={{fontSize:12,color:C.textMd}}>OT Records</div>
+            </div>
+            <div style={{background:C.card,border:`1px solid ${C.cardBorder}`,borderRadius:16,padding:16,boxShadow:C.shadow}}>
+              <div style={{fontSize:11,color:C.textSm,fontWeight:700,marginBottom:6}}>TOTAL HOURS</div>
+              <div style={{fontSize:22,fontWeight:900,color:"#0f766e"}}>{totalHours}</div>
+              <div style={{fontSize:12,color:C.textMd}}>Hours logged</div>
+            </div>
+          </div>
+
+          {/* Log OT button */}
+          {!D&&<button style={{...S.goldBtn,background:"linear-gradient(135deg,#0f766e,#0d9488)",color:"#fff",marginBottom:20}}
+            onClick={()=>setView("overtime")}>⏰ Log Overtime</button>}
+
+          {/* Recent */}
+          <div style={{fontWeight:800,fontSize:16,color:C.text,marginBottom:12}}>Recent Overtime</div>
+          {myOTs.length===0?(
+            <div style={{...S.empty,background:C.card,borderRadius:16,border:`1px solid ${C.cardBorder}`}}>
+              <div style={{fontSize:36,marginBottom:8}}>⏰</div>
+              <div style={{fontWeight:700,color:C.textMd}}>No overtime logged yet</div>
+              <div style={{fontSize:13,color:C.textSm,marginTop:4}}>Tap "Log Overtime" to get started</div>
+            </div>
+          ):(
+            myOTs.slice(0,10).map(t=>(
+              <div key={t.id} style={{background:C.card,border:`1px solid ${C.cardBorder}`,borderRadius:14,padding:"14px 16px",marginBottom:8,boxShadow:C.shadow}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
+                  <div style={{fontWeight:800,fontSize:15,color:C.text}}>{t.employeeName}</div>
+                  <div style={{fontWeight:900,fontSize:15,color:"#0f766e"}}>{t.hours} hrs × {t.ratePerHour} = {t.amount}</div>
+                </div>
+                <div style={{display:"flex",gap:12,fontSize:12,color:C.textSm}}>
+                  <span>📅 {t.date}</span>
+                  <span>📆 {t.month}</span>
+                  {t.note&&<span>💬 {t.note}</span>}
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      );
+    }
+
+    // FOREMAN OVERTIME
+    if(user.role==="foreman"&&view==="overtime") {
+      const [submitted,setSubmitted] = [false,()=>{}]; // placeholder
+      return (
+        <div style={{fontFamily:"'Segoe UI',Arial,sans-serif",direction:"ltr",color:C.text}}>
+          <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:20}}>
+            {!D&&<button style={S.backBtn2} onClick={()=>setView("home")}>←</button>}
+            <div style={{fontSize:20,fontWeight:900,color:C.text}}>⏰ Log Overtime</div>
+          </div>
+          <ForemanOTForm
+            employees={salaryEmployees}
+            onSubmit={async(data)=>{
+              const emp=salaryEmployees.find(e=>e.id===data.employeeId);
+              const amt=data.hours&&data.ratePerHour?Number(data.hours)*Number(data.ratePerHour):Number(data.amount);
+              if(!amt||!data.employeeId)return false;
+              await addDoc(collection(db,"overtimePayments"),{
+                employeeId:data.employeeId,
+                employeeName:emp?.name||"",
+                hours:Number(data.hours)||0,
+                ratePerHour:Number(data.ratePerHour)||0,
+                amount:amt,
+                currency:emp?.currency||"دينار",
+                month:data.month,
+                date:data.date,
+                note:data.note||"",
+                submittedBy:user.id,
+                submittedByName:user.name,
+                createdAt:new Date().toISOString(),
+              });
+              const accountant=USERS.find(u=>u.role==="accountant");
+              if(accountant){
+                await addDoc(collection(db,"transactions"),{
+                  userId:accountant.id,userName:accountant.name,
+                  projectId:"",projectName:"",
+                  type:"صرف",amount:amt,
+                  currency:emp?.currency||"دينار",
+                  note:`Overtime — ${emp?.name||""} — ${data.month}${data.hours?" ("+data.hours+" hrs)":""}`,
+                  date:data.date,image:null,isPersonal:false,isAdvance:false,
+                  isOvertime:true,
+                  createdAt:new Date().toISOString(),
+                });
+              }
+              return true;
+            }}
+          />
+        </div>
+      );
+    }
 
     // WORKER HOME
     if(user.role!=="manager"&&view==="home") return (
@@ -2187,6 +2299,115 @@ export default function App() {
 
     return null;
   }
+}
+
+function ForemanOTForm({employees, onSubmit}) {
+  const today2 = () => new Date().toISOString().split("T")[0];
+  const thisMonth = () => new Date().toISOString().slice(0,7);
+  const [f, setF] = useState({employeeId:"",hours:"",ratePerHour:"",amount:"",month:thisMonth(),date:today2(),note:""});
+  const [ok, setOk] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const toAr2 = n => String(n).replace(/\d/g, d => "٠١٢٣٤٥٦٧٨٩"[d]);
+
+  const amt = f.hours&&f.ratePerHour ? Number(f.hours)*Number(f.ratePerHour) : Number(f.amount)||0;
+  const emp = employees.find(e=>e.id===f.employeeId);
+
+  const submit = async () => {
+    if(!f.employeeId||!f.month||!f.date||!amt) return;
+    setLoading(true);
+    const res = await onSubmit({...f, amount:amt});
+    setLoading(false);
+    if(res){ setOk(true); setTimeout(()=>{setOk(false);setF({employeeId:"",hours:"",ratePerHour:"",amount:"",month:thisMonth(),date:today2(),note:""});},2000); }
+  };
+
+  const inp = {width:"100%",background:"#F8FAFC",border:"1px solid #E2E8F0",borderRadius:12,padding:"13px 16px",color:"#1a1a2e",fontSize:15,outline:"none",boxSizing:"border-box",fontFamily:"'Segoe UI',Arial,sans-serif",direction:"ltr"};
+  const lbl = {fontSize:11,color:"#64748b",fontWeight:800,letterSpacing:1,textTransform:"uppercase",marginBottom:6,marginTop:16,display:"block"};
+
+  if(ok) return (
+    <div style={{textAlign:"center",padding:"60px 20px",background:"#fff",borderRadius:20,border:"1px solid #E2E8F0"}}>
+      <div style={{fontSize:64,marginBottom:12}}>✅</div>
+      <div style={{fontSize:22,fontWeight:900,color:"#0f766e"}}>Overtime Logged!</div>
+      <div style={{fontSize:14,color:"#64748b",marginTop:4}}>Record saved successfully</div>
+    </div>
+  );
+
+  return (
+    <div style={{background:"#fff",border:"1px solid #E2E8F0",borderRadius:20,padding:24,boxShadow:"0 2px 12px rgba(0,0,0,0.06)",direction:"ltr",fontFamily:"'Segoe UI',Arial,sans-serif"}}>
+
+      {/* Worker */}
+      <label style={lbl}>👷 Select Worker</label>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:4}}>
+        {employees.map(e=>(
+          <button key={e.id} style={{
+            display:"flex",alignItems:"center",gap:10,padding:"12px 14px",
+            borderRadius:12,border:`2px solid ${f.employeeId===e.id?"#0f766e":"#E2E8F0"}`,
+            background:f.employeeId===e.id?"rgba(15,118,110,0.06)":"#F8FAFC",
+            cursor:"pointer",textAlign:"left",transition:"all 0.2s",
+          }} onClick={()=>setF(x=>({...x,employeeId:e.id}))}>
+            <div style={{width:36,height:36,borderRadius:10,background:"linear-gradient(135deg,#0f766e,#0d9488)",display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontSize:16,fontWeight:800,flexShrink:0}}>{e.name[0]}</div>
+            <div>
+              <div style={{fontWeight:800,fontSize:14,color:f.employeeId===e.id?"#0f766e":"#1a1a2e"}}>{e.name}</div>
+              <div style={{fontSize:11,color:"#64748b",marginTop:1}}>{e.currency==="دولار"?"$ Dollar":"د.ع Dinar"}</div>
+            </div>
+          </button>
+        ))}
+      </div>
+
+      {/* Month & Date */}
+      <div style={{display:"flex",gap:12}}>
+        <div style={{flex:1}}><label style={lbl}>📆 Month</label><input style={inp} type="month" value={f.month} onChange={e=>setF(x=>({...x,month:e.target.value}))}/></div>
+        <div style={{flex:1}}><label style={lbl}>📅 Date</label><input style={inp} type="date" value={f.date} onChange={e=>setF(x=>({...x,date:e.target.value}))}/></div>
+      </div>
+
+      {/* Hours & Rate */}
+      <div style={{display:"flex",gap:12}}>
+        <div style={{flex:1}}>
+          <label style={lbl}>⏱️ Hours</label>
+          <input style={{...inp,textAlign:"center",fontSize:20,fontWeight:800}} type="number" placeholder="0" value={f.hours}
+            onChange={e=>setF(x=>({...x,hours:e.target.value,amount:e.target.value&&x.ratePerHour?String(Number(e.target.value)*Number(x.ratePerHour)):""}))  }/>
+        </div>
+        <div style={{flex:1}}>
+          <label style={lbl}>💰 Rate / Hour</label>
+          <input style={{...inp,textAlign:"center",fontSize:18,fontWeight:700}} type="number" placeholder="0" value={f.ratePerHour}
+            onChange={e=>setF(x=>({...x,ratePerHour:e.target.value,amount:x.hours&&e.target.value?String(Number(x.hours)*Number(e.target.value)):""}))  }/>
+        </div>
+      </div>
+
+      {/* Auto calc preview */}
+      {f.hours&&f.ratePerHour&&(
+        <div style={{background:"rgba(15,118,110,0.08)",border:"1px solid rgba(15,118,110,0.25)",borderRadius:12,padding:"14px 18px",marginTop:12,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+          <div style={{fontSize:14,color:"#0f766e",fontWeight:700}}>
+            {f.hours} hrs × {Number(f.ratePerHour).toLocaleString()} = 
+          </div>
+          <div style={{fontSize:22,fontWeight:900,color:"#0f766e"}}>
+            {Number(amt).toLocaleString()} {emp?.currency==="دولار"?"$":"IQD"}
+          </div>
+        </div>
+      )}
+
+      {/* Manual amount */}
+      {!f.hours&&<>
+        <label style={lbl}>💵 Or Enter Amount Directly</label>
+        <input style={{...inp,textAlign:"center",fontSize:18,fontWeight:700}} type="number" placeholder="0" value={f.amount} onChange={e=>setF(x=>({...x,amount:e.target.value}))}/>
+      </>}
+
+      {/* Note */}
+      <label style={lbl}>📝 Note (optional)</label>
+      <input style={inp} placeholder="e.g. Night shift, holiday work..." value={f.note} onChange={e=>setF(x=>({...x,note:e.target.value}))}/>
+
+      {/* Submit */}
+      <button style={{
+        width:"100%",background:(!f.employeeId||!amt)?"#e2e8f0":"linear-gradient(135deg,#0f766e,#0d9488)",
+        border:"none",borderRadius:14,padding:17,
+        color:(!f.employeeId||!amt)?"#94a3b8":"#fff",
+        fontSize:17,fontWeight:800,cursor:(!f.employeeId||!amt)?"not-allowed":"pointer",
+        marginTop:20,letterSpacing:0.3,
+        boxShadow:(!f.employeeId||!amt)?"none":"0 6px 20px rgba(15,118,110,0.3)",
+      }} onClick={submit} disabled={!f.employeeId||!amt||loading}>
+        {loading?"Saving...":"⏰ Submit Overtime"}
+      </button>
+    </div>
+  );
 }
 
 function PayDebtRow({debt, onPay}){
