@@ -147,7 +147,7 @@ export default function App() {
   const dinSt = bal(myTxs,myOB,"دينار");
   const dolSt = bal(myTxs,myOB,"دولار");
 
-  const workerBals = WORKERS.map(u=>{ const list=txs.filter(t=>t.userId===u.id); const ob=OBs[u.id]||{}; return{...u,din:bal(list,ob,"دينار"),dol:bal(list,ob,"دولار"),cnt:list.length}; });
+  const workerBals = WORKERS.map(u=>{ const list=txs.filter(t=>t.userId===u.id); const ob=OBs[u.id]||{}; const personalW=list.filter(t=>t.type==="صرف"&&t.isPersonal).reduce((s,t)=>s+t.amount,0)+(ob.personalWithdraw||0); return{...u,din:bal(list,ob,"دينار"),dol:bal(list,ob,"دولار"),cnt:list.length,personalW}; });
 
   // الصندوق العام = مجموع كل الاستلامات - مجموع كل المصروفات
   const generalFund = () => {
@@ -333,7 +333,18 @@ export default function App() {
             <div style={{fontSize:14,fontWeight:800,color:"rgba(255,255,255,0.9)",margin:"4px 0 10px"}}>
               {dinSt.b>0?"✅ مطلوب منك":dinSt.b<0?"⚠️ أنت طالب":"◼️ متوازن"}
             </div>
-            <div style={S.balRow}><span style={S.balSt}>↓ استلمت {fmt(dinSt.r,"دينار")}</span><span style={S.balSt}>↑ صرفت {fmt(dinSt.s,"دينار")}</span></div>
+            <div style={S.balRow}>
+              <span style={S.balSt}>↓ استلمت {fmt(dinSt.r,"دينار")}</span>
+              <span style={S.balSt}>↑ صرفت {fmt(dinSt.s,"دينار")}</span>
+            </div>
+            {user.role==="partner"&&(myOB.personalWithdraw>0||myTxs.filter(t=>t.isPersonal&&t.type==="صرف").length>0)&&(
+              <div style={{marginTop:10,paddingTop:10,borderTop:"1px solid rgba(255,255,255,0.15)",display:"flex",justifyContent:"space-between"}}>
+                <span style={{fontSize:12,color:"rgba(255,255,255,0.7)"}}>👤 منها سحب شخصي</span>
+                <span style={{fontSize:13,fontWeight:800,color:"#c4b5fd"}}>
+                  {fmtD(myTxs.filter(t=>t.isPersonal&&t.type==="صرف").reduce((s,t)=>s+t.amount,0)+(myOB.personalWithdraw||0))}
+                </span>
+              </div>
+            )}
           </div>
           <div style={{...S.balCard,background:dolSt.b>=0?"linear-gradient(135deg,#1e40af,#2563eb)":"linear-gradient(135deg,#7f1d1d,#991b1b)",flex:D?1:undefined,marginBottom:16}}>
             <div style={S.balLbl}>🇺🇸 صندوقك — دولار أمريكي</div>
@@ -341,7 +352,10 @@ export default function App() {
             <div style={{fontSize:14,fontWeight:800,color:"rgba(255,255,255,0.9)",margin:"4px 0 10px"}}>
               {dolSt.b>0?"✅ مطلوب منك":dolSt.b<0?"⚠️ أنت طالب":"◼️ متوازن"}
             </div>
-            <div style={S.balRow}><span style={S.balSt}>↓ استلمت {fmt(dolSt.r,"دولار")}</span><span style={S.balSt}>↑ صرفت {fmt(dolSt.s,"دولار")}</span></div>
+            <div style={S.balRow}>
+              <span style={S.balSt}>↓ استلمت {fmt(dolSt.r,"دولار")}</span>
+              <span style={S.balSt}>↑ صرفت {fmt(dolSt.s,"دولار")}</span>
+            </div>
           </div>
         </div>
         {!D&&<button style={S.goldBtn} onClick={()=>{setView("add");setForm({type:"استلام",projectId:"",amount:"",currency:"دينار",note:"",date:today(),image:null,isPersonal:false});}}>➕ تسجيل معاملة جديدة</button>}
@@ -449,27 +463,38 @@ export default function App() {
                   </div>
                   <div style={{color:"#6b7280",fontSize:14}}>←</div>
                 </div>
-                {/* دينار */}
-                <div style={{background:e.din.b>=0?"rgba(6,95,70,0.2)":"rgba(127,29,29,0.2)",border:`1px solid ${e.din.b>=0?"rgba(6,95,70,0.4)":"rgba(127,29,29,0.4)"}`,borderRadius:10,padding:"8px 12px",marginBottom:8,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                  <div>
-                    <div style={{fontSize:11,color:"rgba(255,255,255,0.6)",marginBottom:2}}>🇮🇶 دينار</div>
-                    <div style={{fontSize:15,fontWeight:800,color:e.din.b>=0?"#34d399":"#f87171",letterSpacing:-0.5}}>{fmt(Math.abs(e.din.b),"دينار")}</div>
-                  </div>
-                  <div style={{textAlign:"left"}}>
+
+                {/* الرصيد الكلي - دينار */}
+                <div style={{background:e.din.b>=0?"rgba(6,95,70,0.2)":"rgba(127,29,29,0.2)",border:`1px solid ${e.din.b>=0?"rgba(6,95,70,0.4)":"rgba(127,29,29,0.4)"}`,borderRadius:10,padding:"10px 12px",marginBottom:8}}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
+                    <div style={{fontSize:11,color:"rgba(255,255,255,0.6)"}}>🇮🇶 الرصيد الكلي — دينار</div>
                     <div style={{fontSize:12,fontWeight:700,color:e.din.b>=0?"#34d399":"#f87171"}}>{e.din.b>0?"مطلوب منه":e.din.b<0?"طالب":"متوازن"}</div>
-                    <div style={{fontSize:10,color:"rgba(255,255,255,0.4)",marginTop:2}}>↓{fmt(e.din.r,"دينار")} ↑{fmt(e.din.s,"دينار")}</div>
                   </div>
+                  <div style={{fontSize:17,fontWeight:900,color:e.din.b>=0?"#34d399":"#f87171",letterSpacing:-0.5,marginBottom:6}}>{fmt(Math.abs(e.din.b),"دينار")}</div>
+                  <div style={{display:"flex",gap:12,fontSize:11,color:"rgba(255,255,255,0.5)"}}>
+                    <span>↓ استلم {fmt(e.din.r,"دينار")}</span>
+                    <span>↑ صرف {fmt(e.din.s,"دينار")}</span>
+                  </div>
+                  {/* السحب الشخصي للشركاء */}
+                  {e.role==="partner"&&e.personalW>0&&(
+                    <div style={{marginTop:8,paddingTop:8,borderTop:"1px solid rgba(255,255,255,0.08)",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                      <span style={{fontSize:11,color:"#c4b5fd"}}>👤 منها سحب شخصي</span>
+                      <span style={{fontSize:12,fontWeight:700,color:"#c4b5fd"}}>{fmtD(e.personalW)}</span>
+                    </div>
+                  )}
                 </div>
+
                 {/* دولار */}
                 {(e.dol.r>0||e.dol.s>0)&&(
-                  <div style={{background:e.dol.b>=0?"rgba(29,64,175,0.2)":"rgba(127,29,29,0.2)",border:`1px solid ${e.dol.b>=0?"rgba(29,64,175,0.4)":"rgba(127,29,29,0.4)"}`,borderRadius:10,padding:"8px 12px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                    <div>
-                      <div style={{fontSize:11,color:"rgba(255,255,255,0.6)",marginBottom:2}}>🇺🇸 دولار</div>
-                      <div style={{fontSize:15,fontWeight:800,color:e.dol.b>=0?"#60a5fa":"#f87171",letterSpacing:-0.5}}>{fmt(Math.abs(e.dol.b),"دولار")}</div>
-                    </div>
-                    <div style={{textAlign:"left"}}>
+                  <div style={{background:e.dol.b>=0?"rgba(29,64,175,0.2)":"rgba(127,29,29,0.2)",border:`1px solid ${e.dol.b>=0?"rgba(29,64,175,0.4)":"rgba(127,29,29,0.4)"}`,borderRadius:10,padding:"10px 12px"}}>
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
+                      <div style={{fontSize:11,color:"rgba(255,255,255,0.6)"}}>🇺🇸 الرصيد الكلي — دولار</div>
                       <div style={{fontSize:12,fontWeight:700,color:e.dol.b>=0?"#60a5fa":"#f87171"}}>{e.dol.b>0?"مطلوب منه":e.dol.b<0?"طالب":"متوازن"}</div>
-                      <div style={{fontSize:10,color:"rgba(255,255,255,0.4)",marginTop:2}}>↓{fmt(e.dol.r,"دولار")} ↑{fmt(e.dol.s,"دولار")}</div>
+                    </div>
+                    <div style={{fontSize:17,fontWeight:900,color:e.dol.b>=0?"#60a5fa":"#f87171",letterSpacing:-0.5,marginBottom:6}}>{fmt(Math.abs(e.dol.b),"دولار")}</div>
+                    <div style={{display:"flex",gap:12,fontSize:11,color:"rgba(255,255,255,0.5)"}}>
+                      <span>↓ استلم {fmt(e.dol.r,"دولار")}</span>
+                      <span>↑ صرف {fmt(e.dol.s,"دولار")}</span>
                     </div>
                   </div>
                 )}
