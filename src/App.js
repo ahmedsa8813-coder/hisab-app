@@ -253,7 +253,7 @@ export default function App() {
               </div>
             </div>
             <div style={S.lbl}>أدخل الرمز السري</div>
-            <div style={S.dots}>{[0,1,2,3].map(i=><div key={i} style={{...S.dot,background:pin.length>i?"#f59e0b":"rgba(255,255,255,0.15)"}}/>)}</div>
+            <div style={S.dots}>{[0,1,2,3].map(i=><div key={i} style={{...S.dot,background:pin.length>i?C.gold:C.bg3}}/>)}</div>
             {pinErr&&<div style={S.pinErr}>رمز خاطئ، حاول مرة ثانية</div>}
             <div style={D?S.numpadD:S.numpad}>
               {["1","2","3","4","5","6","7","8","9","","0","⌫"].map((k,i)=>(
@@ -706,13 +706,13 @@ export default function App() {
                 <div style={{...S.av,width:48,height:48,fontSize:20,borderRadius:15,background:"linear-gradient(135deg,#7c3aed,#5b21b6)"}}>{p.name[0]}</div>
                 <div>
                   <div style={{fontWeight:800,fontSize:18,letterSpacing:-0.5}}>{p.name}</div>
-                  <div style={{fontSize:12,color:"#a78bfa",marginTop:2,fontWeight:600}}>شريك بنسبة {toAr(p.share)}%</div>
+                  <div style={{fontSize:12,color:"#6B3FA0",marginTop:2,fontWeight:600}}>شريك بنسبة {toAr(p.share)}%</div>
                 </div>
               </div>
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:12}}>
                 <div style={{background:"rgba(255,255,255,0.05)",borderRadius:12,padding:12}}>
                   <div style={{fontSize:11,color:"#9ca3af",fontWeight:600}}>حصة رأس المال</div>
-                  <div style={{fontSize:15,fontWeight:800,color:"#60a5fa",marginTop:4,letterSpacing:-0.5}}>{fmtD(p.shareAmt)}</div>
+                  <div style={{fontSize:15,fontWeight:800,color:"#2557A7",marginTop:4,letterSpacing:-0.5}}>{fmtD(p.shareAmt)}</div>
                 </div>
                 <div style={{background:"rgba(255,255,255,0.05)",borderRadius:12,padding:12}}>
                   <div style={{fontSize:11,color:"#9ca3af",fontWeight:600}}>إجمالي السحوبات</div>
@@ -720,7 +720,7 @@ export default function App() {
                 </div>
               </div>
               <div style={{background:p.remaining>=0?"rgba(6,95,70,0.3)":"rgba(127,29,29,0.3)",border:`1px solid ${p.remaining>=0?"#047857":"#991b1b"}`,borderRadius:14,padding:"14px",textAlign:"center"}}>
-                <div style={{fontSize:12,color:"rgba(255,255,255,0.7)",fontWeight:600}}>{p.remaining>=0?"المتبقي من حصتك":"تجاوزت حصتك"}</div>
+                <div style={{fontSize:12,color:"rgba(255,255,255,0.9)",fontWeight:600}}>{p.remaining>=0?"المتبقي من حصتك":"تجاوزت حصتك"}</div>
                 <div style={{fontSize:24,fontWeight:900,color:p.remaining>=0?"#34d399":"#f87171",marginTop:4,letterSpacing:-1}}>{fmtD(Math.abs(p.remaining))}</div>
               </div>
               <div style={{...S.progBar,marginTop:12}}><div style={{...S.progFill,width:`${p.shareAmt?Math.min(100,Math.round(p.withdrawn/p.shareAmt*100)):0}%`,background:"linear-gradient(90deg,#7c3aed,#a78bfa)"}}/></div>
@@ -742,7 +742,7 @@ export default function App() {
         <div style={D?S.empGrid:{}}>
           {WORKERS.map(u=>{ const ob=OBs[u.id]||{}; const of=OBform[u.id]||{}; const isP=u.role==="partner";
             return(
-              <div key={u.id} style={{background:"rgba(255,255,255,0.04)",border:`1px solid ${isP?"rgba(124,58,237,0.25)":"rgba(255,255,255,0.08)"}`,borderRadius:18,padding:18,marginBottom:12}}>
+              <div key={u.id} style={{background:"#fff",border:`1px solid ${isP?"rgba(107,63,160,0.2)":"#E2D9CC"}`,borderRadius:18,padding:18,marginBottom:12,boxShadow:"0 2px 8px rgba(44,24,16,0.06)"}}>
                 <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:4}}>
                   <div style={{...S.av,width:36,height:36,fontSize:16,borderRadius:11,background:avatarBg(u.role)}}>{u.name[0]}</div>
                   <div>
@@ -775,106 +775,133 @@ export default function App() {
 }
 
 function TxCard({t,showUser,onDelete,onImg}){
+  const sp=t.type==="صرف";
   return(
-    <div style={{background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,255,255,0.08)",borderRadius:14,padding:"14px 16px",marginBottom:10}}>
+    <div style={{background:"#fff",border:"1px solid #E2D9CC",borderRadius:14,padding:"14px 16px",boxShadow:"0 2px 8px rgba(44,24,16,0.06)",marginBottom:10}}>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
         <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}}>
-          <span style={{borderRadius:8,padding:"4px 12px",fontSize:12,fontWeight:700,background:t.type==="صرف"?"rgba(127,29,29,0.4)":"rgba(6,95,70,0.4)",color:t.type==="صرف"?"#f87171":"#34d399",border:`1px solid ${t.type==="صرف"?"rgba(127,29,29,0.6)":"rgba(6,95,70,0.6)"}`}}>{t.type}</span>
-          {t.isPersonal&&<span style={{borderRadius:8,padding:"4px 10px",fontSize:11,fontWeight:700,background:"rgba(124,58,237,0.2)",color:"#c4b5fd",border:"1px solid rgba(124,58,237,0.3)"}}>👤 شخصي</span>}
-          <span style={{borderRadius:8,padding:"4px 10px",fontSize:11,background:"rgba(255,255,255,0.05)",color:"#6b7280",border:"1px solid rgba(255,255,255,0.08)"}}>{t.currency||"دينار"}</span>
+          <span style={{borderRadius:8,padding:"4px 12px",fontSize:12,fontWeight:700,background:sp?"rgba(192,57,43,0.1)":"rgba(26,122,74,0.1)",color:sp?"#C0392B":"#1A7A4A",border:`1px solid ${sp?"rgba(192,57,43,0.2)":"rgba(26,122,74,0.2)"}`}}>{t.type}</span>
+          {t.isPersonal&&<span style={{borderRadius:8,padding:"4px 10px",fontSize:11,fontWeight:700,background:"rgba(107,63,160,0.1)",color:"#6B3FA0",border:"1px solid rgba(107,63,160,0.2)"}}>👤 شخصي</span>}
+          <span style={{borderRadius:8,padding:"4px 10px",fontSize:11,background:"#F5F0E8",color:"#9B846D",border:"1px solid #E2D9CC"}}>{t.currency||"دينار"}</span>
         </div>
-        <div style={{fontSize:17,fontWeight:900,color:t.type==="صرف"?"#f87171":"#34d399",letterSpacing:-0.5}}>
-          {t.type==="صرف"?"-":"+"}{String(Number(t.amount).toLocaleString("ar-IQ")).replace(/\d/g,d=>"٠١٢٣٤٥٦٧٨٩"[d])} {t.currency==="دولار"?"$":"د.ع"}
+        <div style={{fontSize:17,fontWeight:900,color:sp?"#C0392B":"#1A7A4A",letterSpacing:-0.5}}>
+          {sp?"-":"+"}{String(Number(t.amount).toLocaleString("ar-IQ")).replace(/\d/g,d=>"٠١٢٣٤٥٦٧٨٩"[d])} {t.currency==="دولار"?"$":"د.ع"}
         </div>
       </div>
-      {showUser&&<div style={{fontSize:12,color:"#f59e0b",fontWeight:600,marginBottom:3}}>{t.userName}</div>}
-      {t.projectName&&<div style={{fontSize:13,color:"#9ca3af"}}>{t.projectName}</div>}
-      <div style={{fontSize:12,color:"#6b7280",marginTop:4}}>📅 {t.date}</div>
-      {t.note&&<div style={{fontSize:13,color:"#d1d5db",marginTop:8,background:"rgba(255,255,255,0.04)",borderRadius:10,padding:"8px 12px",border:"1px solid rgba(255,255,255,0.05)"}}>{t.note}</div>}
+      {showUser&&<div style={{fontSize:12,color:"#C17B2F",fontWeight:700,marginBottom:3}}>{t.userName}</div>}
+      {t.projectName&&<div style={{fontSize:13,color:"#6B5744"}}>{t.projectName}</div>}
+      <div style={{fontSize:12,color:"#9B846D",marginTop:4}}>📅 {t.date}</div>
+      {t.note&&<div style={{fontSize:13,color:"#2C1810",marginTop:8,background:"#F5F0E8",borderRadius:10,padding:"8px 12px",border:"1px solid #E2D9CC"}}>{t.note}</div>}
       {t.image&&<img src={t.image} style={{width:"100%",maxHeight:180,objectFit:"cover",borderRadius:12,marginTop:10,cursor:"pointer"}} alt="وصل" onClick={()=>onImg&&onImg(t.image)}/>}
-      {onDelete&&<button style={{marginTop:10,background:"rgba(127,29,29,0.2)",border:"1px solid rgba(232,69,69,0.2)",borderRadius:8,padding:"7px 14px",color:"#f87171",fontSize:12,cursor:"pointer"}} onClick={onDelete}>🗑️ حذف</button>}
+      {onDelete&&<button style={{marginTop:10,background:"rgba(192,57,43,0.06)",border:"1px solid rgba(192,57,43,0.15)",borderRadius:8,padding:"7px 14px",color:"#C0392B",fontSize:12,cursor:"pointer"}} onClick={onDelete}>🗑️ حذف</button>}
     </div>
   );
 }
 
+const C = {
+  bg:"#F5F0E8",bg2:"#EDE8DD",bg3:"#E4DDD1",
+  card:"#FFFFFF",cardBorder:"#E2D9CC",
+  text:"#2C1810",textMd:"#6B5744",textSm:"#9B846D",
+  gold:"#C17B2F",goldL:"#D4922B",goldD:"#A8641A",
+  blue:"#2557A7",blueL:"#3B6EC4",
+  green:"#1A7A4A",greenL:"#2A9960",
+  red:"#C0392B",redL:"#D44435",
+  purple:"#6B3FA0",purpleL:"#8354BC",
+  shadow:"0 2px 12px rgba(44,24,16,0.08)",
+  shadowMd:"0 4px 24px rgba(44,24,16,0.12)",
+};
+
 const S = {
-  page:{minHeight:"100vh",background:"#080c14",display:"flex",alignItems:"center",justifyContent:"center",padding:24,fontFamily:"Tahoma,'Segoe UI',sans-serif",direction:"rtl"},
-  loginWrap:{width:"100%",maxWidth:440,color:"#fff"},
-  loginWrapD:{width:"100%",maxWidth:560,color:"#fff"},
+  // ── LOGIN ──
+  page:{minHeight:"100vh",background:`linear-gradient(160deg,${C.bg} 0%,${C.bg2} 50%,${C.bg3} 100%)`,display:"flex",alignItems:"center",justifyContent:"center",padding:24,fontFamily:"'Segoe UI',Tahoma,sans-serif",direction:"rtl"},
+  loginWrap:{width:"100%",maxWidth:440,color:C.text},
+  loginWrapD:{width:"100%",maxWidth:560,color:C.text},
   logo:{textAlign:"center",marginBottom:48},
-  logoText:{fontSize:52,fontWeight:900,background:"linear-gradient(135deg,#f59e0b,#ffd27a,#f59e0b)",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent",letterSpacing:-2,lineHeight:1},
-  logoSub:{fontSize:14,color:"#6b7280",marginTop:6,letterSpacing:1},
-  lbl:{textAlign:"center",fontSize:13,color:"#6b7280",marginBottom:16,fontWeight:600,letterSpacing:0.5},
+  logoText:{fontSize:56,fontWeight:900,background:`linear-gradient(135deg,${C.gold},${C.goldL},${C.goldD})`,WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent",letterSpacing:-2,lineHeight:1,fontFamily:"Georgia,serif"},
+  logoSub:{fontSize:14,color:C.textSm,marginTop:8,letterSpacing:2,textTransform:"uppercase"},
+  lbl:{textAlign:"center",fontSize:13,color:C.textMd,marginBottom:16,fontWeight:600},
   grid:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12},
   gridD:{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:12},
-  userBtn:{background:"rgba(255,255,255,0.04)",border:"1px solid rgba(255,255,255,0.08)",borderRadius:18,padding:"20px 12px 16px",color:"#fff",cursor:"pointer",textAlign:"center",transition:"all 0.2s"},
-  mgrBtn:{gridColumn:"1/-1",border:"1px solid rgba(30,111,255,0.3)",background:"rgba(30,111,255,0.06)"},
-  partnerBtnStyle:{border:"1px solid rgba(124,58,237,0.3)",background:"rgba(124,58,237,0.06)"},
-  uName:{fontSize:17,fontWeight:800,letterSpacing:-0.5,marginBottom:4},
-  uRole:{fontSize:11,color:"#6b7280",fontWeight:500},
+  userBtn:{background:C.card,border:`1px solid ${C.cardBorder}`,borderRadius:18,padding:"20px 12px 16px",color:C.text,cursor:"pointer",textAlign:"center",transition:"all 0.2s",boxShadow:C.shadow},
+  mgrBtn:{gridColumn:"1/-1",border:`2px solid ${C.blue}`,background:`rgba(37,87,167,0.06)`},
+  partnerBtnStyle:{border:`1px solid ${C.purple}`,background:`rgba(107,63,160,0.06)`},
+  uName:{fontSize:16,fontWeight:800,letterSpacing:-0.3,marginBottom:4,color:C.text},
+  uRole:{fontSize:11,color:C.textSm,fontWeight:500},
   av:{width:46,height:46,borderRadius:14,display:"flex",alignItems:"center",justifyContent:"center",fontSize:20,fontWeight:800,flexShrink:0},
-  selCard:{display:"flex",alignItems:"center",gap:14,background:"rgba(245,166,35,0.08)",border:"1px solid rgba(245,166,35,0.2)",borderRadius:16,padding:"16px 20px",marginBottom:28},
+  selCard:{display:"flex",alignItems:"center",gap:14,background:`rgba(193,123,47,0.08)`,border:`1px solid rgba(193,123,47,0.25)`,borderRadius:16,padding:"16px 20px",marginBottom:28},
   dots:{display:"flex",justifyContent:"center",gap:18,marginBottom:6},
-  dot:{width:16,height:16,borderRadius:"50%",border:"2px solid rgba(255,255,255,0.2)",transition:"all 0.15s"},
-  pinErr:{textAlign:"center",color:"#f87171",fontSize:13,margin:"8px 0",fontWeight:600},
+  dot:{width:16,height:16,borderRadius:"50%",border:`2px solid ${C.cardBorder}`,transition:"all 0.15s"},
+  pinErr:{textAlign:"center",color:C.red,fontSize:13,margin:"8px 0",fontWeight:600},
   numpad:{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:10,margin:"20px auto",maxWidth:320},
   numpadD:{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:10,margin:"20px auto",maxWidth:300},
-  numBtn:{background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.08)",borderRadius:14,padding:20,color:"#fff",fontSize:24,fontWeight:700,cursor:"pointer",transition:"all 0.15s"},
+  numBtn:{background:C.card,border:`1px solid ${C.cardBorder}`,borderRadius:14,padding:20,color:C.text,fontSize:24,fontWeight:700,cursor:"pointer",transition:"all 0.15s",boxShadow:C.shadow},
   numEmpty:{background:"transparent",border:"none",cursor:"default"},
-  loginBtn:{width:"100%",background:"linear-gradient(135deg,#f59e0b,#d97706)",border:"none",borderRadius:16,padding:17,color:"#000",fontSize:17,fontWeight:800,cursor:"pointer",marginBottom:10,boxShadow:"0 8px 24px rgba(245,166,35,0.25)"},
-  backBtn:{width:"100%",background:"transparent",border:"1px solid rgba(255,255,255,0.1)",borderRadius:16,padding:15,color:"#6b7280",fontSize:15,cursor:"pointer"},
-  appWrap:{width:"100%",maxWidth:430,margin:"0 auto",minHeight:"100vh",display:"flex",flexDirection:"column",color:"#fff",fontFamily:"Tahoma,'Segoe UI',sans-serif",direction:"rtl",background:"#080c14",position:"relative"},
-  appWrapD:{width:"100%",display:"flex",flexDirection:"column",minHeight:"100vh",color:"#fff",fontFamily:"Tahoma,'Segoe UI',sans-serif",direction:"rtl",background:"#080c14"},
-  header:{background:"rgba(8,12,20,0.95)",backdropFilter:"blur(20px)",borderBottom:"1px solid rgba(255,255,255,0.06)",padding:"14px 20px",display:"flex",justifyContent:"space-between",alignItems:"center",position:"sticky",top:0,zIndex:100},
-  headerD:{background:"rgba(8,12,20,0.95)",backdropFilter:"blur(20px)",borderBottom:"1px solid rgba(255,255,255,0.06)",padding:"14px 32px",display:"flex",justifyContent:"space-between",alignItems:"center",position:"sticky",top:0,zIndex:100},
-  hName:{fontSize:16,fontWeight:800,letterSpacing:-0.5},
-  hRole:{fontSize:11,color:"#f59e0b",fontWeight:600,marginTop:1},
-  iconBtn:{background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,255,255,0.08)",borderRadius:10,padding:"8px 12px",color:"#6b7280",fontSize:16,cursor:"pointer"},
-  outBtn:{background:"rgba(232,69,69,0.08)",border:"1px solid rgba(232,69,69,0.2)",borderRadius:10,padding:"8px 16px",color:"#f87171",fontSize:13,fontWeight:600,cursor:"pointer"},
-  sidebar:{width:230,background:"rgba(13,21,37,0.8)",borderLeft:"1px solid rgba(255,255,255,0.06)",padding:"24px 14px",display:"flex",flexDirection:"column",gap:4,flexShrink:0},
-  sideBtn:{display:"flex",alignItems:"center",gap:12,background:"transparent",border:"none",color:"#6b7280",cursor:"pointer",padding:"12px 14px",borderRadius:12,fontSize:14,fontWeight:500,width:"100%",textAlign:"right",transition:"all 0.2s"},
-  sideBtnA:{color:"#f59e0b",background:"rgba(245,158,11,0.1)",border:"1px solid rgba(245,158,11,0.15)",fontWeight:700},
-  sideIcon:{width:34,height:34,borderRadius:10,display:"flex",alignItems:"center",justifyContent:"center",fontSize:17,background:"rgba(255,255,255,0.05)",flexShrink:0},
-  mainContent:{flex:1,padding:"28px 36px",overflowY:"auto"},
-  mobileContent:{flex:1,padding:"20px 16px 110px",overflowY:"auto"},
-  botNav:{position:"fixed",bottom:0,left:"50%",transform:"translateX(-50%)",width:"100%",maxWidth:430,background:"rgba(8,12,20,0.97)",backdropFilter:"blur(24px)",borderTop:"1px solid rgba(255,255,255,0.06)",padding:"8px 8px 20px",display:"flex",zIndex:100},
-  navBtn:{flex:1,background:"transparent",border:"none",color:"rgba(255,255,255,0.3)",cursor:"pointer",padding:"6px 2px",borderRadius:10,display:"flex",flexDirection:"column",alignItems:"center",gap:4,transition:"all 0.2s"},
-  navBtnA:{color:"#f59e0b"},
+  loginBtn:{width:"100%",background:`linear-gradient(135deg,${C.gold},${C.goldD})`,border:"none",borderRadius:16,padding:17,color:"#fff",fontSize:17,fontWeight:800,cursor:"pointer",marginBottom:10,boxShadow:`0 8px 24px rgba(193,123,47,0.3)`,letterSpacing:0.5},
+  backBtn:{width:"100%",background:"transparent",border:`1px solid ${C.cardBorder}`,borderRadius:16,padding:15,color:C.textMd,fontSize:15,cursor:"pointer"},
+
+  // ── APP ──
+  appWrap:{width:"100%",maxWidth:430,margin:"0 auto",minHeight:"100vh",display:"flex",flexDirection:"column",color:C.text,fontFamily:"'Segoe UI',Tahoma,sans-serif",direction:"rtl",background:C.bg,position:"relative"},
+  appWrapD:{width:"100%",display:"flex",flexDirection:"column",minHeight:"100vh",color:C.text,fontFamily:"'Segoe UI',Tahoma,sans-serif",direction:"rtl",background:C.bg},
+  header:{background:"rgba(245,240,232,0.95)",backdropFilter:"blur(20px)",borderBottom:`1px solid ${C.cardBorder}`,padding:"14px 20px",display:"flex",justifyContent:"space-between",alignItems:"center",position:"sticky",top:0,zIndex:100,boxShadow:"0 1px 8px rgba(44,24,16,0.06)"},
+  headerD:{background:"rgba(245,240,232,0.95)",backdropFilter:"blur(20px)",borderBottom:`1px solid ${C.cardBorder}`,padding:"14px 32px",display:"flex",justifyContent:"space-between",alignItems:"center",position:"sticky",top:0,zIndex:100,boxShadow:"0 1px 8px rgba(44,24,16,0.06)"},
+  hName:{fontSize:16,fontWeight:800,letterSpacing:-0.3,color:C.text},
+  hRole:{fontSize:11,color:C.gold,fontWeight:700,marginTop:2},
+  iconBtn:{background:C.card,border:`1px solid ${C.cardBorder}`,borderRadius:10,padding:"8px 12px",color:C.textMd,fontSize:16,cursor:"pointer",boxShadow:C.shadow},
+  outBtn:{background:`rgba(192,57,43,0.08)`,border:`1px solid rgba(192,57,43,0.2)`,borderRadius:10,padding:"8px 16px",color:C.red,fontSize:13,fontWeight:600,cursor:"pointer"},
+
+  // ── SIDEBAR ──
+  sidebar:{width:230,background:C.bg2,borderLeft:`1px solid ${C.cardBorder}`,padding:"24px 14px",display:"flex",flexDirection:"column",gap:4,flexShrink:0},
+  sideBtn:{display:"flex",alignItems:"center",gap:12,background:"transparent",border:"none",color:C.textMd,cursor:"pointer",padding:"12px 14px",borderRadius:12,fontSize:14,fontWeight:500,width:"100%",textAlign:"right",transition:"all 0.2s"},
+  sideBtnA:{color:C.gold,background:`rgba(193,123,47,0.1)`,border:`1px solid rgba(193,123,47,0.2)`,fontWeight:700},
+  sideIcon:{width:34,height:34,borderRadius:10,display:"flex",alignItems:"center",justifyContent:"center",fontSize:17,background:C.card,boxShadow:C.shadow,flexShrink:0},
+  mainContent:{flex:1,padding:"28px 36px",overflowY:"auto",background:C.bg},
+  mobileContent:{flex:1,padding:"20px 16px 110px",overflowY:"auto",background:C.bg},
+
+  // ── BOTTOM NAV ──
+  botNav:{position:"fixed",bottom:0,left:"50%",transform:"translateX(-50%)",width:"100%",maxWidth:430,background:"rgba(245,240,232,0.97)",backdropFilter:"blur(24px)",borderTop:`1px solid ${C.cardBorder}`,padding:"8px 8px 20px",display:"flex",zIndex:100,boxShadow:"0 -2px 12px rgba(44,24,16,0.06)"},
+  navBtn:{flex:1,background:"transparent",border:"none",color:C.textSm,cursor:"pointer",padding:"6px 2px",borderRadius:10,display:"flex",flexDirection:"column",alignItems:"center",gap:4,transition:"all 0.2s"},
+  navBtnA:{color:C.gold},
   navIcon:{width:38,height:30,borderRadius:10,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,transition:"all 0.2s"},
   navLbl:{fontSize:10,fontWeight:600},
-  secTitle:{fontSize:20,fontWeight:800,color:"#f0f4ff",marginBottom:20,letterSpacing:-0.5},
-  balCard:{borderRadius:22,padding:"22px 20px",marginBottom:12},
-  balLbl:{fontSize:13,color:"rgba(255,255,255,0.7)",fontWeight:600,marginBottom:8},
-  balAmt:{fontSize:30,fontWeight:900,letterSpacing:-1,lineHeight:1.1},
-  balSub:{fontSize:12,color:"rgba(255,255,255,0.6)",margin:"6px 0 14px"},
+
+  // ── CONTENT ──
+  secTitle:{fontSize:19,fontWeight:800,color:C.text,marginBottom:20,letterSpacing:-0.5},
+  balCard:{borderRadius:22,padding:"22px 20px",marginBottom:12,boxShadow:C.shadowMd},
+  balLbl:{fontSize:13,color:"rgba(255,255,255,0.85)",fontWeight:600,marginBottom:8},
+  balAmt:{fontSize:30,fontWeight:900,letterSpacing:-1,lineHeight:1.1,color:"#fff"},
+  balSub:{fontSize:12,color:"rgba(255,255,255,0.7)",margin:"6px 0 14px"},
   balRow:{display:"flex",gap:20},
-  balSt:{fontSize:12,color:"rgba(255,255,255,0.75)",fontWeight:500},
-  goldBtn:{width:"100%",background:"linear-gradient(135deg,#f59e0b,#d97706)",border:"none",borderRadius:14,padding:16,color:"#000",fontSize:16,fontWeight:800,cursor:"pointer",marginBottom:10,letterSpacing:-0.3},
-  formCard:{background:"rgba(255,255,255,0.03)",border:"1px solid rgba(255,255,255,0.08)",borderRadius:20,padding:22},
-  filterCard:{background:"rgba(255,255,255,0.02)",border:"1px solid rgba(255,255,255,0.05)",borderRadius:16,padding:18,marginBottom:16},
-  fLbl:{fontSize:12,color:"#6b7280",fontWeight:700,marginBottom:8,marginTop:16,letterSpacing:0.5},
+  balSt:{fontSize:12,color:"rgba(255,255,255,0.8)",fontWeight:500},
+  goldBtn:{width:"100%",background:`linear-gradient(135deg,${C.gold},${C.goldD})`,border:"none",borderRadius:14,padding:16,color:"#fff",fontSize:16,fontWeight:800,cursor:"pointer",marginBottom:10,letterSpacing:0.3,boxShadow:`0 4px 16px rgba(193,123,47,0.25)`},
+
+  // ── FORMS ──
+  formCard:{background:C.card,border:`1px solid ${C.cardBorder}`,borderRadius:20,padding:22,boxShadow:C.shadow},
+  filterCard:{background:C.card,border:`1px solid ${C.cardBorder}`,borderRadius:16,padding:18,marginBottom:16,boxShadow:C.shadow},
+  fLbl:{fontSize:12,color:C.textMd,fontWeight:700,marginBottom:8,marginTop:16,letterSpacing:0.3},
   tRow:{display:"flex",gap:10},
-  tBtn:{flex:1,background:"rgba(255,255,255,0.04)",border:"1px solid rgba(255,255,255,0.08)",borderRadius:12,padding:13,color:"#6b7280",fontSize:14,fontWeight:700,cursor:"pointer",transition:"all 0.2s"},
-  sel:{width:"100%",background:"rgba(255,255,255,0.04)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:12,padding:"13px 16px",color:"#fff",fontSize:15,outline:"none"},
-  inp:{width:"100%",background:"rgba(255,255,255,0.04)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:12,padding:"13px 16px",color:"#fff",fontSize:15,outline:"none",boxSizing:"border-box"},
-  ta:{width:"100%",background:"rgba(255,255,255,0.04)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:12,padding:"13px 16px",color:"#fff",fontSize:14,outline:"none",resize:"none",boxSizing:"border-box"},
-  imgBtn:{width:"100%",background:"rgba(255,255,255,0.03)",border:"2px dashed rgba(255,255,255,0.12)",borderRadius:14,padding:16,color:"#6b7280",fontSize:14,cursor:"pointer",marginTop:4},
+  tBtn:{flex:1,background:C.bg2,border:`1px solid ${C.cardBorder}`,borderRadius:12,padding:13,color:C.textMd,fontSize:14,fontWeight:700,cursor:"pointer",transition:"all 0.2s"},
+  sel:{width:"100%",background:C.bg2,border:`1px solid ${C.cardBorder}`,borderRadius:12,padding:"13px 16px",color:C.text,fontSize:15,outline:"none"},
+  inp:{width:"100%",background:C.bg2,border:`1px solid ${C.cardBorder}`,borderRadius:12,padding:"13px 16px",color:C.text,fontSize:15,outline:"none",boxSizing:"border-box"},
+  ta:{width:"100%",background:C.bg2,border:`1px solid ${C.cardBorder}`,borderRadius:12,padding:"13px 16px",color:C.text,fontSize:14,outline:"none",resize:"none",boxSizing:"border-box"},
+  imgBtn:{width:"100%",background:C.bg2,border:`2px dashed ${C.cardBorder}`,borderRadius:14,padding:16,color:C.textMd,fontSize:14,cursor:"pointer",marginTop:4},
   imgPrev:{width:"100%",maxHeight:200,objectFit:"cover",borderRadius:14,marginTop:12,cursor:"pointer"},
-  subBtn:{width:"100%",background:"linear-gradient(135deg,#f59e0b,#d97706)",border:"none",borderRadius:14,padding:16,color:"#000",fontSize:16,fontWeight:800,cursor:"pointer",marginTop:20,letterSpacing:-0.3},
-  canBtn:{width:"100%",background:"transparent",border:"1px solid rgba(255,255,255,0.08)",borderRadius:14,padding:15,color:"#6b7280",fontSize:15,cursor:"pointer",marginTop:10},
-  backBtn2:{background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,255,255,0.08)",borderRadius:10,padding:"8px 14px",color:"#6b7280",fontSize:16,cursor:"pointer",flexShrink:0},
-  empty:{textAlign:"center",color:"#374151",padding:48,fontSize:15},
-  empCard:{width:"100%",background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,255,255,0.08)",borderRadius:16,padding:"16px",marginBottom:10,cursor:"pointer",textAlign:"right",transition:"all 0.2s"},
-  empGrid:{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(290px,1fr))",gap:12,marginBottom:20},
-  txCard:{background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,255,255,0.08)",borderRadius:14,padding:"14px 16px"},
+  subBtn:{width:"100%",background:`linear-gradient(135deg,${C.gold},${C.goldD})`,border:"none",borderRadius:14,padding:16,color:"#fff",fontSize:16,fontWeight:800,cursor:"pointer",marginTop:20,letterSpacing:0.3,boxShadow:`0 4px 16px rgba(193,123,47,0.25)`},
+  canBtn:{width:"100%",background:"transparent",border:`1px solid ${C.cardBorder}`,borderRadius:14,padding:15,color:C.textMd,fontSize:15,cursor:"pointer",marginTop:10},
+  backBtn2:{background:C.card,border:`1px solid ${C.cardBorder}`,borderRadius:10,padding:"8px 14px",color:C.textMd,fontSize:16,cursor:"pointer",flexShrink:0,boxShadow:C.shadow},
+  empty:{textAlign:"center",color:C.textSm,padding:48,fontSize:15},
+
+  // ── CARDS ──
+  empCard:{width:"100%",background:C.card,border:`1px solid ${C.cardBorder}`,borderRadius:16,padding:"16px",marginBottom:10,cursor:"pointer",textAlign:"right",transition:"all 0.2s",boxShadow:C.shadow},
+  empGrid:{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(290px,1fr))",gap:14,marginBottom:20},
+  txCard:{background:C.card,border:`1px solid ${C.cardBorder}`,borderRadius:14,padding:"14px 16px",boxShadow:C.shadow},
   txGrid:{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(320px,1fr))",gap:12,marginBottom:16},
-  projCard:{background:"rgba(255,255,255,0.04)",border:"1px solid rgba(255,255,255,0.07)",borderRadius:14,padding:"14px 18px",marginBottom:10,display:"flex",justifyContent:"space-between",alignItems:"center"},
-  projRepCard:{width:"100%",background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:18,padding:18,marginBottom:12,cursor:"pointer",textAlign:"right",color:"#fff",transition:"all 0.2s"},
-  specBtn:{background:"rgba(255,255,255,0.04)",border:"1px solid rgba(255,255,255,0.08)",borderRadius:10,padding:"10px 18px",color:"#6b7280",fontSize:14,fontWeight:600,cursor:"pointer"},
-  specBtnA:{background:"rgba(245,158,11,0.15)",border:"1px solid #f59e0b",color:"#f59e0b"},
-  delBtn:{background:"rgba(232,69,69,0.08)",border:"1px solid rgba(232,69,69,0.15)",borderRadius:10,padding:"8px 16px",color:"#f87171",fontSize:13,cursor:"pointer",whiteSpace:"nowrap"},
-  progBar:{background:"rgba(255,255,255,0.08)",borderRadius:999,height:8,overflow:"hidden",marginTop:12},
-  progFill:{background:"linear-gradient(90deg,#1d4ed8,#3b82f6)",height:"100%",borderRadius:999,transition:"width 0.6s ease"},
-  overlay:{position:"fixed",inset:0,background:"rgba(0,0,0,0.92)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",backdropFilter:"blur(10px)"},
+  projCard:{background:C.card,border:`1px solid ${C.cardBorder}`,borderRadius:14,padding:"14px 18px",marginBottom:10,display:"flex",justifyContent:"space-between",alignItems:"center",boxShadow:C.shadow},
+  projRepCard:{width:"100%",background:C.card,border:`1px solid ${C.cardBorder}`,borderRadius:18,padding:18,marginBottom:12,cursor:"pointer",textAlign:"right",color:C.text,transition:"all 0.2s",boxShadow:C.shadow},
+  specBtn:{background:C.bg2,border:`1px solid ${C.cardBorder}`,borderRadius:10,padding:"10px 18px",color:C.textMd,fontSize:14,fontWeight:600,cursor:"pointer"},
+  specBtnA:{background:`rgba(193,123,47,0.12)`,border:`1px solid ${C.gold}`,color:C.gold},
+  delBtn:{background:`rgba(192,57,43,0.06)`,border:`1px solid rgba(192,57,43,0.2)`,borderRadius:10,padding:"8px 16px",color:C.red,fontSize:13,cursor:"pointer",whiteSpace:"nowrap"},
+  progBar:{background:C.bg3,borderRadius:999,height:8,overflow:"hidden",marginTop:12},
+  progFill:{background:`linear-gradient(90deg,${C.blue},${C.blueL})`,height:"100%",borderRadius:999,transition:"width 0.6s ease"},
+  overlay:{position:"fixed",inset:0,background:"rgba(44,24,16,0.7)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",backdropFilter:"blur(10px)"},
   fullImg:{maxWidth:"95%",maxHeight:"90vh",borderRadius:16,objectFit:"contain"},
 };
