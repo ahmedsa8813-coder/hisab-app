@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useRef } from "react";
 import { db } from "./firebase";
 import { collection, addDoc, onSnapshot, query, orderBy, deleteDoc, doc, setDoc } from "firebase/firestore";
@@ -73,6 +72,7 @@ export default function App() {
   const [debts,   setDebts]   = useState([]);
   const [debtForm,setDebtForm]= useState({name:"",projectId:"",amount:"",currency:"دينار",lastPayment:"",status:"غير مسدد",note:""});
   const [showDebtForm,setShowDebtForm]=useState(false);
+  const [personalDebts,setPersonalDebts]=useState([]);
   const imgRef = useRef();
 
   useEffect(() => {
@@ -82,6 +82,7 @@ export default function App() {
     u.push(onSnapshot(collection(db,"openingBalances"), s => { const o={}; s.docs.forEach(d=>{o[d.id]=d.data();}); setOBs(o); }));
     u.push(onSnapshot(doc(db,"settings","company"), s => { if(s.exists()) setCompSet(s.data()); }));
     u.push(onSnapshot(query(collection(db,"debts"),orderBy("createdAt","desc")), s => setDebts(s.docs.map(d=>({id:d.id,...d.data()})))));
+    u.push(onSnapshot(query(collection(db,"personalDebts"),orderBy("createdAt","desc")), s => setPersonalDebts(s.docs.map(d=>({id:d.id,...d.data()})))));
     return () => u.forEach(f=>f());
   }, []);
 
@@ -125,7 +126,7 @@ export default function App() {
       const receiver=USERS.find(u=>u.id===form.advanceTo);
       const isPersonalAdv = form.advanceIsPersonal;
 
-      // صرف من أحمد (دائماً بدون مشروع من جهته)
+      // صرف من أحمد دائماً
       await addDoc(collection(db,"transactions"),{
         userId:user.id, userName:user.name,
         projectId:"", projectName:"",
@@ -138,20 +139,34 @@ export default function App() {
         createdAt:new Date().toISOString(),
       });
 
-      // على الشخص الآخر: إما استلام مشروع أو استلام شخصي
-      await addDoc(collection(db,"transactions"),{
-        userId:form.advanceTo, userName:receiver?.name||"",
-        projectId:isPersonalAdv?"":form.projectId,
-        projectName:isPersonalAdv?"":projName,
-        type:"استلام", amount:amt,
-        currency:form.currency,
-        note:`${isPersonalAdv?"سلفة شخصية من أحمد":"استلام دفعة مشروع من أحمد"}${form.note?" — "+form.note:""}`,
-        date:form.date, image:null,
-        isPersonal:isPersonalAdv,
-        isAdvance:true,
-        advanceFrom:user.id, advanceFromName:user.name,
-        createdAt:new Date().toISOString(),
-      });
+      if(isPersonalAdv){
+        // السلفة الشخصية = دين على الشخص، تتسجل بجدول الديون الداخلية
+        // ما تضاف لصندوق الشخص
+        await addDoc(collection(db,"personalDebts"),{
+          debtorId:form.advanceTo, debtorName:receiver?.name||"",
+          creditorId:user.id, creditorName:user.name,
+          amount:amt, currency:form.currency,
+          remaining:amt, // المبلغ المتبقي
+          note:form.note||"",
+          date:form.date,
+          status:"غير مسدد",
+          payments:[], // سجل المدفوعات
+          createdAt:new Date().toISOString(),
+        });
+      } else {
+        // دفعة مشروع: تضاف للشخص كاستلام مشروع
+        await addDoc(collection(db,"transactions"),{
+          userId:form.advanceTo, userName:receiver?.name||"",
+          projectId:form.projectId, projectName:projName,
+          type:"استلام", amount:amt,
+          currency:form.currency,
+          note:`استلام دفعة مشروع من أحمد${form.note?" — "+form.note:""}`,
+          date:form.date, image:null,
+          isPersonal:false, isAdvance:true,
+          advanceFrom:user.id, advanceFromName:user.name,
+          createdAt:new Date().toISOString(),
+        });
+      }
 
     } else {
       await addDoc(collection(db,"transactions"),{
@@ -215,6 +230,32 @@ export default function App() {
   };
   const updateDebtStatus = async (id,status) => await setDoc(doc(db,"debts",id),{status},{merge:true});
   const delDebt = async id=>{ if(window.confirm("تحذف هذا الدين؟")) await deleteDoc(doc(db,"debts",id)); };
+
+  // دفع سلفة شخصية
+  const payPersonalDebt = async (debt, payAmount) => {
+    const amt = Number(payAmount);
+    if(!amt||amt<=0) return;
+    const newRemaining = Math.max(0, (debt.remaining||debt.amount) - amt);
+    const newStatus = newRemaining<=0?"مسدد كامل":"مسدد جزئي";
+    // تحديث الدين
+    await setDoc(doc(db,"personalDebts",debt.id),{
+      remaining: newRemaining,
+      status: newStatus,
+      lastPayment: today(),
+    },{merge:true});
+    // استلام لأحمد
+    await addDoc(collection(db,"transactions"),{
+      userId: debt.creditorId, userName: debt.creditorName,
+      projectId:"", projectName:"",
+      type:"استلام", amount:amt,
+      currency:debt.currency,
+      note:`سداد سلفة من ${debt.debtorName}`,
+      date:today(), image:null, isPersonal:false, isAdvance:false,
+      isDebtPayment:true, debtId:debt.id,
+      createdAt:new Date().toISOString(),
+    });
+  };
+  const delPersonalDebt = async id=>{ if(window.confirm("تحذف هذه السلفة؟")) await deleteDoc(doc(db,"personalDebts",id)); };
 
   const bal = (list,ob,cur) => {
     const obR=cur==="دينار"?(ob?.dinarReceived||0):(ob?.dollarReceived||0);
@@ -449,24 +490,29 @@ export default function App() {
         <div style={S.secTitle}>سجل المعاملات</div>
         {/* ملخص السلف لأحمد */}
         {user.role==="accountant"&&(()=>{
-          const advances = myTxs.filter(t=>t.isAdvance&&t.type==="صرف");
-          if(advances.length===0)return null;
-          const totalAdv = advances.reduce((s,t)=>s+t.amount,0);
+          const myPersonalDebts = personalDebts.filter(d=>d.creditorId===user.id&&d.status!=="مسدد كامل");
+          const totalOwed = myPersonalDebts.reduce((s,d)=>s+(d.remaining||d.amount),0);
+          if(myPersonalDebts.length===0&&!txs.filter(t=>t.isAdvance&&t.userId===user.id&&t.type==="صرف").length) return null;
           return(
-            <div style={{background:`rgba(193,123,47,0.08)`,border:`1px solid rgba(193,123,47,0.25)`,borderRadius:14,padding:"14px 16px",marginBottom:16}}>
-              <div style={{fontSize:13,fontWeight:700,color:C.gold,marginBottom:10}}>💸 السلف الممنوحة</div>
-              <div style={{display:"flex",flexWrap:"wrap",gap:8,marginBottom:8}}>
-                {WORKERS.filter(u=>u.id!=="ahmed").map(u=>{
-                  const uAdv=advances.filter(t=>t.advanceTo===u.id).reduce((s,t)=>s+t.amount,0);
-                  if(!uAdv)return null;
-                  return(
-                    <div key={u.id} style={{background:C.card,border:`1px solid ${C.cardBorder}`,borderRadius:10,padding:"6px 12px",fontSize:12,fontWeight:700}}>
-                      {u.name}: {fmtD(uAdv)}
-                    </div>
-                  );
-                })}
+            <div style={{background:`rgba(192,57,43,0.06)`,border:`1px solid rgba(192,57,43,0.2)`,borderRadius:14,padding:"14px 16px",marginBottom:16}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+                <div style={{fontSize:13,fontWeight:700,color:C.red}}>💳 السلف الشخصية (ديون عليهم)</div>
+                <div style={{fontSize:14,fontWeight:800,color:C.red}}>{fmtD(totalOwed)}</div>
               </div>
-              <div style={{fontSize:12,color:C.textMd,fontWeight:600}}>إجمالي السلف: {fmtD(totalAdv)}</div>
+              {myPersonalDebts.map(d=>(
+                <div key={d.id} style={{background:C.card,borderRadius:10,padding:"10px 12px",marginBottom:8,border:`1px solid ${C.cardBorder}`}}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
+                    <div style={{fontWeight:700,fontSize:14}}>{d.debtorName}</div>
+                    <div style={{fontWeight:800,color:C.red,fontSize:14}}>{fmtD(d.remaining||d.amount)}</div>
+                  </div>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                    <div style={{fontSize:11,color:C.textSm}}>📅 {d.date} {d.note&&`· ${d.note}`}</div>
+                    <span style={{fontSize:11,fontWeight:700,color:d.status==="مسدد جزئي"?"#b45309":C.red,background:d.status==="مسدد جزئي"?"rgba(180,83,9,0.1)":"rgba(192,57,43,0.1)",padding:"3px 8px",borderRadius:6}}>{d.status}</span>
+                  </div>
+                  {/* زر سداد سريع */}
+                  <PayDebtRow debt={d} onPay={payPersonalDebt}/>
+                </div>
+              ))}
             </div>
           );
         })()}
@@ -1251,6 +1297,25 @@ export default function App() {
 
     return null;
   }
+}
+
+function PayDebtRow({debt, onPay}){
+  const [amt,setAmt]=useState("");
+  const [paying,setPaying]=useState(false);
+  if(!paying) return(
+    <button style={{marginTop:8,fontSize:12,fontWeight:700,color:"#1A7A4A",background:"rgba(26,122,74,0.08)",border:"1px solid rgba(26,122,74,0.2)",borderRadius:8,padding:"6px 14px",cursor:"pointer",width:"100%"}}
+      onClick={()=>setPaying(true)}>✓ تسجيل سداد</button>
+  );
+  return(
+    <div style={{marginTop:8,display:"flex",gap:8}}>
+      <input style={{flex:1,background:"#F5F0E8",border:"1px solid #E2D9CC",borderRadius:8,padding:"6px 10px",fontSize:13,outline:"none"}}
+        type="number" placeholder="المبلغ المسدد" value={amt} onChange={e=>setAmt(e.target.value)}/>
+      <button style={{background:"linear-gradient(135deg,#1A7A4A,#147A40)",border:"none",borderRadius:8,padding:"6px 14px",color:"#fff",fontSize:12,fontWeight:700,cursor:"pointer"}}
+        onClick={async()=>{await onPay(debt,amt);setAmt("");setPaying(false);}}>حفظ</button>
+      <button style={{background:"transparent",border:"1px solid #E2D9CC",borderRadius:8,padding:"6px 10px",color:"#9B846D",fontSize:12,cursor:"pointer"}}
+        onClick={()=>setPaying(false)}>✕</button>
+    </div>
+  );
 }
 
 function TxCard({t,showUser,onDelete,onImg}){
