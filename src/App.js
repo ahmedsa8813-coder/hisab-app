@@ -48,6 +48,7 @@ export default function App() {
   const [pin,     setPin]     = useState("");
   const [pinErr,  setPinErr]  = useState(false);
   const [view,    setView]    = useState("home");
+  const [module,  setModule]  = useState("finance"); // finance | admin
   const [txs,     setTxs]     = useState([]);
   const [projs,   setProjs]   = useState([]);
   const [OBs,     setOBs]     = useState({});
@@ -477,7 +478,9 @@ export default function App() {
   };
   const pr = selProj ? projRep(selProj,pfFrom,pfTo) : null;
 
-  const navMgr = [{icon:"📊",label:"الملخص",v:"home"},{icon:"📄",label:"الكشوفات",v:"statements"},{icon:"📋",label:"المعاملات",v:"allTx"},{icon:"🏗️",label:"المشاريع",v:"projects"},{icon:"💰",label:"المالية",v:"projReport"},{icon:"🏢",label:"الشركة",v:"company"},{icon:"💳",label:"الديون",v:"debts"},{icon:"💵",label:"الرواتب",v:"salaries"},{icon:"⚖️",label:"افتتاحي",v:"opening"}];
+  const navMgr = module==="admin"
+    ? [{icon:"🏠",label:"الرئيسية",v:"adminHome"},{icon:"🏗️",label:"المشاريع",v:"adminProjects"},{icon:"👷",label:"الموظفون",v:"adminEmployees"},{icon:"📋",label:"المهام",v:"adminTasks"},{icon:"📊",label:"التقارير",v:"adminReports"}]
+    : [{icon:"📊",label:"الملخص",v:"home"},{icon:"📄",label:"الكشوفات",v:"statements"},{icon:"📋",label:"المعاملات",v:"allTx"},{icon:"🏗️",label:"المشاريع",v:"projects"},{icon:"💰",label:"المالية",v:"projReport"},{icon:"🏢",label:"الشركة",v:"company"},{icon:"💳",label:"الديون",v:"debts"},{icon:"💵",label:"الرواتب",v:"salaries"},{icon:"⚖️",label:"افتتاحي",v:"opening"}];
   const navWorker = user?.role==="accountant"
     ? [{icon:"🏠",label:"الرئيسية",v:"home"},{icon:"➕",label:"استلام/سلفة",v:"add"},{icon:"💵",label:"الرواتب",v:"salaries"}]
     : user?.role==="foreman"
@@ -573,9 +576,30 @@ export default function App() {
             <div style={S.hRole}>{user.role==="manager"?"مدير مالي":user.role==="accountant"?"محاسب":"موظف"}</div>
           </div>
         </div>
+
+        {/* Module Switcher - للمدير فقط */}
+        {user.role==="manager"&&(
+          <div style={{display:"flex",background:C.bg2,borderRadius:10,padding:3,gap:2}}>
+            <button onClick={()=>{setModule("finance");setView("home");}} style={{
+              padding:"7px 14px",borderRadius:8,border:"none",cursor:"pointer",
+              fontWeight:700,fontSize:12,transition:"all 0.2s",
+              background:module==="finance"?"linear-gradient(135deg,#C17B2F,#A8641A)":"transparent",
+              color:module==="finance"?"#fff":C.textMd,
+              boxShadow:module==="finance"?C.shadow:"none",
+            }}>💰 المالية</button>
+            <button onClick={()=>{setModule("admin");setView("adminHome");}} style={{
+              padding:"7px 14px",borderRadius:8,border:"none",cursor:"pointer",
+              fontWeight:700,fontSize:12,transition:"all 0.2s",
+              background:module==="admin"?"linear-gradient(135deg,#2557A7,#1d4ed8)":"transparent",
+              color:module==="admin"?"#fff":C.textMd,
+              boxShadow:module==="admin"?C.shadow:"none",
+            }}>💼 الإدارة</button>
+          </div>
+        )}
+
         <div style={{display:"flex",gap:8}}>
           <button style={S.iconBtn} onClick={()=>setManL(D?"mobile":"desktop")}>{D?"📱":"🖥️"}</button>
-          <button style={S.outBtn} onClick={()=>{setUser(null);setScreen("login");setPin("");setView("home");}}>خروج</button>
+          <button style={S.outBtn} onClick={()=>{setUser(null);setScreen("login");setPin("");setView("home");setModule("finance");}}>خروج</button>
         </div>
       </div>
 
@@ -2294,6 +2318,225 @@ export default function App() {
           </div>
         )}
         {!D&&<button style={S.canBtn} onClick={()=>setView("home")}>← رجوع</button>}
+      </div>
+    );
+
+    // ════════════════════════════════
+    // قسم الإدارة — ADMIN MODULE
+    // ════════════════════════════════
+
+    // ADMIN HOME
+    if(user.role==="manager"&&view==="adminHome") return (
+      <div>
+        <div style={S.secTitle}>💼 لوحة الإدارة</div>
+
+        {/* بطاقات القسم */}
+        <div style={{display:"grid",gridTemplateColumns:D?"repeat(4,1fr)":"1fr 1fr",gap:14,marginBottom:28}}>
+          {[
+            {icon:"🏗️",label:"المشاريع",sub:`${projs.length} مشروع نشط`,v:"adminProjects",bg:"linear-gradient(135deg,#1d4ed8,#2563eb)"},
+            {icon:"👷",label:"الموظفون",sub:`${salaryEmployees.length} موظف`,v:"adminEmployees",bg:"linear-gradient(135deg,#0f766e,#0d9488)"},
+            {icon:"📋",label:"المهام",sub:"قريباً",v:"adminTasks",bg:"linear-gradient(135deg,#7c3aed,#6d28d9)"},
+            {icon:"📊",label:"التقارير",sub:"قريباً",v:"adminReports",bg:"linear-gradient(135deg,#b45309,#92400e)"},
+          ].map(c=>(
+            <button key={c.v} style={{background:c.bg,borderRadius:18,padding:"20px 16px",border:"none",cursor:"pointer",textAlign:"right",color:"#fff",boxShadow:C.shadowMd,transition:"all 0.2s"}}
+              onClick={()=>setView(c.v)}>
+              <div style={{fontSize:32,marginBottom:8}}>{c.icon}</div>
+              <div style={{fontSize:16,fontWeight:900,letterSpacing:-0.3}}>{c.label}</div>
+              <div style={{fontSize:12,color:"rgba(255,255,255,0.75)",marginTop:3}}>{c.sub}</div>
+            </button>
+          ))}
+        </div>
+
+        {/* ملخص المشاريع */}
+        <div style={S.secTitle}>🏗️ ملخص المشاريع</div>
+        <div style={{...S.formCard,padding:0,overflow:"hidden",marginBottom:20}}>
+          {projs.length===0?<div style={{...S.empty,padding:20}}>ما في مشاريع</div>:(
+            <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
+              <thead>
+                <tr style={{background:C.bg2}}>
+                  {["المشروع","التخصص","المحافظة","القيمة","المصروف","الباقي"].map(h=>(
+                    <th key={h} style={{padding:"10px 14px",textAlign:"center",fontWeight:700,color:C.textMd,fontSize:12,borderBottom:`1px solid ${C.cardBorder}`}}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {projs.map((p,i)=>{
+                  const spent=txs.filter(t=>t.projectId===p.id&&t.type==="صرف").reduce((s,t)=>s+t.amount,0);
+                  const rem=(p.value||0)-spent;
+                  const pct=p.value?Math.min(100,Math.round(spent/p.value*100)):0;
+                  return(
+                    <tr key={p.id} style={{borderTop:`1px solid ${C.cardBorder}`,background:i%2===0?"#fff":C.bg}}>
+                      <td style={{padding:"10px 14px",fontWeight:800,color:C.text,textAlign:"right"}}>{p.name}</td>
+                      <td style={{padding:"10px 14px",textAlign:"center"}}><span style={{background:`rgba(37,87,167,0.1)`,color:"#2557A7",padding:"3px 10px",borderRadius:8,fontSize:11,fontWeight:700}}>{p.specialization||p.spec}</span></td>
+                      <td style={{padding:"10px 14px",textAlign:"center",color:C.textMd,fontSize:12}}>{p.province}</td>
+                      <td style={{padding:"10px 14px",textAlign:"center",fontWeight:700,color:C.textMd}}>{p.value?fmtD(p.value):"—"}</td>
+                      <td style={{padding:"10px 14px",textAlign:"center",fontWeight:700,color:C.red}}>{fmtD(spent)}</td>
+                      <td style={{padding:"10px 14px",textAlign:"center"}}>
+                        <span style={{fontWeight:800,color:rem>=0?C.green:C.red}}>{fmtD(Math.abs(rem))}</span>
+                        {p.value>0&&<div style={{background:C.bg3,borderRadius:999,height:4,marginTop:5,overflow:"hidden"}}><div style={{background:rem>=0?"#1A7A4A":"#C0392B",height:"100%",width:`${pct}%`,borderRadius:999}}/></div>}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          )}
+        </div>
+
+        {/* ملخص سريع للموظفين */}
+        <div style={S.secTitle}>👷 ملخص الموظفين</div>
+        <div style={{display:"grid",gridTemplateColumns:D?"repeat(auto-fill,minmax(200px,1fr)":"1fr 1fr",gap:12}}>
+          {salaryEmployees.map(e=>(
+            <div key={e.id} style={{background:C.card,border:`1px solid ${C.cardBorder}`,borderRadius:14,padding:14,boxShadow:C.shadow}}>
+              <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:8}}>
+                <div style={{width:36,height:36,borderRadius:10,background:"linear-gradient(135deg,#0f766e,#0d9488)",display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontSize:15,fontWeight:800}}>{e.name[0]}</div>
+                <div>
+                  <div style={{fontWeight:800,fontSize:14,color:C.text}}>{e.name}</div>
+                  <div style={{fontSize:11,color:C.textSm}}>{e.note||"موظف"}</div>
+                </div>
+              </div>
+              <div style={{display:"flex",justifyContent:"space-between",fontSize:12}}>
+                <span style={{color:C.textMd}}>الراتب الأساسي</span>
+                <span style={{fontWeight:700,color:C.gold}}>{fmt(e.baseSalary,e.currency)}</span>
+              </div>
+            </div>
+          ))}
+          {salaryEmployees.length===0&&<div style={{...S.empty,gridColumn:"1/-1"}}>ما في موظفين مسجلين</div>}
+        </div>
+      </div>
+    );
+
+    // ADMIN PROJECTS
+    if(user.role==="manager"&&view==="adminProjects") return (
+      <div>
+        <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:20}}>
+          {!D&&<button style={S.backBtn2} onClick={()=>setView("adminHome")}>←</button>}
+          <div style={S.secTitle}>🏗️ إدارة المشاريع</div>
+        </div>
+        <div style={{background:`rgba(37,87,167,0.06)`,border:`1px solid rgba(37,87,167,0.15)`,borderRadius:14,padding:"14px 18px",marginBottom:20,fontSize:13,color:"#2557A7",fontWeight:600}}>
+          💡 لإضافة أو حذف مشاريع، اذهب لقسم المالية ← المشاريع
+        </div>
+        {projs.map((p,i)=>{
+          const spent=txs.filter(t=>t.projectId===p.id&&t.type==="صرف").reduce((s,t)=>s+t.amount,0);
+          const workers=WORKERS.filter(u=>txs.some(t=>t.projectId===p.id&&t.userId===u.id));
+          const pct=p.value?Math.min(100,Math.round(spent/p.value*100)):0;
+          return(
+            <div key={p.id} style={{background:C.card,border:`1px solid ${C.cardBorder}`,borderRadius:18,padding:18,marginBottom:14,boxShadow:C.shadow}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:12}}>
+                <div>
+                  <div style={{fontWeight:900,fontSize:17,color:C.text,letterSpacing:-0.3}}>{p.name}</div>
+                  <div style={{display:"flex",gap:8,marginTop:6,flexWrap:"wrap"}}>
+                    <span style={{background:`rgba(37,87,167,0.1)`,color:"#2557A7",padding:"3px 10px",borderRadius:8,fontSize:12,fontWeight:700}}>{p.specialization||p.spec}</span>
+                    <span style={{background:`rgba(193,123,47,0.1)`,color:C.gold,padding:"3px 10px",borderRadius:8,fontSize:12,fontWeight:700}}>📍 {p.province}</span>
+                  </div>
+                </div>
+                <div style={{textAlign:"left"}}>
+                  <div style={{fontSize:11,color:C.textSm,marginBottom:2}}>نسبة الإنجاز</div>
+                  <div style={{fontSize:22,fontWeight:900,color:pct>=80?C.red:pct>=50?C.gold:C.green}}>{toAr(pct)}%</div>
+                </div>
+              </div>
+              {p.value>0&&(
+                <>
+                  <div style={{...S.progBar,marginBottom:8}}>
+                    <div style={{...S.progFill,width:`${pct}%`,background:pct>=80?"linear-gradient(90deg,#C0392B,#e74c3c)":pct>=50?"linear-gradient(90deg,#C17B2F,#f39c12)":"linear-gradient(90deg,#1A7A4A,#27ae60)"}}/>
+                  </div>
+                  <div style={{display:"flex",justifyContent:"space-between",fontSize:12,marginBottom:12}}>
+                    <span style={{color:C.red,fontWeight:600}}>↑ صُرف: {fmtD(spent)}</span>
+                    <span style={{color:C.green,fontWeight:600}}>باقي: {fmtD((p.value||0)-spent)}</span>
+                    <span style={{color:C.textMd}}>القيمة: {fmtD(p.value)}</span>
+                  </div>
+                </>
+              )}
+              {workers.length>0&&(
+                <div>
+                  <div style={{fontSize:11,color:C.textSm,fontWeight:700,marginBottom:6}}>العاملون على المشروع</div>
+                  <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+                    {workers.map(u=>(
+                      <span key={u.id} style={{background:C.bg2,border:`1px solid ${C.cardBorder}`,borderRadius:8,padding:"4px 10px",fontSize:12,fontWeight:600,color:C.textMd}}>
+                        {u.name}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })}
+        {projs.length===0&&<div style={S.empty}>ما في مشاريع</div>}
+      </div>
+    );
+
+    // ADMIN EMPLOYEES
+    if(user.role==="manager"&&view==="adminEmployees") return (
+      <div>
+        <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:20}}>
+          {!D&&<button style={S.backBtn2} onClick={()=>setView("adminHome")}>←</button>}
+          <div style={S.secTitle}>👷 الموظفون</div>
+        </div>
+        <div style={{background:`rgba(15,118,110,0.06)`,border:`1px solid rgba(15,118,110,0.2)`,borderRadius:14,padding:"14px 18px",marginBottom:20,fontSize:13,color:"#0f766e",fontWeight:600}}>
+          💡 لإضافة أو حذف موظفين، اذهب لقسم المالية ← الرواتب
+        </div>
+        <div style={D?S.empGrid:{}}>
+          {[...WORKERS,...salaryEmployees.filter(se=>!WORKERS.some(w=>w.name===se.name))].map((e,i)=>(
+            <div key={e.id||i} style={{background:C.card,border:`1px solid ${C.cardBorder}`,borderRadius:16,padding:18,boxShadow:C.shadow}}>
+              <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:12}}>
+                <div style={{...S.av,width:44,height:44,fontSize:19,borderRadius:14,background:e.role?avatarBg(e.role):"linear-gradient(135deg,#0f766e,#0d9488)"}}>{e.name[0]}</div>
+                <div>
+                  <div style={{fontWeight:800,fontSize:16,color:C.text}}>{e.name}</div>
+                  <div style={{fontSize:12,color:C.textSm,marginTop:2}}>
+                    {e.role==="partner"?"شريك":e.role==="accountant"?"محاسب":e.role?"موظف":"موظف رواتب"}
+                  </div>
+                </div>
+              </div>
+              {e.baseSalary&&(
+                <div style={{background:C.bg2,borderRadius:10,padding:"8px 12px",display:"flex",justifyContent:"space-between"}}>
+                  <span style={{fontSize:12,color:C.textMd,fontWeight:600}}>الراتب الأساسي</span>
+                  <span style={{fontSize:13,fontWeight:800,color:C.gold}}>{fmt(e.baseSalary,e.currency)}</span>
+                </div>
+              )}
+              {e.share&&(
+                <div style={{background:`rgba(124,58,237,0.06)`,borderRadius:10,padding:"8px 12px",marginTop:6,display:"flex",justifyContent:"space-between"}}>
+                  <span style={{fontSize:12,color:"#7c3aed",fontWeight:600}}>حصة بالشركة</span>
+                  <span style={{fontSize:13,fontWeight:800,color:"#7c3aed"}}>{toAr(e.share)}%</span>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+
+    // ADMIN TASKS (قريباً)
+    if(user.role==="manager"&&view==="adminTasks") return (
+      <div>
+        <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:20}}>
+          {!D&&<button style={S.backBtn2} onClick={()=>setView("adminHome")}>←</button>}
+          <div style={S.secTitle}>📋 المهام والمتابعة</div>
+        </div>
+        <div style={{textAlign:"center",padding:"60px 20px",background:C.card,borderRadius:24,border:`2px dashed ${C.cardBorder}`}}>
+          <div style={{fontSize:64,marginBottom:16}}>🚧</div>
+          <div style={{fontWeight:900,fontSize:22,color:C.text,marginBottom:8}}>قريباً</div>
+          <div style={{fontSize:14,color:C.textMd,maxWidth:300,margin:"0 auto",lineHeight:1.6}}>
+            نظام متابعة المهام والمشاريع قيد التطوير.<br/>سيتضمن تعيين مهام، متابعة الإنجاز، والتقارير.
+          </div>
+        </div>
+      </div>
+    );
+
+    // ADMIN REPORTS (قريباً)
+    if(user.role==="manager"&&view==="adminReports") return (
+      <div>
+        <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:20}}>
+          {!D&&<button style={S.backBtn2} onClick={()=>setView("adminHome")}>←</button>}
+          <div style={S.secTitle}>📊 التقارير الإدارية</div>
+        </div>
+        <div style={{textAlign:"center",padding:"60px 20px",background:C.card,borderRadius:24,border:`2px dashed ${C.cardBorder}`}}>
+          <div style={{fontSize:64,marginBottom:16}}>📊</div>
+          <div style={{fontWeight:900,fontSize:22,color:C.text,marginBottom:8}}>قريباً</div>
+          <div style={{fontSize:14,color:C.textMd,maxWidth:300,margin:"0 auto",lineHeight:1.6}}>
+            التقارير الإدارية الشاملة قيد التطوير.<br/>ستتضمن تقارير المشاريع، الحضور، والأداء.
+          </div>
+        </div>
       </div>
     );
 
