@@ -73,6 +73,13 @@ export default function App() {
   const [debtForm,setDebtForm]= useState({name:"",projectId:"",amount:"",currency:"دينار",lastPayment:"",status:"غير مسدد",note:""});
   const [showDebtForm,setShowDebtForm]=useState(false);
   const [personalDebts,setPersonalDebts]=useState([]);
+  const [salaryEmployees,setSalaryEmployees]=useState([]); // قائمة الموظفين والرواتب
+  const [salaryPayments,setSalaryPayments]=useState([]); // سجل دفعات الرواتب
+  const [salEmpForm,setSalEmpForm]=useState({name:"",baseSalary:"",currency:"دينار",note:""});
+  const [showSalEmpForm,setShowSalEmpForm]=useState(false);
+  const [salPayForm,setSalPayForm]=useState({employeeId:"",amount:"",month:"",date:today(),note:""});
+  const [showSalPayForm,setShowSalPayForm]=useState(false);
+  const [salFilterMonth,setSalFilterMonth]=useState("");
   const imgRef = useRef();
 
   useEffect(() => {
@@ -83,6 +90,8 @@ export default function App() {
     u.push(onSnapshot(doc(db,"settings","company"), s => { if(s.exists()) setCompSet(s.data()); }));
     u.push(onSnapshot(query(collection(db,"debts"),orderBy("createdAt","desc")), s => setDebts(s.docs.map(d=>({id:d.id,...d.data()})))));
     u.push(onSnapshot(query(collection(db,"personalDebts"),orderBy("createdAt","desc")), s => setPersonalDebts(s.docs.map(d=>({id:d.id,...d.data()})))));
+    u.push(onSnapshot(collection(db,"salaryEmployees"), s => setSalaryEmployees(s.docs.map(d=>({id:d.id,...d.data()})))));
+    u.push(onSnapshot(query(collection(db,"salaryPayments"),orderBy("date","desc")), s => setSalaryPayments(s.docs.map(d=>({id:d.id,...d.data()})))));
     return () => u.forEach(f=>f());
   }, []);
 
@@ -257,6 +266,60 @@ export default function App() {
   };
   const delPersonalDebt = async id=>{ if(window.confirm("تحذف هذه السلفة؟")) await deleteDoc(doc(db,"personalDebts",id)); };
 
+  // رواتب
+  const addSalaryEmployee = async () => {
+    if(!salEmpForm.name.trim()||!salEmpForm.baseSalary) return;
+    await addDoc(collection(db,"salaryEmployees"),{
+      name:salEmpForm.name.trim(),
+      baseSalary:Number(salEmpForm.baseSalary),
+      currency:salEmpForm.currency,
+      note:salEmpForm.note||"",
+      createdAt:new Date().toISOString(),
+    });
+    setSalEmpForm({name:"",baseSalary:"",currency:"دينار",note:""});
+    setShowSalEmpForm(false);
+  };
+
+  const delSalaryEmployee = async id=>{
+    if(window.confirm("تحذف هذا الموظف من قائمة الرواتب؟")) await deleteDoc(doc(db,"salaryEmployees",id));
+  };
+
+  const paySalary = async () => {
+    if(!salPayForm.employeeId||!salPayForm.amount||!salPayForm.month||!salPayForm.date) return;
+    const emp = salaryEmployees.find(e=>e.id===salPayForm.employeeId);
+    // تسجيل دفعة الراتب
+    await addDoc(collection(db,"salaryPayments"),{
+      employeeId:salPayForm.employeeId,
+      employeeName:emp?.name||"",
+      amount:Number(salPayForm.amount),
+      currency:emp?.currency||"دينار",
+      month:salPayForm.month,
+      date:salPayForm.date,
+      note:salPayForm.note||"",
+      createdAt:new Date().toISOString(),
+    });
+    // تسجيل صرف على أحمد
+    const accountant = USERS.find(u=>u.role==="accountant");
+    if(accountant){
+      await addDoc(collection(db,"transactions"),{
+        userId:accountant.id, userName:accountant.name,
+        projectId:"", projectName:"",
+        type:"صرف", amount:Number(salPayForm.amount),
+        currency:emp?.currency||"دينار",
+        note:`راتب ${emp?.name||""} — ${salPayForm.month}`,
+        date:salPayForm.date, image:null, isPersonal:false, isAdvance:false,
+        isSalary:true,
+        createdAt:new Date().toISOString(),
+      });
+    }
+    setSalPayForm({employeeId:"",amount:"",month:"",date:today(),note:""});
+    setShowSalPayForm(false);
+  };
+
+  const delSalaryPayment = async id=>{
+    if(window.confirm("تحذف هذه الدفعة؟")) await deleteDoc(doc(db,"salaryPayments",id));
+  };
+
   const bal = (list,ob,cur) => {
     const obR=cur==="دينار"?(ob?.dinarReceived||0):(ob?.dollarReceived||0);
     const obS=cur==="دينار"?(ob?.dinarSpent||0):(ob?.dollarSpent||0);
@@ -317,9 +380,9 @@ export default function App() {
   };
   const pr = selProj ? projRep(selProj,pfFrom,pfTo) : null;
 
-  const navMgr    = [{icon:"📊",label:"الملخص",v:"home"},{icon:"📄",label:"الكشوفات",v:"statements"},{icon:"📋",label:"المعاملات",v:"allTx"},{icon:"🏗️",label:"المشاريع",v:"projects"},{icon:"💰",label:"المالية",v:"projReport"},{icon:"🏢",label:"الشركة",v:"company"},{icon:"💳",label:"الديون",v:"debts"},{icon:"⚖️",label:"افتتاحي",v:"opening"}];
+  const navMgr = [{icon:"📊",label:"الملخص",v:"home"},{icon:"📄",label:"الكشوفات",v:"statements"},{icon:"📋",label:"المعاملات",v:"allTx"},{icon:"🏗️",label:"المشاريع",v:"projects"},{icon:"💰",label:"المالية",v:"projReport"},{icon:"🏢",label:"الشركة",v:"company"},{icon:"💳",label:"الديون",v:"debts"},{icon:"💵",label:"الرواتب",v:"salaries"},{icon:"⚖️",label:"افتتاحي",v:"opening"}];
   const navWorker = user?.role==="accountant"
-    ? [{icon:"🏠",label:"الرئيسية",v:"home"},{icon:"➕",label:"استلام/سلفة",v:"add"}]
+    ? [{icon:"🏠",label:"الرئيسية",v:"home"},{icon:"➕",label:"استلام/سلفة",v:"add"},{icon:"💵",label:"الرواتب",v:"salaries"}]
     : [{icon:"🏠",label:"الرئيسية",v:"home"},{icon:"➕",label:"تسجيل صرف",v:"add"}];
   const navItems  = user?.role==="manager" ? navMgr : navWorker;
 
@@ -788,7 +851,7 @@ export default function App() {
 
           {!D&&(
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginTop:4}}>
-              {[["📄 الكشوفات","statements","linear-gradient(135deg,#1A7A4A,#147A40)"],["📋 المعاملات","allTx","linear-gradient(135deg,#1d4ed8,#1455cc)"],["🏗️ المشاريع","projects","linear-gradient(135deg,#065f46,#047857)"],["💰 كشف المشاريع","projReport","linear-gradient(135deg,#b45309,#92400e)"],["🏢 كشف الشركة","company","linear-gradient(135deg,#7c3aed,#5b21b6)"],["💳 الديون","debts","linear-gradient(135deg,#C0392B,#A93226)"]].map(([l,v,bg])=>(
+              {[["📄 الكشوفات","statements","linear-gradient(135deg,#1A7A4A,#147A40)"],["📋 المعاملات","allTx","linear-gradient(135deg,#1d4ed8,#1455cc)"],["🏗️ المشاريع","projects","linear-gradient(135deg,#065f46,#047857)"],["💰 كشف المشاريع","projReport","linear-gradient(135deg,#b45309,#92400e)"],["🏢 كشف الشركة","company","linear-gradient(135deg,#7c3aed,#5b21b6)"],["💳 الديون","debts","linear-gradient(135deg,#C0392B,#A93226)"],["💵 الرواتب","salaries","linear-gradient(135deg,#1A7A4A,#0f5c36)"]].map(([l,v,bg])=>(
                 <button key={v} style={{...S.goldBtn,background:bg,color:"#fff",marginBottom:0}} onClick={()=>setView(v)}>{l}</button>
               ))}
               <button style={{...S.goldBtn,background:"linear-gradient(135deg,#374151,#1f2937)",color:"#fff",gridColumn:"1/-1",marginBottom:0}} onClick={()=>setView("opening")}>⚖️ الأرصدة الافتتاحية</button>
@@ -1164,6 +1227,219 @@ export default function App() {
                   )}
                 </>
               )}
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // SALARIES
+    if((user.role==="manager"||user.role==="accountant")&&view==="salaries") {
+      const filteredPayments = salaryPayments.filter(p=>!salFilterMonth||p.month===salFilterMonth);
+      const totalPaid = filteredPayments.reduce((s,p)=>s+p.amount,0);
+      const months = [...new Set(salaryPayments.map(p=>p.month))].sort().reverse();
+
+      // إجمالي الرواتب المستحقة هذا الشهر
+      const currentMonth = new Date().toISOString().slice(0,7);
+      const paidThisMonth = salaryPayments.filter(p=>p.month===currentMonth);
+      const totalBaseSalaries = salaryEmployees.reduce((s,e)=>s+e.baseSalary,0);
+      const paidThisMonthAmt = paidThisMonth.reduce((s,p)=>s+p.amount,0);
+
+      return (
+        <div>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
+            <div style={S.secTitle}>💵 سجل الرواتب</div>
+          </div>
+
+          {/* ملخص الشهر الحالي */}
+          <div style={{display:"grid",gridTemplateColumns:D?"repeat(3,1fr)":"1fr 1fr",gap:12,marginBottom:20}}>
+            <div style={{background:"linear-gradient(135deg,#1A7A4A,#147A40)",borderRadius:16,padding:16,boxShadow:C.shadowMd}}>
+              <div style={{fontSize:11,color:"rgba(255,255,255,0.8)",marginBottom:6,fontWeight:600}}>إجمالي الرواتب الأساسية</div>
+              <div style={{fontSize:20,fontWeight:900,color:"#fff",letterSpacing:-0.5}}>{fmtD(totalBaseSalaries)}</div>
+            </div>
+            <div style={{background:"linear-gradient(135deg,#C17B2F,#A8641A)",borderRadius:16,padding:16,boxShadow:C.shadowMd}}>
+              <div style={{fontSize:11,color:"rgba(255,255,255,0.8)",marginBottom:6,fontWeight:600}}>مدفوع هذا الشهر</div>
+              <div style={{fontSize:20,fontWeight:900,color:"#fff",letterSpacing:-0.5}}>{fmtD(paidThisMonthAmt)}</div>
+            </div>
+            <div style={{background:"linear-gradient(135deg,#C0392B,#A93226)",borderRadius:16,padding:16,boxShadow:C.shadowMd,gridColumn:D?"auto":"1/-1"}}>
+              <div style={{fontSize:11,color:"rgba(255,255,255,0.8)",marginBottom:6,fontWeight:600}}>متبقي هذا الشهر</div>
+              <div style={{fontSize:20,fontWeight:900,color:"#fff",letterSpacing:-0.5}}>{fmtD(Math.max(0,totalBaseSalaries-paidThisMonthAmt))}</div>
+            </div>
+          </div>
+
+          <div style={D?{display:"flex",gap:20}:{}}>
+            {/* قائمة الموظفين */}
+            <div style={D?{width:320,flexShrink:0}:{}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+                <div style={{fontSize:15,fontWeight:700,color:C.text}}>قائمة الموظفين</div>
+                <button style={{...S.goldBtn,width:"auto",padding:"8px 16px",marginBottom:0,fontSize:13}} onClick={()=>setShowSalEmpForm(v=>!v)}>
+                  {showSalEmpForm?"✕":"+ إضافة"}
+                </button>
+              </div>
+
+              {showSalEmpForm&&(
+                <div style={{...S.formCard,marginBottom:16}}>
+                  <div style={S.fLbl}>اسم الموظف</div>
+                  <input style={S.inp} placeholder="مثال: علي حسن" value={salEmpForm.name} onChange={e=>setSalEmpForm(f=>({...f,name:e.target.value}))}/>
+                  <div style={S.fLbl}>الراتب الأساسي</div>
+                  <input style={S.inp} type="number" placeholder="٠" value={salEmpForm.baseSalary} onChange={e=>setSalEmpForm(f=>({...f,baseSalary:e.target.value}))}/>
+                  <div style={S.fLbl}>العملة</div>
+                  <div style={S.tRow}>
+                    <button style={{...S.tBtn,...(salEmpForm.currency==="دينار"?{background:"rgba(37,87,167,0.15)",border:`1px solid #2557A7`,color:"#2557A7"}:{})}} onClick={()=>setSalEmpForm(f=>({...f,currency:"دينار"}))}>🇮🇶 دينار</button>
+                    <button style={{...S.tBtn,...(salEmpForm.currency==="دولار"?{background:"rgba(37,87,167,0.15)",border:`1px solid #2557A7`,color:"#2557A7"}:{})}} onClick={()=>setSalEmpForm(f=>({...f,currency:"دولار"}))}>🇺🇸 دولار</button>
+                  </div>
+                  <div style={S.fLbl}>ملاحظة</div>
+                  <input style={S.inp} placeholder="مثال: موظف دوام كامل" value={salEmpForm.note} onChange={e=>setSalEmpForm(f=>({...f,note:e.target.value}))}/>
+                  <button style={S.subBtn} onClick={addSalaryEmployee}>+ إضافة الموظف</button>
+                </div>
+              )}
+
+              {/* جدول الموظفين */}
+              <div style={{...S.formCard,padding:0,overflow:"hidden"}}>
+                {salaryEmployees.length===0?(
+                  <div style={{...S.empty,padding:24}}>ما في موظفين بعد</div>
+                ):(
+                  <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
+                    <thead>
+                      <tr style={{background:C.bg2}}>
+                        <th style={{padding:"10px 14px",textAlign:"right",fontWeight:700,color:C.textMd,fontSize:12}}>الموظف</th>
+                        <th style={{padding:"10px 14px",textAlign:"center",fontWeight:700,color:C.textMd,fontSize:12}}>الراتب</th>
+                        <th style={{padding:"10px 14px",textAlign:"center",fontWeight:700,color:C.textMd,fontSize:12}}></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {salaryEmployees.map((e,i)=>(
+                        <tr key={e.id} style={{borderTop:`1px solid ${C.cardBorder}`,background:i%2===0?"#fff":C.bg}}>
+                          <td style={{padding:"10px 14px"}}>
+                            <div style={{fontWeight:700,color:C.text}}>{e.name}</div>
+                            {e.note&&<div style={{fontSize:11,color:C.textSm,marginTop:2}}>{e.note}</div>}
+                          </td>
+                          <td style={{padding:"10px 14px",textAlign:"center",fontWeight:700,color:C.gold}}>
+                            {fmt(e.baseSalary,e.currency)}
+                          </td>
+                          <td style={{padding:"10px 14px",textAlign:"center"}}>
+                            <button style={{background:"transparent",border:"none",color:C.red,cursor:"pointer",fontSize:16}} onClick={()=>delSalaryEmployee(e.id)}>🗑️</button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot>
+                      <tr style={{background:C.bg2,borderTop:`2px solid ${C.cardBorder}`}}>
+                        <td style={{padding:"10px 14px",fontWeight:800,color:C.text,fontSize:13}}>الإجمالي</td>
+                        <td style={{padding:"10px 14px",textAlign:"center",fontWeight:800,color:C.gold,fontSize:14}}>{fmtD(totalBaseSalaries)}</td>
+                        <td/>
+                      </tr>
+                    </tfoot>
+                  </table>
+                )}
+              </div>
+            </div>
+
+            {/* سجل الدفعات */}
+            <div style={{flex:1}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12,flexWrap:"wrap",gap:8}}>
+                <div style={{fontSize:15,fontWeight:700,color:C.text}}>سجل دفعات الرواتب</div>
+                <div style={{display:"flex",gap:8,alignItems:"center"}}>
+                  <select style={{...S.sel,width:"auto",padding:"8px 12px",fontSize:13}} value={salFilterMonth} onChange={e=>setSalFilterMonth(e.target.value)}>
+                    <option value="">كل الأشهر</option>
+                    {months.map(m=><option key={m} value={m}>{m}</option>)}
+                  </select>
+                  <button style={{...S.goldBtn,width:"auto",padding:"8px 16px",marginBottom:0,fontSize:13}} onClick={()=>setShowSalPayForm(v=>!v)}>
+                    {showSalPayForm?"✕":"💵 صرف راتب"}
+                  </button>
+                </div>
+              </div>
+
+              {showSalPayForm&&(
+                <div style={{...S.formCard,marginBottom:16}}>
+                  <div style={D?{display:"flex",gap:12}:{}}>
+                    <div style={D?{flex:1}:{}}>
+                      <div style={S.fLbl}>الموظف</div>
+                      <select style={S.sel} value={salPayForm.employeeId} onChange={e=>{
+                        const emp=salaryEmployees.find(x=>x.id===e.target.value);
+                        setSalPayForm(f=>({...f,employeeId:e.target.value,amount:emp?.baseSalary||""}));
+                      }}>
+                        <option value="">اختر الموظف</option>
+                        {salaryEmployees.map(e=><option key={e.id} value={e.id}>{e.name}</option>)}
+                      </select>
+                    </div>
+                    <div style={D?{flex:1}:{}}>
+                      <div style={S.fLbl}>الشهر</div>
+                      <input style={S.inp} type="month" value={salPayForm.month} onChange={e=>setSalPayForm(f=>({...f,month:e.target.value}))}/>
+                    </div>
+                  </div>
+                  <div style={D?{display:"flex",gap:12}:{}}>
+                    <div style={D?{flex:1}:{}}>
+                      <div style={S.fLbl}>المبلغ المدفوع</div>
+                      <input style={S.inp} type="number" placeholder="٠" value={salPayForm.amount} onChange={e=>setSalPayForm(f=>({...f,amount:e.target.value}))}/>
+                    </div>
+                    <div style={D?{flex:1}:{}}>
+                      <div style={S.fLbl}>تاريخ الدفع</div>
+                      <input style={S.inp} type="date" value={salPayForm.date} onChange={e=>setSalPayForm(f=>({...f,date:e.target.value}))}/>
+                    </div>
+                  </div>
+                  <div style={S.fLbl}>ملاحظة</div>
+                  <input style={S.inp} placeholder="مثال: راتب كامل، سلفة راتب..." value={salPayForm.note} onChange={e=>setSalPayForm(f=>({...f,note:e.target.value}))}/>
+                  <div style={{background:`rgba(192,57,43,0.06)`,border:`1px solid rgba(192,57,43,0.15)`,borderRadius:10,padding:"10px 14px",marginTop:12,fontSize:13,color:C.red,fontWeight:600}}>
+                    ⚠️ سينقص المبلغ من رصيد أحمد تلقائياً
+                  </div>
+                  <button style={S.subBtn} onClick={paySalary}>💾 تسجيل الراتب</button>
+                </div>
+              )}
+
+              {/* جدول الدفعات */}
+              <div style={{...S.formCard,padding:0,overflow:"hidden"}}>
+                {filteredPayments.length===0?(
+                  <div style={{...S.empty,padding:24}}>ما في دفعات مسجلة</div>
+                ):(
+                  <>
+                    <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
+                      <thead>
+                        <tr style={{background:C.bg2}}>
+                          <th style={{padding:"10px 14px",textAlign:"right",fontWeight:700,color:C.textMd,fontSize:12}}>الموظف</th>
+                          <th style={{padding:"10px 14px",textAlign:"center",fontWeight:700,color:C.textMd,fontSize:12}}>الشهر</th>
+                          <th style={{padding:"10px 14px",textAlign:"center",fontWeight:700,color:C.textMd,fontSize:12}}>المبلغ</th>
+                          <th style={{padding:"10px 14px",textAlign:"center",fontWeight:700,color:C.textMd,fontSize:12}}>تاريخ الدفع</th>
+                          <th style={{padding:"10px 14px",textAlign:"center",fontWeight:700,color:C.textMd,fontSize:12}}>ملاحظة</th>
+                          <th style={{padding:"10px 14px",textAlign:"center",fontWeight:700,color:C.textMd,fontSize:12}}></th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {filteredPayments.map((p,i)=>(
+                          <tr key={p.id} style={{borderTop:`1px solid ${C.cardBorder}`,background:i%2===0?"#fff":C.bg}}>
+                            <td style={{padding:"10px 14px"}}>
+                              <div style={{fontWeight:700,color:C.text}}>{p.employeeName}</div>
+                            </td>
+                            <td style={{padding:"10px 14px",textAlign:"center"}}>
+                              <span style={{background:`rgba(193,123,47,0.1)`,color:C.gold,fontWeight:700,padding:"3px 10px",borderRadius:8,fontSize:12}}>{p.month}</span>
+                            </td>
+                            <td style={{padding:"10px 14px",textAlign:"center",fontWeight:800,color:C.red}}>
+                              {fmt(p.amount,p.currency)}
+                            </td>
+                            <td style={{padding:"10px 14px",textAlign:"center",color:C.textMd,fontSize:12}}>
+                              📅 {p.date}
+                            </td>
+                            <td style={{padding:"10px 14px",textAlign:"center",color:C.textSm,fontSize:12}}>
+                              {p.note||"-"}
+                            </td>
+                            <td style={{padding:"10px 14px",textAlign:"center"}}>
+                              <button style={{background:"transparent",border:"none",color:C.red,cursor:"pointer",fontSize:14}} onClick={()=>delSalaryPayment(p.id)}>🗑️</button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                      <tfoot>
+                        <tr style={{background:C.bg2,borderTop:`2px solid ${C.cardBorder}`}}>
+                          <td colSpan={2} style={{padding:"10px 14px",fontWeight:800,color:C.text,fontSize:13}}>الإجمالي المدفوع</td>
+                          <td style={{padding:"10px 14px",textAlign:"center",fontWeight:800,color:C.red,fontSize:14}}>{fmtD(totalPaid)}</td>
+                          <td colSpan={3}/>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </>
+                )}
+              </div>
+              {!D&&<button style={S.canBtn} onClick={()=>setView("home")}>← رجوع</button>}
             </div>
           </div>
         </div>
