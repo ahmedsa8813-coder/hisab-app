@@ -139,6 +139,33 @@ export default function App() {
   const addTx = async () => {
     if(!form.amount||!form.date)return;
 
+    // سحب شخصي لأحمد
+    if(form.isPersonal&&user.role==="accountant"){
+      const amt=Number(form.amount);
+      await addDoc(collection(db,"transactions"),{
+        userId:user.id, userName:user.name,
+        projectId:"", projectName:"",
+        type:"صرف", amount:amt,
+        currency:form.currency,
+        note:`سحب شخصي${form.note?" — "+form.note:""}`,
+        date:form.date, image:null,
+        isPersonal:true, isAdvance:false,
+        createdAt:new Date().toISOString(),
+      });
+      // تسجيل في personalDebts على نفسه (للكشف بالشركة)
+      await addDoc(collection(db,"personalDebts"),{
+        debtorId:user.id, debtorName:user.name,
+        creditorId:"company", creditorName:"الشركة",
+        amount:amt, currency:form.currency,
+        remaining:amt, status:"غير مسدد",
+        note:form.note||"", date:form.date,
+        createdAt:new Date().toISOString(),
+      });
+      setFormOK(true);
+      setTimeout(()=>{setFormOK(false);setForm({type:"استلام",projectId:"",amount:"",currency:"دينار",note:"",date:today(),image:null,isPersonal:false,isAdvance:false,advanceTo:"",advanceIsPersonal:false,receiveType:"",generalLabel:"",isForeman:false,foremanId:"",foremanName:""});setView("home");},1500);
+      return;
+    }
+
     // فورمن
     if(form.isForeman){
       if(!form.foremanId)return;
@@ -1025,17 +1052,31 @@ export default function App() {
             {user.role==="accountant"&&(
               <>
                 <div style={S.fLbl}>نوع المعاملة</div>
-                <div style={S.tRow}>
-                  <button style={{...S.tBtn,...(!form.isAdvance&&!form.isForeman?{background:"rgba(26,122,74,0.15)",border:`1px solid #1A7A4A`,color:"#1A7A4A"}:{})}} onClick={()=>setForm(f=>({...f,isAdvance:false,isForeman:false,type:"استلام",isPersonal:false}))}>
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+                  <button style={{...S.tBtn,...(!form.isAdvance&&!form.isForeman&&!form.isPersonal?{background:"rgba(26,122,74,0.15)",border:`1px solid #1A7A4A`,color:"#1A7A4A"}:{})}}
+                    onClick={()=>setForm(f=>({...f,isAdvance:false,isForeman:false,isPersonal:false,type:"استلام"}))}>
                     ↓ استلام
                   </button>
-                  <button style={{...S.tBtn,...(form.isAdvance?{background:"rgba(193,123,47,0.15)",border:`1px solid ${C.gold}`,color:C.gold}:{})}} onClick={()=>setForm(f=>({...f,isAdvance:true,isForeman:false,type:"صرف",isPersonal:false,projectId:""}))}>
+                  <button style={{...S.tBtn,...(form.isAdvance?{background:"rgba(193,123,47,0.15)",border:`1px solid ${C.gold}`,color:C.gold}:{})}}
+                    onClick={()=>setForm(f=>({...f,isAdvance:true,isForeman:false,isPersonal:false,type:"صرف",projectId:""}))}>
                     💸 سلفة لشخص
                   </button>
-                  <button style={{...S.tBtn,...(form.isForeman?{background:"rgba(180,83,9,0.15)",border:`1px solid #b45309`,color:"#b45309"}:{})}} onClick={()=>setForm(f=>({...f,isForeman:true,isAdvance:false,type:"صرف",isPersonal:false,projectId:"",advanceTo:""}))}>
+                  <button style={{...S.tBtn,...(form.isForeman?{background:"rgba(180,83,9,0.15)",border:`1px solid #b45309`,color:"#b45309"}:{})}}
+                    onClick={()=>setForm(f=>({...f,isForeman:true,isAdvance:false,isPersonal:false,type:"صرف",projectId:"",advanceTo:""}))}>
                     👷 دفع لفورمن
                   </button>
+                  <button style={{...S.tBtn,...(form.isPersonal?{background:"rgba(107,63,160,0.15)",border:`1px solid #6B3FA0`,color:"#6B3FA0"}:{})}}
+                    onClick={()=>setForm(f=>({...f,isPersonal:true,isAdvance:false,isForeman:false,type:"صرف",projectId:""}))}>
+                    👤 سحب شخصي
+                  </button>
                 </div>
+
+                {/* سحب شخصي لأحمد */}
+                {form.isPersonal&&(
+                  <div style={{background:"rgba(107,63,160,0.08)",border:`1px solid rgba(107,63,160,0.2)`,borderRadius:10,padding:"12px 14px",marginTop:8,fontSize:13,color:"#6B3FA0",fontWeight:600}}>
+                    ⚠️ هذا المبلغ سينقص من رصيدك ويُحسب ضمن حصتك بالشركة (١٥%)
+                  </div>
+                )}
 
                 {/* دفع لفورمن */}
                 {form.isForeman&&(
