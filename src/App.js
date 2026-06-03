@@ -2992,12 +2992,19 @@ function ForemenPage({D,foremen,projs,txs,foremanTrust,onAdd,onDel,onSettle,S,C,
   // حساب الأمانات لكل فورمن
   const getForemanStats = (f) => {
     const fTrust  = foremanTrust.filter(t=>t.foremanId===f.id);
-    const totalReceived = fTrust.reduce((s,t)=>s+t.amount,0);           // كل ما استلم
-    const totalSettled  = fTrust.reduce((s,t)=>s+(t.settledAmount||0),0); // كل ما سوّى
-    const pending       = totalReceived - totalSettled;                   // عنده غير مسوّى
-    // معاملات عمل من txs
-    const fTxs = txs.filter(t=>t.foremanId===f.id||t.userId===f.id);
-    return {fTrust, fTxs, totalReceived, totalSettled, pending};
+    // ما استلم الفورمن من أحمد (أمانات)
+    const totalReceived = fTrust.reduce((s,t)=>s+t.amount,0);
+    // ما سوّاه (تسويات)
+    const totalSettled  = fTrust.reduce((s,t)=>s+(t.settledAmount||0),0);
+    // الباقي بذمته
+    const pending = totalReceived - totalSettled;
+    // تسويات من txs (اختياري للعرض)
+    const fTxs = txs.filter(t=>(t.foremanId===f.id||t.userId===f.id)&&t.isForemanSettle);
+    return {fTrust, fTxs, totalReceived, totalSettled, pending,
+      received: totalReceived,   // ما استلم
+      spent:    totalSettled,    // ما سوّى
+      balance:  pending          // الباقي بذمته
+    };
   };
 
   return (
@@ -3072,18 +3079,31 @@ function ForemenPage({D,foremen,projs,txs,foremanTrust,onAdd,onDel,onSettle,S,C,
                 {/* ملخص الحساب */}
                 <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
                   <div style={{background:"rgba(26,122,74,0.08)",borderRadius:10,padding:"8px 10px",textAlign:"center"}}>
-                    <div style={{fontSize:10,color:C.textSm,fontWeight:700,marginBottom:3}}>استلم</div>
-                    <div style={{fontSize:14,fontWeight:800,color:"#1A7A4A"}}>{fmtD(stats.received)}</div>
+                    <div style={{fontSize:10,color:C.textSm,fontWeight:700,marginBottom:3}}>💰 استلم</div>
+                    <div style={{fontSize:14,fontWeight:800,color:"#1A7A4A"}}>{fmtD(stats.totalReceived)}</div>
                   </div>
-                  <div style={{background:"rgba(192,57,43,0.08)",borderRadius:10,padding:"8px 10px",textAlign:"center"}}>
-                    <div style={{fontSize:10,color:C.textSm,fontWeight:700,marginBottom:3}}>صرف</div>
-                    <div style={{fontSize:14,fontWeight:800,color:C.red}}>{fmtD(stats.spent)}</div>
+                  <div style={{background:"rgba(37,87,167,0.08)",borderRadius:10,padding:"8px 10px",textAlign:"center"}}>
+                    <div style={{fontSize:10,color:C.textSm,fontWeight:700,marginBottom:3}}>✅ سوّى</div>
+                    <div style={{fontSize:14,fontWeight:800,color:"#2557A7"}}>{fmtD(stats.totalSettled)}</div>
                   </div>
-                  <div style={{background:stats.balance>=0?"rgba(26,122,74,0.08)":"rgba(192,57,43,0.08)",borderRadius:10,padding:"8px 10px",textAlign:"center"}}>
-                    <div style={{fontSize:10,color:C.textSm,fontWeight:700,marginBottom:3}}>الرصيد</div>
-                    <div style={{fontSize:14,fontWeight:800,color:stats.balance>=0?"#1A7A4A":C.red}}>{fmtD(Math.abs(stats.balance))}</div>
+                  <div style={{background:stats.pending<=0?"rgba(26,122,74,0.08)":"rgba(192,57,43,0.1)",borderRadius:10,padding:"8px 10px",textAlign:"center",border:stats.pending>0?`1px solid rgba(192,57,43,0.2)`:"none"}}>
+                    <div style={{fontSize:10,color:C.textSm,fontWeight:700,marginBottom:3}}>⏳ بذمته</div>
+                    <div style={{fontSize:14,fontWeight:800,color:stats.pending>0?C.red:"#1A7A4A"}}>{fmtD(stats.pending)}</div>
                   </div>
                 </div>
+
+                {/* شريط تقدم التسوية */}
+                {stats.totalReceived>0&&(
+                  <div style={{marginTop:8}}>
+                    <div style={{background:C.bg3,borderRadius:999,height:5,overflow:"hidden"}}>
+                      <div style={{background:stats.pending<=0?"linear-gradient(90deg,#1A7A4A,#27ae60)":"linear-gradient(90deg,#2557A7,#1d4ed8)",height:"100%",borderRadius:999,
+                        width:`${Math.min(100,Math.round(stats.totalSettled/stats.totalReceived*100))}%`,transition:"width 0.5s"}}/>
+                    </div>
+                    <div style={{fontSize:10,color:C.textSm,marginTop:3,textAlign:"left"}}>
+                      سوّى {toAr(Math.min(100,Math.round(stats.totalSettled/stats.totalReceived*100)))}%
+                    </div>
+                  </div>
+                )}
 
                 {f.note&&<div style={{fontSize:12,color:C.textSm,marginTop:8}}>📝 {f.note}</div>}
 
