@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useRef } from "react";
 import { db } from "./firebase";
 import { collection, addDoc, onSnapshot, query, orderBy, deleteDoc, doc, setDoc } from "firebase/firestore";
@@ -947,7 +948,22 @@ export default function App() {
         {!D&&<button style={S.goldBtn} onClick={()=>{setView("add");setForm({type:user.role==="accountant"?"استلام":"صرف",projectId:"",amount:"",currency:"دينار",note:"",date:today(),image:null,isPersonal:false,isAdvance:false,advanceTo:""});}}>
           {user.role==="accountant"?"💰 استلام أو سلفة":"➕ تسجيل مصروف"}
         </button>}
-        <div style={S.secTitle}>سجل المعاملات</div>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12,flexWrap:"wrap",gap:8}}>
+          <div style={S.secTitle}>سجل المعاملات</div>
+          {user.role==="accountant"&&(
+            <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+              {[["all","الكل",C.gold],["استلام","↓ استلام","#1A7A4A"],["صرف","↑ صرف","#C0392B"]].map(([v,l,col])=>(
+                <button key={v} style={{
+                  padding:"6px 12px",borderRadius:8,border:`1px solid`,cursor:"pointer",
+                  fontSize:12,fontWeight:700,
+                  background:fuType===v?`rgba(${v==="استلام"?"26,122,74":v==="صرف"?"192,57,43":"193,123,47"},0.1)`:"transparent",
+                  color:fuType===v?col:C.textMd,
+                  borderColor:fuType===v?col:C.cardBorder,
+                }} onClick={()=>setFuType(v)}>{l}</button>
+              ))}
+            </div>
+          )}
+        </div>
         {/* ملخص السلف لأحمد */}
         {user.role==="accountant"&&(()=>{
           const myPersonalDebts = personalDebts.filter(d=>d.creditorId===user.id&&d.status!=="مسدد كامل");
@@ -976,9 +992,17 @@ export default function App() {
             </div>
           );
         })()}
-        {myTxs.length===0?<div style={S.empty}>ما عندك معاملات بعد</div>:(
-          <div style={D?S.txGrid:{}}>{myTxs.map(t=><TxCard key={t.id} t={t} onImg={setViewImg}/>)}</div>
-        )}
+        {(()=>{
+          const filtered = user.role==="accountant"&&fuType!=="all"?myTxs.filter(t=>t.type===fuType):myTxs;
+          return filtered.length===0?<div style={S.empty}>ما عندك معاملات بعد</div>:(
+            <div style={D?S.txGrid:{}}>{filtered.map(t=>(
+              <TxCard key={t.id} t={t} onImg={setViewImg}
+                onDelete={user.role==="accountant"?()=>delTx(t.id):undefined}
+                onEdit={user.role==="accountant"?setEditTx:undefined}
+              />
+            ))}</div>
+          );
+        })()}
       </div>
     );
 
