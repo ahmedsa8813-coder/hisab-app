@@ -127,7 +127,7 @@ export default function App() {
 
   useEffect(() => {
     const u = [];
-    u.push(onSnapshot(query(collection(db,"transactions"),orderBy("date","desc")), s => { setTxs(s.docs.map(d=>({id:d.id,...d.data()}))); setLoading(false); }));
+    u.push(onSnapshot(query(collection(db,"transactions"),orderBy("date","desc"),limit(500)), s => { setTxs(s.docs.map(d=>({id:d.id,...d.data()}))); setLoading(false); }));
     u.push(onSnapshot(collection(db,"projects"), s => setProjs(s.docs.map(d=>({id:d.id,...d.data()})))));
     u.push(onSnapshot(collection(db,"openingBalances"), s => { const o={}; s.docs.forEach(d=>{o[d.id]=d.data();}); setOBs(o); }));
     u.push(onSnapshot(doc(db,"settings","company"), s => { if(s.exists()) setCompSet(s.data()); }));
@@ -1997,7 +1997,7 @@ export default function App() {
                   {pr.allProjTx.filter(t=>pfType==="all"||t.type===pfType).length===0?(
                     <div style={S.empty}>ما في معاملات</div>
                   ):(
-                    <div style={D?S.txGrid:{}}>{pr.allProjTx.filter(t=>pfType==="all"||t.type===pfType).map(t=>(
+                    <div style={D?S.txGrid:{}}>{pr.allProjTx.filter(t=>pfType==="all"||t.type===pfType).slice(0,100).map(t=>(
                       <TxCard key={t.id} t={t} showUser onDelete={()=>delTx(t.id)} onImg={setViewImg} onEdit={setEditTx}/>
                     ))}</div>
                   )}
@@ -2649,6 +2649,7 @@ export default function App() {
     return null;
   }
 }
+
 
 function ForemenPage({D,foremen,projs,txs,onAdd,onDel,S,C,fmt,fmtD,toAr,today,BackBtn}) {
   const [showForm, setShowForm] = useState(false);
@@ -3837,7 +3838,7 @@ function PayDebtRow({debt, onPay}){
   );
 }
 
-function TxCard({t,showUser,onDelete,onImg,onEdit}){
+const TxCard = React.memo(function TxCard({t,showUser,onDelete,onImg,onEdit}){
   const sp=t.type==="صرف";
   const ar=n=>String(n).replace(/\d/g,d=>"٠١٢٣٤٥٦٧٨٩"[d]);
   return(
@@ -3867,7 +3868,7 @@ function TxCard({t,showUser,onDelete,onImg,onEdit}){
       )}
     </div>
   );
-}
+})
 
 const C = {
   bg:"#F5F0E8",bg2:"#EDE8DD",bg3:"#E4DDD1",
