@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from "react";
 import { db } from "./firebase";
 import { collection, addDoc, onSnapshot, query, orderBy, deleteDoc, doc, setDoc, limit } from "firebase/firestore";
@@ -416,7 +415,7 @@ export default function App() {
       });
 
       if(isPersonalAdv){
-        // قرض شخصي: دين على الشخص — ويتسجل على المشروع بجانب
+        // قرض شخصي: دين على الشخص
         await addDoc(collection(db,"personalDebts"),{
           debtorId:form.advanceTo, debtorName:receiver?.name||"",
           creditorId:user.id, creditorName:user.name,
@@ -427,6 +426,19 @@ export default function App() {
           status:"غير مسدد",
           projectId:srcProjId, projectName:srcProjName,
           payments:[],
+          createdAt:new Date().toISOString(),
+        });
+        // ← المفتاح: تسجيل استلام عند نور بحسابه الشخصي
+        await addDoc(collection(db,"transactions"),{
+          userId:form.advanceTo, userName:receiver?.name||"",
+          projectId:srcProjId, projectName:srcProjName,
+          type:"استلام", amount:amt,
+          currency:form.currency,
+          note:`💳 سلفة شخصية من أحمد${form.note?" — "+form.note:""}`,
+          date:form.date, image:null,
+          isPersonal:true,   // ← يبين في الحساب الشخصي فقط
+          isAdvance:true,
+          advanceFrom:user.id, advanceFromName:user.name,
           createdAt:new Date().toISOString(),
         });
       } else {
