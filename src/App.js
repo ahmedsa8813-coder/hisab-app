@@ -601,10 +601,10 @@ export default function App() {
     ? [{icon:"🏠",label:"الرئيسية",v:"adminHome"},{icon:"🏗️",label:"المشاريع",v:"adminProjects"},{icon:"👷",label:"الموظفون",v:"adminEmployees"},{icon:"📋",label:"المهام",v:"adminTasks"},{icon:"📊",label:"التقارير",v:"adminReports"}]
     : [{icon:"📊",label:"الملخص",v:"home"},{icon:"📄",label:"الكشوفات",v:"statements"},{icon:"📋",label:"المعاملات",v:"allTx"},{icon:"🏗️",label:"المشاريع",v:"projects"},{icon:"💰",label:"المالية",v:"projReport"},{icon:"🏢",label:"الشركة",v:"company"},{icon:"💳",label:"الديون",v:"debts"},{icon:"💵",label:"الرواتب",v:"salaries"},{icon:"👷",label:"الفورمنية",v:"foremen"},{icon:"⚖️",label:"افتتاحي",v:"opening"}];
   const navWorker = user?.role==="accountant"
-    ? [{icon:"🏠",label:"الرئيسية",v:"home"},{icon:"➕",label:"استلام/سلفة",v:"add"},{icon:"💵",label:"الرواتب",v:"salaries"}]
+    ? [{icon:"🏠",label:"الرئيسية",v:"home"},{icon:"➕",label:"استلام/سلفة",v:"add"},{icon:"📄",label:"كشف حسابي",v:"myStatement"},{icon:"💵",label:"الرواتب",v:"salaries"}]
     : user?.role==="foreman"
     ? [{icon:"🏠",label:"Home",v:"home"},{icon:"⏱️",label:"Log Hours",v:"logHours"},{icon:"📊",label:"Report",v:"hoursReport"}]
-    : [{icon:"🏠",label:"الرئيسية",v:"home"},{icon:"➕",label:"تسجيل صرف",v:"add"}];
+    : [{icon:"🏠",label:"الرئيسية",v:"home"},{icon:"➕",label:"تسجيل صرف",v:"add"},{icon:"📄",label:"كشف حسابي",v:"myStatement"}];
   const navItems  = user?.role==="manager" ? navMgr : navWorker;
 
   const avatarBg = r => r==="manager"?"linear-gradient(135deg,#1d4ed8,#2563eb)":r==="partner"?"linear-gradient(135deg,#7c3aed,#6d28d9)":r==="accountant"?"linear-gradient(135deg,#1A7A4A,#147A40)":r==="foreman"?"linear-gradient(135deg,#0f766e,#0d9488)":"linear-gradient(135deg,#f59e0b,#d97706)";
@@ -1000,6 +1000,17 @@ export default function App() {
         })()}
       </div>
     );
+
+    // MY STATEMENT - كشف حسابي
+    if(user.role!=="manager"&&user.role!=="foreman"&&view==="myStatement") {
+      return <MyStatementPage
+        user={user} myTxs={myTxs} OBs={OBs} projs={projs}
+        D={D} S={S} C={C} fmt={fmt} fmtD={fmtD} toAr={toAr}
+        BackBtn={BackBtn} onImg={setViewImg}
+        onDelete={user.role==="accountant"?delTx:undefined}
+        onEdit={user.role==="accountant"?setEditTx:undefined}
+      />;
+    }
 
     // ADD TX
     if(user.role!=="manager"&&view==="add") return (
@@ -3071,6 +3082,86 @@ function EditTxModal({tx, projs, onSave, onClose, S, C, today}) {
           <button style={{...S.canBtn,flex:1,margin:0,padding:14}} onClick={onClose}>إلغاء</button>
         </div>
       </div>
+    </div>
+  );
+}
+
+function MyStatementPage({user,myTxs,OBs,projs,D,S,C,fmt,fmtD,toAr,BackBtn,onImg,onDelete,onEdit}) {
+  const [stFrom, setStFrom] = useState("");
+  const [stTo,   setStTo]   = useState("");
+  const [stType, setStType] = useState("all");
+  const [stCur,  setStCur]  = useState("دينار");
+
+  const filtered = myTxs.filter(t=>{
+    if(t.currency!==stCur&&!(stCur==="دينار"&&!t.currency))return false;
+    if(stType!=="all"&&t.type!==stType)return false;
+    if(stFrom&&t.date<stFrom)return false;
+    if(stTo&&t.date>stTo)return false;
+    return true;
+  });
+
+  const ob   = OBs[user.id]||{};
+  const obR  = (!stFrom)?(stCur==="دينار"?(ob.dinarReceived||0):(ob.dollarReceived||0)):0;
+  const obS  = (!stFrom)?(stCur==="دينار"?(ob.dinarSpent||0):(ob.dollarSpent||0)):0;
+  const totR = filtered.filter(t=>t.type==="استلام").reduce((s,t)=>s+t.amount,0)+obR;
+  const totS = filtered.filter(t=>t.type==="صرف").reduce((s,t)=>s+t.amount,0)+obS;
+  const bal  = totR-totS;
+
+  return (
+    <div>
+      <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:20}}>
+        <BackBtn to="home"/>
+        <div style={S.secTitle}>📄 كشف حسابي — {user.name}</div>
+      </div>
+
+      {/* فلاتر */}
+      <div style={{...S.filterCard,marginBottom:16}}>
+        <div style={S.fLbl}>العملة</div>
+        <div style={S.tRow}>
+          <button style={{...S.tBtn,...(stCur==="دينار"?{background:"rgba(37,87,167,0.15)",border:`1px solid #2557A7`,color:"#2557A7"}:{})}} onClick={()=>setStCur("دينار")}>🇮🇶 دينار</button>
+          <button style={{...S.tBtn,...(stCur==="دولار"?{background:"rgba(37,87,167,0.15)",border:`1px solid #2557A7`,color:"#2557A7"}:{})}} onClick={()=>setStCur("دولار")}>🇺🇸 دولار</button>
+        </div>
+
+        <div style={S.fLbl}>نوع المعاملة</div>
+        <div style={S.tRow}>
+          {[["all","الكل",C.gold],["استلام","↓ استلام","#1A7A4A"],["صرف","↑ صرف","#C0392B"]].map(([v,l,col])=>(
+            <button key={v} style={{...S.tBtn,...(stType===v?{background:`rgba(${v==="استلام"?"26,122,74":v==="صرف"?"192,57,43":"193,123,47"},0.12)`,border:`1px solid ${col}`,color:col}:{})}} onClick={()=>setStType(v)}>{l}</button>
+          ))}
+        </div>
+
+        <div style={D?{display:"flex",gap:12}:{}}>
+          <div style={D?{flex:1}:{}}><div style={S.fLbl}>من تاريخ</div><input style={S.inp} type="date" value={stFrom} onChange={e=>setStFrom(e.target.value)}/></div>
+          <div style={D?{flex:1}:{}}><div style={S.fLbl}>إلى تاريخ</div><input style={S.inp} type="date" value={stTo} onChange={e=>setStTo(e.target.value)}/></div>
+        </div>
+
+        <button style={{...S.canBtn,marginTop:10}} onClick={()=>{setStFrom("");setStTo("");setStType("all");}}>↺ إعادة تعيين</button>
+      </div>
+
+      {/* بطاقة الرصيد */}
+      <div style={{...S.balCard,background:bal>=0?"linear-gradient(135deg,#065f46,#047857)":"linear-gradient(135deg,#7f1d1d,#991b1b)",marginBottom:16}}>
+        <div style={S.balLbl}>📊 رصيدي — {stCur}</div>
+        <div style={S.balAmt}>{fmt(Math.abs(bal),stCur)}</div>
+        <div style={{fontSize:14,fontWeight:800,color:"rgba(255,255,255,0.9)",margin:"4px 0 12px"}}>
+          {bal>0?"✅ مطلوب مني":bal<0?"⚠️ أنا طالب":"◼️ متوازن"}
+        </div>
+        <div style={S.balRow}>
+          <span style={S.balSt}>↓ استلمت {fmt(totR,stCur)}</span>
+          <span style={S.balSt}>↑ صرفت {fmt(totS,stCur)}</span>
+        </div>
+      </div>
+
+      {/* المعاملات */}
+      <div style={{fontSize:13,color:C.textMd,marginBottom:12,fontWeight:600}}>{toAr(filtered.length)} معاملة</div>
+      {filtered.length===0?(
+        <div style={S.empty}>ما في معاملات بهذه الفلاتر</div>
+      ):(
+        <div style={D?S.txGrid:{}}>{filtered.map(t=>(
+          <TxCard key={t.id} t={t} onImg={onImg}
+            onDelete={onDelete?()=>onDelete(t.id):undefined}
+            onEdit={onEdit}
+          />
+        ))}</div>
+      )}
     </div>
   );
 }
