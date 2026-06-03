@@ -523,6 +523,16 @@ export default function App() {
   };
   const delForeman = async id => { if(window.confirm("تحذف هذا الفورمن؟")) await deleteDoc(doc(db,"foremen",id)); };
 
+  const editForeman = async (id, data) => {
+    await setDoc(doc(db,"foremen",id),{
+      name:       data.name.trim(),
+      projectId:  data.projectId||"",
+      projectName:projs.find(p=>p.id===data.projectId)?.name||"",
+      phone:      data.phone||"",
+      note:       data.note||"",
+    },{merge:true});
+  };
+
   // تسوية أمانة الفورمن
   const settleForeman = async (trust, settleAmt) => {
     const amt = Number(settleAmt);
@@ -3176,7 +3186,7 @@ export default function App() {
       <ForemenPage
         D={D} foremen={foremen} projs={projs} txs={txs}
         foremanTrust={foremanTrust}
-        onAdd={addForeman} onDel={delForeman} onSettle={settleForeman}
+        onAdd={addForeman} onDel={delForeman} onSettle={settleForeman} onEdit={editForeman}
         S={S} C={C} fmt={fmt} fmtD={fmtD} toAr={toAr} today={today}
         BackBtn={BackBtn}
       />
@@ -3187,13 +3197,14 @@ export default function App() {
 }
 
 
-function ForemenPage({D,foremen,projs,txs,foremanTrust,onAdd,onDel,onSettle,S,C,fmt,fmtD,toAr,today,BackBtn}) {
-  const [showForm, setShowForm] = useState(false);
-  const [form, setForm]         = useState({name:"",projectId:"",phone:"",note:""});
+function ForemenPage({D,foremen,projs,txs,foremanTrust,onAdd,onDel,onSettle,onEdit,S,C,fmt,fmtD,toAr,today,BackBtn}) {
+  const [showForm,   setShowForm]   = useState(false);
+  const [form,       setForm]       = useState({name:"",projectId:"",phone:"",note:""});
   const [selForeman, setSelForeman] = useState(null);
-  const [saving, setSaving]     = useState(false);
-  const [settleId, setSettleId] = useState(null); // trust id قيد التسوية
-  const [settleAmt, setSettleAmt] = useState("");
+  const [saving,     setSaving]     = useState(false);
+  const [editId,     setEditId]     = useState(null); // فورمن قيد التعديل
+  const [editForm,   setEditForm]   = useState({name:"",projectId:"",phone:"",note:""});
+  const [editSaving, setEditSaving] = useState(false);
 
   const save = async () => {
     if(!form.name.trim()||saving) return;
@@ -3202,6 +3213,14 @@ function ForemenPage({D,foremen,projs,txs,foremanTrust,onAdd,onDel,onSettle,S,C,
     setSaving(false);
     setForm({name:"",projectId:"",phone:"",note:""});
     setShowForm(false);
+  };
+
+  const saveEdit = async () => {
+    if(!editForm.name.trim()||editSaving) return;
+    setEditSaving(true);
+    await onEdit(editId, editForm);
+    setEditSaving(false);
+    setEditId(null);
   };
 
   // حساب الأمانات لكل فورمن
@@ -3289,6 +3308,8 @@ function ForemenPage({D,foremen,projs,txs,foremanTrust,onAdd,onDel,onSettle,S,C,
                   </div>
                   <button style={{background:"transparent",border:`1px solid rgba(192,57,43,0.2)`,borderRadius:8,padding:"4px 8px",color:C.red,fontSize:13,cursor:"pointer"}}
                     onClick={e=>{e.stopPropagation();onDel(f.id);}}>🗑️</button>
+                  <button style={{background:"transparent",border:`1px solid rgba(37,87,167,0.2)`,borderRadius:8,padding:"4px 8px",color:"#2557A7",fontSize:13,cursor:"pointer"}}
+                    onClick={e=>{e.stopPropagation();setEditId(f.id);setEditForm({name:f.name,projectId:f.projectId||"",phone:f.phone||"",note:f.note||""});setSelForeman(null);}}>✏️</button>
                 </div>
 
                 {/* ملخص الحساب */}
@@ -3498,6 +3519,38 @@ function ForemenPage({D,foremen,projs,txs,foremanTrust,onAdd,onDel,onSettle,S,C,
         </div>
       )}
 
+      {/* نافذة التعديل */}
+      {editId&&(
+        <div style={{position:"fixed",inset:0,background:"rgba(44,24,16,0.55)",zIndex:600,display:"flex",alignItems:"center",justifyContent:"center",padding:16,backdropFilter:"blur(4px)"}}
+          onClick={()=>setEditId(null)}>
+          <div style={{background:"#fff",borderRadius:22,padding:24,width:"100%",maxWidth:430,boxShadow:"0 20px 60px rgba(0,0,0,0.2)"}}
+            onClick={e=>e.stopPropagation()}>
+            <div style={{fontWeight:900,fontSize:18,color:C.text,marginBottom:16}}>✏️ تعديل الفورمن</div>
+
+            <div style={S.fLbl}>الاسم</div>
+            <input style={S.inp} value={editForm.name} onChange={e=>setEditForm(f=>({...f,name:e.target.value}))} autoFocus/>
+
+            <div style={S.fLbl}>المشروع</div>
+            <select style={S.sel} value={editForm.projectId} onChange={e=>setEditForm(f=>({...f,projectId:e.target.value}))}>
+              <option value="">بدون مشروع</option>
+              {projs.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}
+            </select>
+
+            <div style={S.fLbl}>رقم الهاتف</div>
+            <input style={S.inp} placeholder="07x..." value={editForm.phone} onChange={e=>setEditForm(f=>({...f,phone:e.target.value}))}/>
+
+            <div style={S.fLbl}>ملاحظة</div>
+            <input style={S.inp} placeholder="اختياري..." value={editForm.note} onChange={e=>setEditForm(f=>({...f,note:e.target.value}))}/>
+
+            <div style={{display:"flex",gap:10,marginTop:16}}>
+              <button style={{flex:2,...S.subBtn,margin:0,padding:14,opacity:editSaving?0.7:1}} onClick={saveEdit} disabled={editSaving}>
+                {editSaving?"جاري الحفظ...":"💾 حفظ التعديل"}
+              </button>
+              <button style={{flex:1,...S.canBtn,margin:0,padding:14}} onClick={()=>setEditId(null)}>إلغاء</button>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );
