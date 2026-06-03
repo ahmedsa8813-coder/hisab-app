@@ -607,17 +607,27 @@ export default function App() {
       lastPayment: today(),
       lastPaymentAmount: amt,
     },{merge:true});
-    // استلام لأحمد — يتسجل على نفس مشروع الدين لو موجود
+    // ١. استلام لأحمد
     await addDoc(collection(db,"transactions"),{
       userId: debt.creditorId||"ahmed",
       userName: debt.creditorName||"أحمد",
-      projectId: debt.projectId||"",
-      projectName: debt.projectName||"",
-      type:"استلام", amount:amt,
-      currency:debt.currency,
+      projectId: debt.projectId||"", projectName: debt.projectName||"",
+      type:"استلام", amount:amt, currency:debt.currency,
       note:`${isFull?"تسديد كامل":"تسديد جزئي"} — سلفة من ${debt.debtorName}${isFull?" ✅":""}`,
       date:today(), image:null, isPersonal:false, isAdvance:false,
       isDebtPayment:true, debtId:debt.id,
+      createdAt:new Date().toISOString(),
+    });
+    // ٢. صرف على المدين (نور/محمد/...) — يبين في حسابه الشخصي
+    await addDoc(collection(db,"transactions"),{
+      userId: debt.debtorId,
+      userName: debt.debtorName,
+      projectId: debt.projectId||"", projectName: debt.projectName||"",
+      type:"صرف", amount:amt, currency:debt.currency,
+      note:`${isFull?"تسديد كامل":"تسديد جزئي"} سلفة لأحمد${isFull?" ✅":""}`,
+      date:today(), image:null,
+      isPersonal:true,   // يبين في الحساب الشخصي
+      isAdvance:false, isDebtPayment:true, debtId:debt.id,
       createdAt:new Date().toISOString(),
     });
   };
