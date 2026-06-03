@@ -1857,39 +1857,74 @@ export default function App() {
                 </div>
               ):(
                 <>
-                  {/* بطاقة الرصيد */}
-                  <div style={{...S.balCard,background:stB2>=0?"linear-gradient(135deg,#1A7A4A,#147A40)":"linear-gradient(135deg,#C0392B,#A93226)",marginBottom:16}}>
-                    <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:12}}>
-                      <div style={{...S.av,width:44,height:44,fontSize:19,borderRadius:14,background:"rgba(255,255,255,0.2)"}}>{stUserObj?.name[0]}</div>
-                      <div>
-                        <div style={{fontSize:18,fontWeight:800,color:"#fff"}}>{stUserObj?.name}</div>
-                        <div style={{fontSize:12,color:"rgba(255,255,255,0.8)"}}>كشف حساب — {fuCur}</div>
-                      </div>
-                    </div>
-                    <div style={S.balAmt}>{fmt(Math.abs(stB2),fuCur)}</div>
-                    <div style={{fontSize:14,fontWeight:800,color:"rgba(255,255,255,0.9)",margin:"6px 0 12px"}}>
-                      {stB2>0?"✅ مطلوب منه":stB2<0?"⚠️ طالب":"◼️ متوازن"}
-                    </div>
-                    <div style={S.balRow}>
-                      <span style={S.balSt}>↓ استلم {fmt(stR2,fuCur)}</span>
-                      <span style={S.balSt}>↑ صرف {fmt(stS2,fuCur)}</span>
-                    </div>
-                  </div>
+                  {/* فصل العمل والشخصي */}
+                  {(()=>{
+                    const workTxs     = stTxsAll.filter(t=>!t.isPersonal);
+                    const personalTxs = stTxsAll.filter(t=>t.isPersonal);
+                    const workR = workTxs.filter(t=>t.type==="استلام").reduce((s,t)=>s+t.amount,0)+stObR2;
+                    const workS = workTxs.filter(t=>t.type==="صرف").reduce((s,t)=>s+t.amount,0)+stObS2;
+                    const workBal = workR-workS;
+                    const persW = personalTxs.filter(t=>t.type==="صرف").reduce((s,t)=>s+t.amount,0);
 
-                  {/* المعاملات */}
-                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12,flexWrap:"wrap",gap:8}}>
-                    <div style={{fontSize:13,color:C.textMd,fontWeight:600}}>{toAr(stTxsAll.length)} معاملة</div>
-                    <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
-                      {fuType!=="all"&&<span style={{fontSize:11,fontWeight:700,padding:"3px 10px",borderRadius:8,background:fuType==="استلام"?"rgba(26,122,74,0.1)":"rgba(192,57,43,0.1)",color:fuType==="استلام"?"#1A7A4A":"#C0392B"}}>نوع: {fuType}</span>}
-                      {fuName&&<span style={{fontSize:11,fontWeight:700,padding:"3px 10px",borderRadius:8,background:`rgba(193,123,47,0.1)`,color:C.gold}}>بحث: {fuName}</span>}
-                      {fuCur&&<span style={{fontSize:11,fontWeight:700,padding:"3px 10px",borderRadius:8,background:"rgba(37,87,167,0.1)",color:"#2557A7"}}>{fuCur==="دينار"?"🇮🇶":"🇺🇸"} {fuCur}</span>}
-                    </div>
-                  </div>
-                  {stTxsAll.length===0?(
-                    <div style={S.empty}>ما في معاملات بهذه الفلاتر</div>
-                  ):(
-                    <div style={D?S.txGrid:{}}>{stTxsAll.map(t=><TxCard key={t.id} t={t} onDelete={()=>delTx(t.id)} onImg={setViewImg} onEdit={setEditTx}/>)}</div>
-                  )}
+                    return (<>
+                      {/* بطاقتان منفصلتان */}
+                      <div style={{display:"grid",gridTemplateColumns:D?"1fr 1fr":"1fr",gap:12,marginBottom:16}}>
+                        {/* حساب العمل */}
+                        <div style={{...S.balCard,background:workBal>=0?"linear-gradient(135deg,#1A7A4A,#147A40)":"linear-gradient(135deg,#C0392B,#A93226)"}}>
+                          <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:10}}>
+                            <div style={{...S.av,width:36,height:36,fontSize:16,borderRadius:11,background:"rgba(255,255,255,0.2)"}}>{stUserObj?.name[0]}</div>
+                            <div>
+                              <div style={{fontSize:15,fontWeight:800,color:"#fff"}}>{stUserObj?.name}</div>
+                              <div style={{fontSize:11,color:"rgba(255,255,255,0.8)"}}>💼 حساب العمل</div>
+                            </div>
+                          </div>
+                          <div style={S.balAmt}>{fmt(Math.abs(workBal),fuCur)}</div>
+                          <div style={{fontSize:12,fontWeight:700,color:"rgba(255,255,255,0.85)",margin:"4px 0 8px"}}>
+                            {workBal>0?"✅ مطلوب منه":workBal<0?"⚠️ طالب":"◼️ متوازن"}
+                          </div>
+                          <div style={S.balRow}>
+                            <span style={S.balSt}>↓ {fmt(workR,fuCur)}</span>
+                            <span style={S.balSt}>↑ {fmt(workS,fuCur)}</span>
+                          </div>
+                        </div>
+
+                        {/* الحساب الشخصي */}
+                        <div style={{...S.balCard,background:"linear-gradient(135deg,#4c1d95,#6B3FA0)"}}>
+                          <div style={{fontSize:12,color:"rgba(255,255,255,0.8)",marginBottom:6}}>👤 الحساب الشخصي</div>
+                          <div style={S.balAmt}>{fmt(persW,fuCur)}</div>
+                          <div style={{fontSize:12,fontWeight:700,color:"rgba(255,255,255,0.85)",margin:"4px 0 8px"}}>
+                            إجمالي السحوبات الشخصية
+                          </div>
+                          <div style={{fontSize:12,color:"rgba(255,255,255,0.7)"}}>
+                            {toAr(personalTxs.length)} معاملة شخصية
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* المعاملات */}
+                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12,flexWrap:"wrap",gap:8}}>
+                        <div style={{fontSize:13,color:C.textMd,fontWeight:600}}>{toAr(stTxsAll.length)} معاملة إجمالاً</div>
+                        <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+                          {fuType!=="all"&&<span style={{fontSize:11,fontWeight:700,padding:"3px 10px",borderRadius:8,background:fuType==="استلام"?"rgba(26,122,74,0.1)":"rgba(192,57,43,0.1)",color:fuType==="استلام"?"#1A7A4A":"#C0392B"}}>نوع: {fuType}</span>}
+                          {fuName&&<span style={{fontSize:11,fontWeight:700,padding:"3px 10px",borderRadius:8,background:`rgba(193,123,47,0.1)`,color:C.gold}}>بحث: {fuName}</span>}
+                        </div>
+                      </div>
+
+                      {/* قسم العمل */}
+                      {workTxs.length>0&&(<>
+                        <div style={{fontSize:13,fontWeight:800,color:"#1A7A4A",marginBottom:8}}>💼 معاملات العمل ({toAr(workTxs.length)})</div>
+                        <div style={D?S.txGrid:{}}>{workTxs.map(t=><TxCard key={t.id} t={t} onDelete={()=>delTx(t.id)} onImg={setViewImg} onEdit={setEditTx}/>)}</div>
+                      </>)}
+
+                      {/* قسم الشخصي */}
+                      {personalTxs.length>0&&(<>
+                        <div style={{fontSize:13,fontWeight:800,color:"#6B3FA0",margin:"16px 0 8px"}}>👤 المعاملات الشخصية ({toAr(personalTxs.length)})</div>
+                        <div style={D?S.txGrid:{}}>{personalTxs.map(t=><TxCard key={t.id} t={t} onDelete={()=>delTx(t.id)} onImg={setViewImg} onEdit={setEditTx}/>)}</div>
+                      </>)}
+
+                      {stTxsAll.length===0&&<div style={S.empty}>ما في معاملات بهذه الفلاتر</div>}
+                    </>);
+                  })()}
                 </>
               )}
             </div>
@@ -3130,23 +3165,48 @@ function EditTxModal({tx, projs, onSave, onClose, S, C, today}) {
 function MyStatementPage({user,myTxs,OBs,projs,D,S,C,fmt,fmtD,toAr,BackBtn,onImg,onDelete,onEdit}) {
   const [stFrom, setStFrom] = useState("");
   const [stTo,   setStTo]   = useState("");
-  const [stType, setStType] = useState("all");
   const [stCur,  setStCur]  = useState("دينار");
+  const [tab,    setTab]    = useState("work"); // work | personal
 
-  const filtered = myTxs.filter(t=>{
+  // فصل المعاملات
+  const baseFilter = t => {
     if(t.currency!==stCur&&!(stCur==="دينار"&&!t.currency))return false;
-    if(stType!=="all"&&t.type!==stType)return false;
     if(stFrom&&t.date<stFrom)return false;
     if(stTo&&t.date>stTo)return false;
     return true;
-  });
+  };
+
+  // حساب العمل: معاملات غير شخصية
+  const workTxs = myTxs.filter(t=>!t.isPersonal&&baseFilter(t));
+  // الحساب الشخصي: معاملات شخصية فقط
+  const personalTxs = myTxs.filter(t=>t.isPersonal&&baseFilter(t));
 
   const ob   = OBs[user.id]||{};
   const obR  = (!stFrom)?(stCur==="دينار"?(ob.dinarReceived||0):(ob.dollarReceived||0)):0;
   const obS  = (!stFrom)?(stCur==="دينار"?(ob.dinarSpent||0):(ob.dollarSpent||0)):0;
-  const totR = filtered.filter(t=>t.type==="استلام").reduce((s,t)=>s+t.amount,0)+obR;
-  const totS = filtered.filter(t=>t.type==="صرف").reduce((s,t)=>s+t.amount,0)+obS;
-  const bal  = totR-totS;
+
+  // إجماليات العمل
+  const workR = workTxs.filter(t=>t.type==="استلام").reduce((s,t)=>s+t.amount,0)+obR;
+  const workS = workTxs.filter(t=>t.type==="صرف").reduce((s,t)=>s+t.amount,0)+obS;
+  const workBal = workR-workS;
+
+  // إجماليات الشخصي
+  const personalW = personalTxs.filter(t=>t.type==="صرف").reduce((s,t)=>s+t.amount,0);
+  const personalR = personalTxs.filter(t=>t.type==="استلام").reduce((s,t)=>s+t.amount,0);
+
+  const TabBtn = ({id,label,icon,count,color}) => (
+    <button onClick={()=>setTab(id)} style={{
+      flex:1,padding:"12px 8px",borderRadius:12,border:`2px solid`,cursor:"pointer",
+      fontWeight:800,fontSize:13,transition:"all 0.2s",
+      background:tab===id?`rgba(${color},0.1)`:"transparent",
+      color:tab===id?`rgb(${color})`:C.textMd,
+      borderColor:tab===id?`rgb(${color})`:C.cardBorder,
+    }}>
+      <div style={{fontSize:18,marginBottom:2}}>{icon}</div>
+      <div>{label}</div>
+      <div style={{fontSize:11,marginTop:2,opacity:0.8}}>{toAr(count)} معاملة</div>
+    </button>
+  );
 
   return (
     <div>
@@ -3155,53 +3215,86 @@ function MyStatementPage({user,myTxs,OBs,projs,D,S,C,fmt,fmtD,toAr,BackBtn,onImg
         <div style={S.secTitle}>📄 كشف حسابي — {user.name}</div>
       </div>
 
-      {/* فلاتر */}
+      {/* فلاتر عامة */}
       <div style={{...S.filterCard,marginBottom:16}}>
-        <div style={S.fLbl}>العملة</div>
-        <div style={S.tRow}>
-          <button style={{...S.tBtn,...(stCur==="دينار"?{background:"rgba(37,87,167,0.15)",border:`1px solid #2557A7`,color:"#2557A7"}:{})}} onClick={()=>setStCur("دينار")}>🇮🇶 دينار</button>
-          <button style={{...S.tBtn,...(stCur==="دولار"?{background:"rgba(37,87,167,0.15)",border:`1px solid #2557A7`,color:"#2557A7"}:{})}} onClick={()=>setStCur("دولار")}>🇺🇸 دولار</button>
-        </div>
-
-        <div style={S.fLbl}>نوع المعاملة</div>
-        <div style={S.tRow}>
-          {[["all","الكل",C.gold],["استلام","↓ استلام","#1A7A4A"],["صرف","↑ صرف","#C0392B"]].map(([v,l,col])=>(
-            <button key={v} style={{...S.tBtn,...(stType===v?{background:`rgba(${v==="استلام"?"26,122,74":v==="صرف"?"192,57,43":"193,123,47"},0.12)`,border:`1px solid ${col}`,color:col}:{})}} onClick={()=>setStType(v)}>{l}</button>
-          ))}
-        </div>
-
-        <div style={D?{display:"flex",gap:12}:{}}>
-          <div style={D?{flex:1}:{}}><div style={S.fLbl}>من تاريخ</div><input style={S.inp} type="date" value={stFrom} onChange={e=>setStFrom(e.target.value)}/></div>
-          <div style={D?{flex:1}:{}}><div style={S.fLbl}>إلى تاريخ</div><input style={S.inp} type="date" value={stTo} onChange={e=>setStTo(e.target.value)}/></div>
-        </div>
-
-        <button style={{...S.canBtn,marginTop:10}} onClick={()=>{setStFrom("");setStTo("");setStType("all");}}>↺ إعادة تعيين</button>
-      </div>
-
-      {/* بطاقة الرصيد */}
-      <div style={{...S.balCard,background:bal>=0?"linear-gradient(135deg,#065f46,#047857)":"linear-gradient(135deg,#7f1d1d,#991b1b)",marginBottom:16}}>
-        <div style={S.balLbl}>📊 رصيدي — {stCur}</div>
-        <div style={S.balAmt}>{fmt(Math.abs(bal),stCur)}</div>
-        <div style={{fontSize:14,fontWeight:800,color:"rgba(255,255,255,0.9)",margin:"4px 0 12px"}}>
-          {bal>0?"✅ مطلوب مني":bal<0?"⚠️ أنا طالب":"◼️ متوازن"}
-        </div>
-        <div style={S.balRow}>
-          <span style={S.balSt}>↓ استلمت {fmt(totR,stCur)}</span>
-          <span style={S.balSt}>↑ صرفت {fmt(totS,stCur)}</span>
+        <div style={{display:"flex",gap:12,flexWrap:"wrap",alignItems:"flex-end"}}>
+          <div>
+            <div style={S.fLbl}>العملة</div>
+            <div style={S.tRow}>
+              <button style={{...S.tBtn,...(stCur==="دينار"?{background:"rgba(37,87,167,0.15)",border:`1px solid #2557A7`,color:"#2557A7"}:{})}} onClick={()=>setStCur("دينار")}>🇮🇶 دينار</button>
+              <button style={{...S.tBtn,...(stCur==="دولار"?{background:"rgba(37,87,167,0.15)",border:`1px solid #2557A7`,color:"#2557A7"}:{})}} onClick={()=>setStCur("دولار")}>🇺🇸 دولار</button>
+            </div>
+          </div>
+          <div style={{flex:1}}>
+            <div style={S.fLbl}>من تاريخ</div>
+            <input style={S.inp} type="date" value={stFrom} onChange={e=>setStFrom(e.target.value)}/>
+          </div>
+          <div style={{flex:1}}>
+            <div style={S.fLbl}>إلى تاريخ</div>
+            <input style={S.inp} type="date" value={stTo} onChange={e=>setStTo(e.target.value)}/>
+          </div>
+          <button style={{...S.canBtn,marginBottom:0}} onClick={()=>{setStFrom("");setStTo("");}}>↺</button>
         </div>
       </div>
 
-      {/* المعاملات */}
-      <div style={{fontSize:13,color:C.textMd,marginBottom:12,fontWeight:600}}>{toAr(filtered.length)} معاملة</div>
-      {filtered.length===0?(
-        <div style={S.empty}>ما في معاملات بهذه الفلاتر</div>
-      ):(
-        <div style={D?S.txGrid:{}}>{filtered.map(t=>(
-          <TxCard key={t.id} t={t} onImg={onImg}
-            onDelete={onDelete?()=>onDelete(t.id):undefined}
-            onEdit={onEdit}
-          />
-        ))}</div>
+      {/* تبويبتان */}
+      <div style={{display:"flex",gap:10,marginBottom:20}}>
+        <TabBtn id="work"     label="حساب العمل"    icon="💼" count={workTxs.length}     color="37,87,167"/>
+        <TabBtn id="personal" label="الحساب الشخصي" icon="👤" count={personalTxs.length} color="107,63,160"/>
+      </div>
+
+      {/* حساب العمل */}
+      {tab==="work"&&(
+        <div>
+          <div style={{...S.balCard,background:workBal>=0?"linear-gradient(135deg,#065f46,#047857)":"linear-gradient(135deg,#7f1d1d,#991b1b)",marginBottom:16}}>
+            <div style={S.balLbl}>💼 رصيد العمل — {stCur}</div>
+            <div style={S.balAmt}>{fmt(Math.abs(workBal),stCur)}</div>
+            <div style={{fontSize:13,fontWeight:700,color:"rgba(255,255,255,0.85)",margin:"4px 0 10px"}}>
+              {workBal>0?"✅ مطلوب مني":workBal<0?"⚠️ أنا طالب":"◼️ متوازن"}
+            </div>
+            <div style={S.balRow}>
+              <span style={S.balSt}>↓ استلمت {fmt(workR,stCur)}</span>
+              <span style={S.balSt}>↑ صرفت {fmt(workS,stCur)}</span>
+            </div>
+          </div>
+          {workTxs.length===0?(
+            <div style={S.empty}>ما في معاملات عمل</div>
+          ):(
+            <div style={D?S.txGrid:{}}>{workTxs.map(t=>(
+              <TxCard key={t.id} t={t} onImg={onImg}
+                onDelete={onDelete?()=>onDelete(t.id):undefined}
+                onEdit={onEdit}
+              />
+            ))}</div>
+          )}
+        </div>
+      )}
+
+      {/* الحساب الشخصي */}
+      {tab==="personal"&&(
+        <div>
+          <div style={{...S.balCard,background:"linear-gradient(135deg,#4c1d95,#6B3FA0)",marginBottom:16}}>
+            <div style={S.balLbl}>👤 الحساب الشخصي — {stCur}</div>
+            <div style={S.balAmt}>{fmt(personalW,stCur)}</div>
+            <div style={{fontSize:13,fontWeight:700,color:"rgba(255,255,255,0.85)",margin:"4px 0 10px"}}>
+              إجمالي السحوبات الشخصية
+            </div>
+            {personalR>0&&<div style={S.balRow}>
+              <span style={S.balSt}>↓ استلم شخصي {fmt(personalR,stCur)}</span>
+              <span style={S.balSt}>↑ صرف شخصي {fmt(personalW,stCur)}</span>
+            </div>}
+          </div>
+          {personalTxs.length===0?(
+            <div style={S.empty}>ما في معاملات شخصية</div>
+          ):(
+            <div style={D?S.txGrid:{}}>{personalTxs.map(t=>(
+              <TxCard key={t.id} t={t} onImg={onImg}
+                onDelete={onDelete?()=>onDelete(t.id):undefined}
+                onEdit={onEdit}
+              />
+            ))}</div>
+          )}
+        </div>
       )}
     </div>
   );
