@@ -209,8 +209,9 @@ export default function App() {
   const [compForm,setCompForm]= useState({});
   const [compOk,  setCompOk]  = useState(false);
   const [debts,   setDebts]   = useState([]);
-  const [debtForm,setDebtForm]= useState({name:"",projectId:"",amount:"",currency:"دينار",dueDate:"",note:""});
+  const [debtForm,setDebtForm]= useState({name:"",debtType:"person",creditorType:"person",projectId:"",amount:"",currency:"دينار",dueDate:"",note:"",address:"",installment:false,installmentAmount:"",installmentPeriod:"شهري"});
   const [showDebtForm,setShowDebtForm]=useState(false);
+  const [debtTab,     setDebtTab]     = useState("persons"); // persons | locations
   const [personalDebts,setPersonalDebts]=useState([]);
   const [salaryEmployees,setSalaryEmployees]=useState([]);
   const [salaryPayments,setSalaryPayments]=useState([]);
@@ -525,16 +526,23 @@ export default function App() {
   const addDebt = async () => {
     if(!debtForm.name.trim()||!debtForm.amount) return;
     await addDoc(collection(db,"debts"),{
-      name:debtForm.name.trim(), projectId:debtForm.projectId||"",
+      name:debtForm.name.trim(),
+      debtType:debtForm.debtType||"person",
+      creditorType:debtForm.creditorType||"person",
+      address:debtForm.address||"",
+      projectId:debtForm.projectId||"",
       projectName:projs.find(p=>p.id===debtForm.projectId)?.name||"",
       amount:Number(debtForm.amount), currency:debtForm.currency,
       remaining:Number(debtForm.amount),
       paidAmount:0,
       dueDate:debtForm.dueDate||"",
+      installment:debtForm.installment||false,
+      installmentAmount:debtForm.installment?Number(debtForm.installmentAmount||0):0,
+      installmentPeriod:debtForm.installmentPeriod||"شهري",
       status:"غير مسدد",
       note:debtForm.note, createdAt:new Date().toISOString(),
     });
-    setDebtForm({name:"",projectId:"",amount:"",currency:"دينار",dueDate:"",note:""});
+    setDebtForm({name:"",debtType:"person",creditorType:"person",projectId:"",amount:"",currency:"دينار",dueDate:"",note:"",address:"",installment:false,installmentAmount:"",installmentPeriod:"شهري"});
     setShowDebtForm(false);
   };
   const updateDebtStatus = async (id,status) => await setDoc(doc(db,"debts",id),{status},{merge:true});
@@ -2608,36 +2616,170 @@ export default function App() {
     }
     // DEBTS
     if(user.role==="manager"&&view==="debts") {
-      const pendingDebts = debts.filter(d=>d.status!=="مسدد كامل");
-      const totalOwed = pendingDebts.reduce((s,d)=>s+(d.remaining||d.amount||0),0);
-      const totalPaid = debts.reduce((s,d)=>s+(d.paidAmount||0),0);
+      const personDebts   = debts.filter(d=>d.debtType==="person"||!d.debtType);
+      const locationDebts = debts.filter(d=>d.debtType==="location");
+
+      const totalPerson   = personDebts.filter(d=>d.status!=="مسدد كامل").reduce((s,d)=>s+(d.remaining||d.amount||0),0);
+      const totalLocation = locationDebts.filter(d=>d.status!=="مسدد كامل").reduce((s,d)=>s+(d.remaining||d.amount||0),0);
+      const totalAll      = totalPerson + totalLocation;
+
+      const DebtCard = ({d}) => {
+        const remaining = d.remaining??d.amount??0;
+        const paid      = d.paidAmount||0;
+        const pct       = d.amount>0?Math.min(100,Math.round(paid/d.amount*100)):0;
+        const sc = d.status==="مسدد كامل"?"#1A7A4A":d.status==="مسدد جزئي"?"#b45309":"#C0392B";
+        const sb = d.status==="مسدد كامل"?"rgba(26,122,74,0.08)":d.status==="مسدد جزئي"?"rgba(180,83,9,0.08)":"rgba(192,57,43,0.05)";
+        const isLoc = d.debtType==="location";
+        return (
+          <div style={{background:C.card,borderRadius:16,padding:18,marginBottom:12,border:`1px solid ${sc}33`,boxShadow:C.shadow}}>
+            {/* الرأس */}
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:10}}>
+              <div>
+                <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4}}>
+                  <span style={{fontSize:18}}>{isLoc?"📍":"👤"}</span>
+                  <div style={{fontWeight:900,fontSize:16,color:C.text}}>{d.name}</div>
+                </div>
+                {d.address&&<div style={{fontSize:12,color:C.textMd,marginBottom:2}}>📍 {d.address}</div>}
+                {!isLoc&&d.creditorType&&<div style={{fontSize:11,background:`rgba(107,63,160,0.1)`,color:C.purple,padding:"2px 8px",borderRadius:6,display:"inline-block",marginBottom:2}}>{d.creditorType==="company"?"🏢 شركة":"👤 شخص"}</div>}
+                {d.projectName&&<div style={{fontSize:12,color:C.gold,marginTop:2}}>🏗️ {d.projectName}</div>}
+                {d.dueDate&&<div style={{fontSize:11,color:C.textSm,marginTop:2}}>📅 استحقاق: {d.dueDate}</div>}
+                {d.installment&&d.installmentAmount>0&&<div style={{fontSize:11,color:"#2557A7",marginTop:2}}>💳 قسط {d.installmentPeriod}: {fmt(d.installmentAmount,d.currency)}</div>}
+              </div>
+              <div style={{textAlign:"left"}}>
+                <div style={{fontSize:20,fontWeight:900,color:C.red}}>{fmt(remaining,d.currency)}</div>
+                {paid>0&&<div style={{fontSize:11,color:C.textSm,marginTop:2}}>من {fmt(d.amount||0,d.currency)}</div>}
+              </div>
+            </div>
+
+            {/* شريط التقدم */}
+            {paid>0&&d.amount>0&&(
+              <>
+                <div style={{background:C.bg3,borderRadius:999,height:5,marginBottom:4,overflow:"hidden"}}>
+                  <div style={{background:"linear-gradient(90deg,#1A7A4A,#27ae60)",height:"100%",borderRadius:999,width:`${pct}%`,transition:"width 0.5s"}}/>
+                </div>
+                <div style={{display:"flex",justifyContent:"space-between",fontSize:11,color:C.textSm,marginBottom:8}}>
+                  <span>✅ مسدد: {fmt(paid,d.currency)}</span>
+                  <span style={{fontWeight:700,color:"#1A7A4A"}}>{toAr(pct)}%</span>
+                </div>
+              </>
+            )}
+
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+              <span style={{fontSize:12,fontWeight:700,color:sc,background:sb,padding:"4px 12px",borderRadius:8}}>{d.status}</span>
+              {d.lastPayment&&<span style={{fontSize:11,color:C.textSm}}>آخر سداد: {d.lastPayment}</span>}
+            </div>
+
+            {d.note&&<div style={{fontSize:12,color:C.textMd,background:C.bg2,borderRadius:8,padding:"6px 10px",marginBottom:8}}>{d.note}</div>}
+
+            {d.status!=="مسدد كامل"&&<CompanyDebtPayRow debt={d} onPay={payCompanyDebt} S={S} C={C} fmt={fmt}/>}
+            <button style={{marginTop:8,width:"100%",background:"transparent",border:`1px solid rgba(192,57,43,0.15)`,borderRadius:8,padding:"5px",color:C.red,fontSize:11,cursor:"pointer"}} onClick={()=>delDebt(d.id)}>🗑️ حذف</button>
+          </div>
+        );
+      };
+
       return (
         <div>
-          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20,flexWrap:"wrap",gap:10}}>
+          {/* Header */}
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16,flexWrap:"wrap",gap:10}}>
             <div style={{display:"flex",alignItems:"center",gap:12}}>
               {!D&&<BackBtn/>}
               <div style={S.secTitle}>💳 ديون الشركة</div>
             </div>
-            <button style={{...S.goldBtn,width:"auto",padding:"10px 20px",marginBottom:0,background:"linear-gradient(135deg,#C0392B,#A93226)",color:"#fff",fontSize:13}} onClick={()=>setShowDebtForm(v=>!v)}>
+            <button style={{...S.goldBtn,width:"auto",padding:"9px 18px",marginBottom:0,background:"linear-gradient(135deg,#C0392B,#A93226)",color:"#fff",fontSize:13}}
+              onClick={()=>setShowDebtForm(v=>!v)}>
               {showDebtForm?"✕ إغلاق":"+ إضافة دين"}
             </button>
           </div>
 
-          {/* نموذج إضافة دين */}
+          {/* ملخص الإجمالي */}
+          <div style={{background:"linear-gradient(135deg,#C0392B,#A93226)",borderRadius:18,padding:20,marginBottom:16,boxShadow:C.shadowMd}}>
+            <div style={{fontSize:12,color:"rgba(255,255,255,0.8)",fontWeight:700,marginBottom:6}}>💳 إجمالي ديون الشركة</div>
+            <div style={{fontSize:28,fontWeight:900,color:"#fff",letterSpacing:-1}}>{fmtD(totalAll)}</div>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginTop:12}}>
+              <div style={{background:"rgba(255,255,255,0.15)",borderRadius:10,padding:"10px 12px",textAlign:"center"}}>
+                <div style={{fontSize:10,color:"rgba(255,255,255,0.8)",marginBottom:3}}>👤 أشخاص وشركات</div>
+                <div style={{fontSize:16,fontWeight:800,color:"#fff"}}>{fmtD(totalPerson)}</div>
+                <div style={{fontSize:10,color:"rgba(255,255,255,0.6)"}}>{toAr(personDebts.filter(d=>d.status!=="مسدد كامل").length)} دين</div>
+              </div>
+              <div style={{background:"rgba(255,255,255,0.15)",borderRadius:10,padding:"10px 12px",textAlign:"center"}}>
+                <div style={{fontSize:10,color:"rgba(255,255,255,0.8)",marginBottom:3}}>📍 مواقع وعقارات</div>
+                <div style={{fontSize:16,fontWeight:800,color:"#fff"}}>{fmtD(totalLocation)}</div>
+                <div style={{fontSize:10,color:"rgba(255,255,255,0.6)"}}>{toAr(locationDebts.filter(d=>d.status!=="مسدد كامل").length)} دين</div>
+              </div>
+            </div>
+          </div>
+
+          {/* نموذج إضافة */}
           {showDebtForm&&(
-            <div style={{...S.formCard,marginBottom:20}}>
-              <div style={{fontWeight:800,fontSize:15,color:C.red,marginBottom:12}}>إضافة دين جديد على الشركة</div>
-              <div style={D?{display:"flex",gap:12}:{}}>
-                <div style={D?{flex:2}:{}}>
-                  <div style={S.fLbl}>اسم الدائن (شخص أو شركة)</div>
+            <div style={{...S.formCard,marginBottom:16}}>
+              <div style={{fontWeight:800,fontSize:15,color:C.red,marginBottom:12}}>إضافة دين جديد</div>
+
+              {/* نوع الدين */}
+              <div style={S.fLbl}>نوع الدين</div>
+              <div style={S.tRow}>
+                <button style={{...S.tBtn,...(debtForm.debtType==="person"?{background:"rgba(107,63,160,0.15)",border:`1px solid ${C.purple}`,color:C.purple}:{})}}
+                  onClick={()=>setDebtForm(f=>({...f,debtType:"person"}))}>👤 شخص / شركة</button>
+                <button style={{...S.tBtn,...(debtForm.debtType==="location"?{background:"rgba(193,123,47,0.15)",border:`1px solid ${C.gold}`,color:C.gold}:{})}}
+                  onClick={()=>setDebtForm(f=>({...f,debtType:"location"}))}>📍 موقع / عقار</button>
+              </div>
+
+              {/* تفاصيل حسب النوع */}
+              {debtForm.debtType==="person"&&(
+                <>
+                  <div style={S.fLbl}>نوع الدائن</div>
+                  <div style={S.tRow}>
+                    <button style={{...S.tBtn,...(debtForm.creditorType==="person"?{background:"rgba(37,87,167,0.15)",border:`1px solid #2557A7`,color:"#2557A7"}:{})}}
+                      onClick={()=>setDebtForm(f=>({...f,creditorType:"person"}))}>👤 شخص</button>
+                    <button style={{...S.tBtn,...(debtForm.creditorType==="company"?{background:"rgba(37,87,167,0.15)",border:`1px solid #2557A7`,color:"#2557A7"}:{})}}
+                      onClick={()=>setDebtForm(f=>({...f,creditorType:"company"}))}>🏢 شركة</button>
+                  </div>
+                  <div style={S.fLbl}>اسم {debtForm.creditorType==="company"?"الشركة":"الشخص"}</div>
                   <input style={S.inp} placeholder="مثال: شركة المواد، علي حسن..." value={debtForm.name} onChange={e=>setDebtForm(f=>({...f,name:e.target.value}))} autoFocus/>
-                </div>
+                </>
+              )}
+
+              {debtForm.debtType==="location"&&(
+                <>
+                  <div style={S.fLbl}>اسم الموقع / العقار</div>
+                  <input style={S.inp} placeholder="مثال: موقع بغداد، مستودع الشعب..." value={debtForm.name} onChange={e=>setDebtForm(f=>({...f,name:e.target.value}))} autoFocus/>
+                  <div style={S.fLbl}>العنوان</div>
+                  <input style={S.inp} placeholder="العنوان التفصيلي..." value={debtForm.address||""} onChange={e=>setDebtForm(f=>({...f,address:e.target.value}))}/>
+                  {/* خيار الأقساط للمواقع */}
+                  <div style={S.fLbl}>نظام الدفع</div>
+                  <div style={S.tRow}>
+                    <button style={{...S.tBtn,...(!debtForm.installment?{background:"rgba(37,87,167,0.15)",border:`1px solid #2557A7`,color:"#2557A7"}:{})}}
+                      onClick={()=>setDebtForm(f=>({...f,installment:false}))}>دفعة واحدة</button>
+                    <button style={{...S.tBtn,...(debtForm.installment?{background:"rgba(26,122,74,0.15)",border:`1px solid #1A7A4A`,color:"#1A7A4A"}:{})}}
+                      onClick={()=>setDebtForm(f=>({...f,installment:true}))}>💳 أقساط</button>
+                  </div>
+                  {debtForm.installment&&(
+                    <div style={D?{display:"flex",gap:12}:{}}>
+                      <div style={D?{flex:1}:{}}><div style={S.fLbl}>قيمة القسط</div><input style={S.inp} type="number" placeholder="٠" value={debtForm.installmentAmount} onChange={e=>setDebtForm(f=>({...f,installmentAmount:e.target.value}))}/></div>
+                      <div style={D?{flex:1}:{}}>
+                        <div style={S.fLbl}>دورية القسط</div>
+                        <select style={S.sel} value={debtForm.installmentPeriod} onChange={e=>setDebtForm(f=>({...f,installmentPeriod:e.target.value}))}>
+                          <option value="شهري">شهري</option>
+                          <option value="فصلي">فصلي</option>
+                          <option value="سنوي">سنوي</option>
+                        </select>
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
+
+              {/* حقول مشتركة */}
+              <div style={D?{display:"flex",gap:12}:{}}>
                 <div style={D?{flex:1}:{}}>
                   <div style={S.fLbl}>المشروع المرتبط</div>
                   <select style={S.sel} value={debtForm.projectId} onChange={e=>setDebtForm(f=>({...f,projectId:e.target.value}))}>
-                    <option value="">عام (بدون مشروع)</option>
+                    <option value="">عام</option>
                     {projs.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}
                   </select>
+                </div>
+                <div style={D?{flex:1}:{}}>
+                  <div style={S.fLbl}>تاريخ الاستحقاق</div>
+                  <input style={S.inp} type="date" value={debtForm.dueDate||""} onChange={e=>setDebtForm(f=>({...f,dueDate:e.target.value}))}/>
                 </div>
               </div>
               <div style={D?{display:"flex",gap:12}:{}}>
@@ -2652,97 +2794,41 @@ export default function App() {
                     <button style={{...S.tBtn,...(debtForm.currency==="دولار"?{background:"rgba(26,122,74,0.15)",border:`1px solid #1A7A4A`,color:"#1A7A4A"}:{})}} onClick={()=>setDebtForm(f=>({...f,currency:"دولار"}))}>🇺🇸</button>
                   </div>
                 </div>
-                <div style={D?{flex:1}:{}}>
-                  <div style={S.fLbl}>تاريخ الاستحقاق</div>
-                  <input style={S.inp} type="date" value={debtForm.dueDate||""} onChange={e=>setDebtForm(f=>({...f,dueDate:e.target.value}))}/>
-                </div>
               </div>
               <div style={S.fLbl}>ملاحظات</div>
-              <textarea style={S.ta} placeholder="تفاصيل الدين..." value={debtForm.note} onChange={e=>setDebtForm(f=>({...f,note:e.target.value}))} rows={2}/>
-              <button style={{...S.subBtn,background:"linear-gradient(135deg,#C0392B,#A93226)",color:"#fff"}} onClick={addDebt}>💾 حفظ الدين</button>
+              <textarea style={S.ta} placeholder="تفاصيل..." value={debtForm.note} onChange={e=>setDebtForm(f=>({...f,note:e.target.value}))} rows={2}/>
+              <button style={{...S.subBtn,background:"linear-gradient(135deg,#C0392B,#A93226)",color:"#fff"}} onClick={addDebt}>💾 حفظ</button>
             </div>
           )}
 
-          {/* ملخص */}
-          {debts.length>0&&(
-            <div style={{display:"grid",gridTemplateColumns:D?"repeat(3,1fr)":"1fr 1fr",gap:12,marginBottom:20}}>
-              <div style={{background:"linear-gradient(135deg,#C0392B,#A93226)",borderRadius:16,padding:"16px 18px",boxShadow:C.shadowMd,gridColumn:D?"auto":"1/-1"}}>
-                <div style={{fontSize:11,color:"rgba(255,255,255,0.8)",fontWeight:700,marginBottom:4}}>💳 إجمالي المتبقي على الشركة</div>
-                <div style={{fontSize:24,fontWeight:900,color:"#fff"}}>{fmtD(totalOwed)}</div>
-                <div style={{fontSize:11,color:"rgba(255,255,255,0.7)",marginTop:4}}>{toAr(pendingDebts.length)} دين غير مسدد</div>
-              </div>
-              <div style={{background:"linear-gradient(135deg,#1A7A4A,#147A40)",borderRadius:16,padding:"16px 18px",boxShadow:C.shadowMd}}>
-                <div style={{fontSize:11,color:"rgba(255,255,255,0.8)",fontWeight:700,marginBottom:4}}>✅ إجمالي المسدد</div>
-                <div style={{fontSize:22,fontWeight:900,color:"#fff"}}>{fmtD(totalPaid)}</div>
-              </div>
-              <div style={{background:"linear-gradient(135deg,#374151,#1f2937)",borderRadius:16,padding:"16px 18px",boxShadow:C.shadowMd}}>
-                <div style={{fontSize:11,color:"rgba(255,255,255,0.8)",fontWeight:700,marginBottom:4}}>📋 إجمالي الديون</div>
-                <div style={{fontSize:22,fontWeight:900,color:"#fff"}}>{toAr(debts.length)}</div>
-              </div>
-            </div>
-          )}
+          {/* تبويبتان */}
+          <div style={{display:"flex",background:C.bg2,borderRadius:12,padding:4,gap:4,marginBottom:16}}>
+            {[["persons","👤 أشخاص وشركات",personDebts.length],["locations","📍 مواقع وعقارات",locationDebts.length]].map(([id,label,count])=>(
+              <button key={id} style={{flex:1,padding:"10px 8px",borderRadius:9,border:"none",cursor:"pointer",fontWeight:700,fontSize:13,
+                background:debtTab===id?C.red:"transparent",
+                color:debtTab===id?"#fff":C.textMd,
+                boxShadow:debtTab===id?C.shadow:"none",
+              }} onClick={()=>setDebtTab(id)}>
+                {label} ({toAr(count)})
+              </button>
+            ))}
+          </div>
 
           {/* قائمة الديون */}
-          {debts.length===0?<div style={S.empty}>ما في ديون مسجلة</div>:(
-            <div style={D?S.txGrid:{}}>
-              {debts.map(d=>{
-                const remaining = d.remaining??d.amount??0;
-                const paid      = d.paidAmount||0;
-                const pct       = d.amount>0?Math.min(100,Math.round(paid/d.amount*100)):0;
-                const sc = d.status==="مسدد كامل"?"#1A7A4A":d.status==="مسدد جزئي"?"#b45309":"#C0392B";
-                const sb = d.status==="مسدد كامل"?"rgba(26,122,74,0.1)":d.status==="مسدد جزئي"?"rgba(180,83,9,0.1)":"rgba(192,57,43,0.08)";
-                return(
-                  <div key={d.id} style={{...S.txCard,marginBottom:12,border:`1px solid ${sc}33`}}>
-                    {/* الرأس */}
-                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:10}}>
-                      <div>
-                        <div style={{fontWeight:900,fontSize:16,color:C.text}}>{d.name}</div>
-                        {d.projectName&&<div style={{fontSize:12,color:C.gold,marginTop:2}}>🏗️ {d.projectName}</div>}
-                        {d.dueDate&&<div style={{fontSize:11,color:C.textSm,marginTop:2}}>📅 استحقاق: {d.dueDate}</div>}
-                      </div>
-                      <div style={{textAlign:"left"}}>
-                        <div style={{fontSize:18,fontWeight:900,color:"#C0392B"}}>{fmt(remaining,d.currency)}</div>
-                        <div style={{fontSize:11,color:C.textSm,marginTop:2}}>من {fmt(d.amount||0,d.currency)}</div>
-                      </div>
-                    </div>
-
-                    {/* شريط التقدم */}
-                    {paid>0&&d.amount>0&&(
-                      <>
-                        <div style={{background:C.bg3,borderRadius:999,height:6,marginBottom:6,overflow:"hidden"}}>
-                          <div style={{background:`linear-gradient(90deg,#1A7A4A,#27ae60)`,height:"100%",borderRadius:999,width:`${pct}%`,transition:"width 0.5s"}}/>
-                        </div>
-                        <div style={{display:"flex",justifyContent:"space-between",fontSize:11,color:C.textSm,marginBottom:8}}>
-                          <span>✅ مسدد: {fmt(paid,d.currency)}</span>
-                          <span style={{fontWeight:700,color:"#1A7A4A"}}>{toAr(pct)}%</span>
-                        </div>
-                      </>
-                    )}
-
-                    {/* الحالة */}
-                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
-                      <span style={{fontSize:12,fontWeight:700,color:sc,background:sb,padding:"4px 12px",borderRadius:8,border:`1px solid ${sc}33`}}>
-                        {d.status}
-                      </span>
-                      {d.lastPayment&&<span style={{fontSize:11,color:C.textSm}}>آخر سداد: {d.lastPayment}</span>}
-                    </div>
-
-                    {d.note&&<div style={{fontSize:12,color:C.textMd,background:C.bg2,borderRadius:8,padding:"6px 10px",marginBottom:10}}>{d.note}</div>}
-
-                    {/* زر سداد + حذف */}
-                    {d.status!=="مسدد كامل"&&(
-                      <CompanyDebtPayRow debt={d} onPay={payCompanyDebt} S={S} C={C} fmt={fmt}/>
-                    )}
-                    <button style={{marginTop:8,width:"100%",background:"transparent",border:`1px solid rgba(192,57,43,0.15)`,borderRadius:8,padding:"6px",color:C.red,fontSize:11,cursor:"pointer"}} onClick={()=>delDebt(d.id)}>🗑️ حذف</button>
-                  </div>
-                );
-              })}
-            </div>
+          {debtTab==="persons"&&(
+            personDebts.length===0?<div style={S.empty}>ما في ديون أشخاص / شركات</div>:
+            <div style={D?S.txGrid:{}}>{personDebts.map(d=><DebtCard key={d.id} d={d}/>)}</div>
           )}
+          {debtTab==="locations"&&(
+            locationDebts.length===0?<div style={S.empty}>ما في ديون مواقع / عقارات</div>:
+            <div style={D?S.txGrid:{}}>{locationDebts.map(d=><DebtCard key={d.id} d={d}/>)}</div>
+          )}
+
           {!D&&<button style={S.canBtn} onClick={()=>setView("home")}>← رجوع</button>}
         </div>
       );
     }
+
     // ════════════════════════════════
     // قسم الإدارة — ADMIN MODULE
     // ════════════════════════════════
