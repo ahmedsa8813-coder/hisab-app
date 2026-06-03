@@ -3190,14 +3190,19 @@ function SalariesPage({D,user,isManager,salaryEmployees,salaryPayments,salaryAdv
     const totalPay= pays.reduce((s,p)=>s+p.amount,0);
     const totalOT = ots.reduce((s,o)=>s+o.amount,0);
     const foodAllow= e.hasFood?(e.foodAllowance||0):0;
-    const due     = e.baseSalary + totalOT + foodAllow; // راتب + أوفر تايم + طعام
+    const foodCur  = e.foodCurrency||e.currency;
+    // تحويل الطعام لعملة الراتب للحساب الموحد
+    const foodInSalaryCur = foodCur===e.currency ? foodAllow :
+      (foodCur==="دولار"&&e.currency==="دينار") ? foodAllow*exchRate :
+      (foodCur==="دينار"&&e.currency==="دولار") ? foodAllow/exchRate : foodAllow;
+    const due     = e.baseSalary + totalOT + foodInSalaryCur;
     const received= totalAdv + totalPay;
     const remaining=due - received;
     const rate    = e.currency==="دولار"?exchRate:1;
     const dueD    = due*rate;
     const receivedD=received*rate;
     const remainingD=remaining*rate;
-    return{...e,totalAdv,totalPay,totalOT,foodAllow,due,received,remaining,dueD,receivedD,remainingD,rate};
+    return{...e,totalAdv,totalPay,totalOT,foodAllow,foodCurrency:e.foodCurrency||e.currency,due,received,remaining,dueD,receivedD,remainingD,rate};
   });
 
   // مجاميع موحدة بالدينار
@@ -3246,9 +3251,10 @@ function SalariesPage({D,user,isManager,salaryEmployees,salaryPayments,salaryAdv
       currency:newEmp.currency,note:newEmp.note||"",
       hasFood:newEmp.hasFood||false,
       foodAllowance:newEmp.hasFood?Number(newEmp.foodAllowance||0):0,
+      foodCurrency:newEmp.hasFood?(newEmp.foodCurrency||"دينار"):"دينار",
       createdAt:new Date().toISOString(),
     });
-    setNewEmp({name:"",baseSalary:"",currency:"دينار",note:"",hasFood:false,foodAllowance:""});
+    setNewEmp({name:"",baseSalary:"",currency:"دينار",note:"",hasFood:false,foodAllowance:"",foodCurrency:"دينار"});
     setAddEmpModal(false);
   };
 
@@ -3329,7 +3335,7 @@ function SalariesPage({D,user,isManager,salaryEmployees,salaryPayments,salaryAdv
                       <div style={{fontSize:10,color:C.textSm,fontWeight:500}}>{e.currency==="دولار"?"🇺🇸 دولار":"🇮🇶 دينار"}</div>
                     </td>
                     <td style={{padding:"10px 12px",textAlign:"center",fontWeight:700,color:C.textMd}}>{fmt(e.baseSalary,e.currency)}</td>
-                    <td style={{padding:"10px 12px",textAlign:"center"}}>{e.hasFood?<span style={{fontSize:12,fontWeight:700,color:"#1A7A4A"}}>🍽️ {fmt(e.foodAllow,e.currency)}</span>:<span style={{color:C.textSm,fontSize:12}}>—</span>}</td>
+                    <td style={{padding:"10px 12px",textAlign:"center"}}>{e.hasFood?<span style={{fontSize:12,fontWeight:700,color:"#1A7A4A"}}>🍽️ {fmt(e.foodAllow,e.foodCurrency||e.currency)}</span>:<span style={{color:C.textSm,fontSize:12}}>—</span>}</td>
                     <td style={{padding:"10px 12px",textAlign:"center",fontWeight:700,color:"#6B3FA0"}}>{e.totalOT>0?fmt(e.totalOT,e.currency):<span style={{color:C.bg3}}>—</span>}</td>
                     <td style={{padding:"10px 12px",textAlign:"center",fontWeight:900,color:"#1d4ed8",background:"rgba(29,78,216,0.04)"}}>{fmt(e.due,e.currency)}</td>
                     <td style={{padding:"10px 12px",textAlign:"center",fontWeight:700,color:"#b45309"}}>{e.totalAdv>0?fmt(e.totalAdv,e.currency):<span style={{color:C.bg3}}>—</span>}</td>
@@ -3453,12 +3459,19 @@ function SalariesPage({D,user,isManager,salaryEmployees,salaryPayments,salaryAdv
             </div>
             <div style={S.fLbl}>الطعام</div>
             <div style={S.tRow}>
-              <button style={{...S.tBtn,...(newEmp.hasFood?{background:"rgba(26,122,74,0.15)",border:"1px solid #1A7A4A",color:"#1A7A4A"}:{})}} onClick={()=>setNewEmp(f=>({...f,hasFood:true}))}>🍽️ عنده طعام</button>
+              <button style={{...S.tBtn,...(newEmp.hasFood?{background:"rgba(26,122,74,0.15)",border:"1px solid #1A7A4A",color:"#1A7A4A"}:{})}} onClick={()=>setNewEmp(f=>({...f,hasFood:true,foodCurrency:f.foodCurrency||"دينار"}))}>🍽️ عنده طعام</button>
               <button style={{...S.tBtn,...(!newEmp.hasFood?{background:"rgba(192,57,43,0.1)",border:"1px solid #C0392B",color:"#C0392B"}:{})}} onClick={()=>setNewEmp(f=>({...f,hasFood:false}))}>❌ بدون طعام</button>
             </div>
             {newEmp.hasFood&&(<>
               <div style={S.fLbl}>قيمة وجبة الطعام</div>
               <input style={S.inp} type="number" placeholder="مثال: 5000" value={newEmp.foodAllowance||""} onChange={e=>setNewEmp(f=>({...f,foodAllowance:e.target.value}))}/>
+              <div style={S.fLbl}>عملة الطعام</div>
+              <div style={S.tRow}>
+                <button style={{...S.tBtn,...((newEmp.foodCurrency||"دينار")==="دينار"?{background:"rgba(37,87,167,0.15)",border:`1px solid #2557A7`,color:"#2557A7"}:{})}}
+                  onClick={()=>setNewEmp(f=>({...f,foodCurrency:"دينار"}))}>🇮🇶 دينار</button>
+                <button style={{...S.tBtn,...((newEmp.foodCurrency)==="دولار"?{background:"rgba(26,122,74,0.15)",border:`1px solid #1A7A4A`,color:"#1A7A4A"}:{})}}
+                  onClick={()=>setNewEmp(f=>({...f,foodCurrency:"دولار"}))}>🇺🇸 دولار</button>
+              </div>
             </>)}
             <div style={S.fLbl}>ملاحظة (اختياري)</div>
             <input style={S.inp} placeholder="..." value={newEmp.note} onChange={e=>setNewEmp(f=>({...f,note:e.target.value}))}/>
