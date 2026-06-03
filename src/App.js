@@ -483,6 +483,8 @@ export default function App() {
   const addWorkLog = async (data) => {
     if(!data.employeeId||!data.hours||!data.date) return false;
     const emp = salaryEmployees.find(e=>e.id===data.employeeId);
+    const hoursAmt = Number(data.hours) * 1; // $1/hr
+    const foodAmt  = data.hasFood?(emp?.foodAllowance||data.foodAmount||0):0;
     await addDoc(collection(db,"workLogs"),{
       employeeId: data.employeeId,
       employeeName: emp?.name||"",
@@ -491,8 +493,11 @@ export default function App() {
       month: data.date.slice(0,7),
       note: data.note||"",
       submittedBy: "foreman",
-      ratePerHour: 1, // 1 دولار ثابت
-      amount: Number(data.hours) * 1,
+      ratePerHour: 1,
+      amount: hoursAmt,
+      hasFood: data.hasFood||false,
+      foodAmount: foodAmt,
+      totalDay: hoursAmt + foodAmt,
       currency: "دولار",
       createdAt: new Date().toISOString(),
     });
@@ -980,7 +985,7 @@ export default function App() {
     // ADD TX
     if(user.role!=="manager"&&view==="add") return (
       <div style={D?{maxWidth:600}:{}}>
-        <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:4}}><BackBtn to="home" label="رجوع"/><div style={S.secTitle}>تسجيل معاملة جديدة</div></div>
+        <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:20}}><BackBtn to="home" label="رجوع"/><div style={S.secTitle}>تسجيل معاملة جديدة</div></div>
         {formOK?(
           <div style={{textAlign:"center",padding:60,color:"#34d399"}}><div style={{fontSize:60,marginBottom:12}}>✅</div><div style={{fontSize:20,fontWeight:800}}>تم التسجيل بنجاح!</div></div>
         ):(
@@ -1975,7 +1980,7 @@ export default function App() {
     // ADMIN HOME
     if(user.role==="manager"&&view==="adminHome") return (
       <div>
-        <div style={S.secTitle}>💼 لوحة الإدارة</div>
+        <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:4}}>{!D&&<button style={S.backBtn2} onClick={()=>{setModule("finance");setView("home");}}>← المالية</button>}<div style={S.secTitle}>💼 لوحة الإدارة</div></div>
 
         {/* بطاقات القسم */}
         <div style={{display:"grid",gridTemplateColumns:D?"repeat(4,1fr)":"1fr 1fr",gap:14,marginBottom:28}}>
@@ -2350,7 +2355,7 @@ function SalariesPage({D,user,isManager,salaryEmployees,salaryPayments,salaryAdv
   const [payNote,     setPayNote]     = useState("");
   const [payMonth,    setPayMonth]    = useState(curMonth);
   const [addEmpModal, setAddEmpModal] = useState(false);
-  const [newEmp,      setNewEmp]      = useState({name:"",baseSalary:"",currency:"دينار",note:""});
+  const [newEmp,      setNewEmp]      = useState({name:"",baseSalary:"",currency:"دينار",note:"",hasFood:false,foodAllowance:""});
   const [saving,      setSaving]      = useState(false);
   const [exchRate,    setExchRate]    = useState(1520);
   const [exchInput,   setExchInput]   = useState("");
@@ -2363,15 +2368,15 @@ function SalariesPage({D,user,isManager,salaryEmployees,salaryPayments,salaryAdv
     const totalAdv= advs.reduce((s,a)=>s+a.amount,0);
     const totalPay= pays.reduce((s,p)=>s+p.amount,0);
     const totalOT = ots.reduce((s,o)=>s+o.amount,0);
-    const due     = e.baseSalary + totalOT;
+    const foodAllow= e.hasFood?(e.foodAllowance||0):0;
+    const due     = e.baseSalary + totalOT + foodAllow; // راتب + أوفر تايم + طعام
     const received= totalAdv + totalPay;
     const remaining=due - received;
-    // تحويل للدينار
     const rate    = e.currency==="دولار"?exchRate:1;
     const dueD    = due*rate;
     const receivedD=received*rate;
     const remainingD=remaining*rate;
-    return{...e,totalAdv,totalPay,totalOT,due,received,remaining,dueD,receivedD,remainingD,rate};
+    return{...e,totalAdv,totalPay,totalOT,foodAllow,due,received,remaining,dueD,receivedD,remainingD,rate};
   });
 
   // مجاميع موحدة بالدينار
@@ -2418,9 +2423,11 @@ function SalariesPage({D,user,isManager,salaryEmployees,salaryPayments,salaryAdv
     await addDoc(collection(db,"salaryEmployees"),{
       name:newEmp.name.trim(),baseSalary:Number(newEmp.baseSalary),
       currency:newEmp.currency,note:newEmp.note||"",
+      hasFood:newEmp.hasFood||false,
+      foodAllowance:newEmp.hasFood?Number(newEmp.foodAllowance||0):0,
       createdAt:new Date().toISOString(),
     });
-    setNewEmp({name:"",baseSalary:"",currency:"دينار",note:""});
+    setNewEmp({name:"",baseSalary:"",currency:"دينار",note:"",hasFood:false,foodAllowance:""});
     setAddEmpModal(false);
   };
 
@@ -2488,7 +2495,7 @@ function SalariesPage({D,user,isManager,salaryEmployees,salaryPayments,salaryAdv
             <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
               <thead>
                 <tr style={{background:"#1d4ed8"}}>
-                  {["الموظف","الراتب","الأوفر تايم","المستحق","السلف","المدفوع","الباقي",""].map(h=>(
+                  {["الموظف","الراتب","🍽️ طعام","⏰ أوفر تايم","المستحق الكلي","السلف","المدفوع","الباقي",""].map(h=>(
                     <th key={h} style={{padding:"10px 12px",color:"#fff",fontWeight:700,fontSize:11,textAlign:"center",whiteSpace:"nowrap"}}>{h}</th>
                   ))}
                 </tr>
@@ -2501,6 +2508,7 @@ function SalariesPage({D,user,isManager,salaryEmployees,salaryPayments,salaryAdv
                       <div style={{fontSize:10,color:C.textSm,fontWeight:500}}>{e.currency==="دولار"?"🇺🇸 دولار":"🇮🇶 دينار"}</div>
                     </td>
                     <td style={{padding:"10px 12px",textAlign:"center",fontWeight:700,color:C.textMd}}>{fmt(e.baseSalary,e.currency)}</td>
+                    <td style={{padding:"10px 12px",textAlign:"center"}}>{e.hasFood?<span style={{fontSize:12,fontWeight:700,color:"#1A7A4A"}}>🍽️ {fmt(e.foodAllow,e.currency)}</span>:<span style={{color:C.textSm,fontSize:12}}>—</span>}</td>
                     <td style={{padding:"10px 12px",textAlign:"center",fontWeight:700,color:"#6B3FA0"}}>{e.totalOT>0?fmt(e.totalOT,e.currency):<span style={{color:C.bg3}}>—</span>}</td>
                     <td style={{padding:"10px 12px",textAlign:"center",fontWeight:900,color:"#1d4ed8",background:"rgba(29,78,216,0.04)"}}>{fmt(e.due,e.currency)}</td>
                     <td style={{padding:"10px 12px",textAlign:"center",fontWeight:700,color:"#b45309"}}>{e.totalAdv>0?fmt(e.totalAdv,e.currency):<span style={{color:C.bg3}}>—</span>}</td>
@@ -2622,6 +2630,15 @@ function SalariesPage({D,user,isManager,salaryEmployees,salaryPayments,salaryAdv
               <button style={{...S.tBtn,...(newEmp.currency==="دينار"?{background:"rgba(37,87,167,0.15)",border:`1px solid #2557A7`,color:"#2557A7"}:{})}} onClick={()=>setNewEmp(f=>({...f,currency:"دينار"}))}>🇮🇶 دينار</button>
               <button style={{...S.tBtn,...(newEmp.currency==="دولار"?{background:"rgba(26,122,74,0.15)",border:`1px solid #1A7A4A`,color:"#1A7A4A"}:{})}} onClick={()=>setNewEmp(f=>({...f,currency:"دولار"}))}>🇺🇸 دولار</button>
             </div>
+            <div style={S.fLbl}>الطعام</div>
+            <div style={S.tRow}>
+              <button style={{...S.tBtn,...(newEmp.hasFood?{background:"rgba(26,122,74,0.15)",border:"1px solid #1A7A4A",color:"#1A7A4A"}:{})}} onClick={()=>setNewEmp(f=>({...f,hasFood:true}))}>🍽️ عنده طعام</button>
+              <button style={{...S.tBtn,...(!newEmp.hasFood?{background:"rgba(192,57,43,0.1)",border:"1px solid #C0392B",color:"#C0392B"}:{})}} onClick={()=>setNewEmp(f=>({...f,hasFood:false}))}>❌ بدون طعام</button>
+            </div>
+            {newEmp.hasFood&&(<>
+              <div style={S.fLbl}>قيمة وجبة الطعام</div>
+              <input style={S.inp} type="number" placeholder="مثال: 5000" value={newEmp.foodAllowance||""} onChange={e=>setNewEmp(f=>({...f,foodAllowance:e.target.value}))}/>
+            </>)}
             <div style={S.fLbl}>ملاحظة (اختياري)</div>
             <input style={S.inp} placeholder="..." value={newEmp.note} onChange={e=>setNewEmp(f=>({...f,note:e.target.value}))}/>
             <div style={{display:"flex",gap:10,marginTop:16}}>
@@ -2637,7 +2654,7 @@ function SalariesPage({D,user,isManager,salaryEmployees,salaryPayments,salaryAdv
 
 function ForemanLogForm({employees, onSubmit}) {
   const today2 = () => new Date().toISOString().split("T")[0];
-  const [entries, setEntries] = useState([{employeeId:"",hours:""}]);
+  const [entries, setEntries] = useState([{employeeId:"",hours:"",hasFood:false}]);
   const [date, setDate] = useState(today2());
   const [note, setNote] = useState("");
   const [ok, setOk] = useState(false);
@@ -2646,7 +2663,7 @@ function ForemanLogForm({employees, onSubmit}) {
   const inp = {width:"100%",background:"#F8FAFC",border:"1px solid #E2E8F0",borderRadius:10,padding:"11px 14px",color:"#1a1a2e",fontSize:15,outline:"none",fontFamily:"'Segoe UI',Arial,sans-serif"};
   const lbl = {fontSize:11,color:"#64748b",fontWeight:800,letterSpacing:1,textTransform:"uppercase",marginBottom:6,marginTop:14,display:"block"};
 
-  const addEntry = () => setEntries(e=>[...e,{employeeId:"",hours:""}]);
+  const addEntry = () => setEntries(e=>[...e,{employeeId:"",hours:"",hasFood:false}]);
   const removeEntry = i => setEntries(e=>e.filter((_,idx)=>idx!==i));
   const updateEntry = (i,k,v) => setEntries(e=>e.map((en,idx)=>idx===i?{...en,[k]:v}:en));
 
@@ -2655,11 +2672,13 @@ function ForemanLogForm({employees, onSubmit}) {
     if(!valid.length||!date) return;
     setLoading(true);
     for(const entry of valid){
-      await onSubmit({employeeId:entry.employeeId, hours:entry.hours, date, note});
+      const emp = employees.find(e=>e.id===entry.employeeId);
+      const foodAmt = entry.hasFood?(emp?.foodAllowance||0):0;
+      await onSubmit({employeeId:entry.employeeId, hours:entry.hours, date, note, hasFood:entry.hasFood, foodAmount:foodAmt});
     }
     setLoading(false);
     setOk(true);
-    setTimeout(()=>{setOk(false);setEntries([{employeeId:"",hours:""}]);setNote("");setDate(today2());},2500);
+    setTimeout(()=>{setOk(false);setEntries([{employeeId:"",hours:"",hasFood:false}]);setNote("");setDate(today2());},2500);
   };
 
   if(ok) return (
@@ -2680,18 +2699,35 @@ function ForemanLogForm({employees, onSubmit}) {
       {/* Workers */}
       <label style={{...lbl,marginTop:20}}>👷 Workers & Hours</label>
       {entries.map((entry,i)=>(
-        <div key={i} style={{display:"flex",gap:8,alignItems:"center",marginBottom:8}}>
-          <select style={{...inp,flex:2}} value={entry.employeeId} onChange={e=>updateEntry(i,"employeeId",e.target.value)}>
-            <option value="">Select worker...</option>
-            {employees.map(e=><option key={e.id} value={e.id}>{e.name}</option>)}
-          </select>
-          <div style={{position:"relative",flex:1}}>
-            <input style={{...inp,textAlign:"center",fontWeight:800,fontSize:17,paddingLeft:30}} type="number" min="0" max="24" placeholder="0" value={entry.hours} onChange={e=>updateEntry(i,"hours",e.target.value)}/>
-            <span style={{position:"absolute",left:10,top:"50%",transform:"translateY(-50%)",fontSize:11,color:"#94a3b8",pointerEvents:"none"}}>hrs</span>
+        <div key={i} style={{background:"#F8FAFC",borderRadius:12,padding:"10px 12px",marginBottom:8,border:"1px solid #E2E8F0"}}>
+          <div style={{display:"flex",gap:8,alignItems:"center",marginBottom:8}}>
+            <select style={{...inp,flex:2}} value={entry.employeeId} onChange={e=>updateEntry(i,"employeeId",e.target.value)}>
+              <option value="">Select worker...</option>
+              {employees.map(e=><option key={e.id} value={e.id}>{e.name}{e.hasFood?" 🍽️":""}</option>)}
+            </select>
+            <div style={{position:"relative",flex:1}}>
+              <input style={{...inp,textAlign:"center",fontWeight:800,fontSize:17,paddingLeft:30}} type="number" min="0" max="24" placeholder="0" value={entry.hours} onChange={e=>updateEntry(i,"hours",e.target.value)}/>
+              <span style={{position:"absolute",left:8,top:"50%",transform:"translateY(-50%)",fontSize:11,color:"#94a3b8",pointerEvents:"none"}}>hrs</span>
+            </div>
+            {entries.length>1&&(
+              <button onClick={()=>removeEntry(i)} style={{width:36,height:36,borderRadius:8,border:"1px solid #fee2e2",background:"#fef2f2",color:"#ef4444",cursor:"pointer",fontSize:16,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>×</button>
+            )}
           </div>
-          {entries.length>1&&(
-            <button onClick={()=>removeEntry(i)} style={{width:36,height:36,borderRadius:8,border:"1px solid #fee2e2",background:"#fef2f2",color:"#ef4444",cursor:"pointer",fontSize:16,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>×</button>
-          )}
+          {/* Food toggle */}
+          <div style={{display:"flex",gap:8,alignItems:"center"}}>
+            <button style={{
+              flex:1,padding:"7px",borderRadius:8,border:"1px solid",fontSize:12,fontWeight:700,cursor:"pointer",
+              background:entry.hasFood?"rgba(26,122,74,0.1)":"#fff",
+              color:entry.hasFood?"#1A7A4A":"#94a3b8",
+              borderColor:entry.hasFood?"#1A7A4A":"#e2e8f0",
+            }} onClick={()=>updateEntry(i,"hasFood",!entry.hasFood)}>
+              {entry.hasFood?"🍽️ Food included":"🍽️ Add food?"}
+            </button>
+            {entry.hasFood&&(()=>{
+              const emp=employees.find(e=>e.id===entry.employeeId);
+              return emp?.hasFood?<span style={{fontSize:11,color:"#1A7A4A",fontWeight:700}}>${emp.foodAllowance}/day included</span>:<span style={{fontSize:11,color:"#94a3b8"}}>No food rate set</span>;
+            })()}
+          </div>
         </div>
       ))}
 
@@ -2741,11 +2777,15 @@ function ForemanReport({workLogs, employees, onDelete}) {
   // تجميع تراكمي لكل عامل
   const empSummary = employees.map(e=>{
     const logs = filtered.filter(l=>l.employeeId===e.id).sort((a,b)=>a.date.localeCompare(b.date));
-    const totalHrs = logs.reduce((s,l)=>s+(l.hours||0),0);
-    return {...e, logs, totalHrs, totalAmt:totalHrs*1};
+    const totalHrs  = logs.reduce((s,l)=>s+(l.hours||0),0);
+    const totalFood = logs.reduce((s,l)=>s+(l.foodAmount||0),0);
+    const totalAmt  = logs.reduce((s,l)=>s+(l.totalDay||l.amount||0),0);
+    return {...e, logs, totalHrs, totalFood, totalAmt};
   }).filter(e=>e.totalHrs>0);
 
-  const totalAllHrs = empSummary.reduce((s,e)=>s+e.totalHrs,0);
+  const totalAllHrs  = empSummary.reduce((s,e)=>s+e.totalHrs,0);
+  const totalAllFood = empSummary.reduce((s,e)=>s+e.totalFood,0);
+  const totalAllAmt  = empSummary.reduce((s,e)=>s+e.totalAmt,0);
 
   const inp = {background:"#F8FAFC",border:"1px solid #E2E8F0",borderRadius:10,padding:"8px 14px",color:"#1a1a2e",fontSize:14,outline:"none",fontFamily:"'Segoe UI',Arial,sans-serif"};
 
@@ -2758,8 +2798,16 @@ function ForemanReport({workLogs, employees, onDelete}) {
           {months.map(m=><option key={m} value={m}>{m}</option>)}
           {!months.includes(selMonth)&&<option value={selMonth}>{selMonth}</option>}
         </select>
-        <div style={{marginLeft:"auto",background:"linear-gradient(135deg,#0f766e,#0d9488)",borderRadius:10,padding:"8px 16px",color:"#fff",fontSize:13,fontWeight:700}}>
-          Total: {totalAllHrs} hrs = ${totalAllHrs}
+        <div style={{display:"flex",gap:8,marginLeft:"auto"}}>
+          <div style={{background:"linear-gradient(135deg,#0f766e,#0d9488)",borderRadius:10,padding:"8px 14px",color:"#fff",fontSize:12,fontWeight:700}}>
+            ⏱️ {totalAllHrs} hrs = ${totalAllHrs}
+          </div>
+          {totalAllFood>0&&<div style={{background:"linear-gradient(135deg,#1A7A4A,#147A40)",borderRadius:10,padding:"8px 14px",color:"#fff",fontSize:12,fontWeight:700}}>
+            🍽️ Food: ${totalAllFood}
+          </div>}
+          <div style={{background:"linear-gradient(135deg,#1d4ed8,#2563eb)",borderRadius:10,padding:"8px 14px",color:"#fff",fontSize:12,fontWeight:700}}>
+            💰 Total: ${totalAllAmt}
+          </div>
         </div>
       </div>
 
@@ -2780,8 +2828,9 @@ function ForemanReport({workLogs, employees, onDelete}) {
               </div>
             </div>
             <div style={{textAlign:"right"}}>
-              <div style={{fontWeight:900,fontSize:20,color:"#fff"}}>{e.totalHrs} hrs</div>
-              <div style={{fontSize:13,color:"rgba(255,255,255,0.9)",fontWeight:700}}>${e.totalAmt}</div>
+              <div style={{fontWeight:900,fontSize:20,color:"#fff"}}>{e.totalHrs} hrs = ${e.totalHrs}</div>
+              {e.totalFood>0&&<div style={{fontSize:12,color:"rgba(255,255,255,0.85)"}}>🍽️ Food: ${e.totalFood}</div>}
+              <div style={{fontSize:15,fontWeight:900,color:"#fde68a"}}>💰 Total: ${e.totalAmt}</div>
             </div>
           </div>
 
@@ -2791,7 +2840,8 @@ function ForemanReport({workLogs, employees, onDelete}) {
               <tr style={{background:"#f8fafc"}}>
                 <th style={{padding:"8px 14px",textAlign:"left",fontWeight:700,color:"#64748b",fontSize:11,borderBottom:"1px solid #e2e8f0"}}>DATE</th>
                 <th style={{padding:"8px 14px",textAlign:"center",fontWeight:700,color:"#64748b",fontSize:11,borderBottom:"1px solid #e2e8f0"}}>HOURS</th>
-                <th style={{padding:"8px 14px",textAlign:"center",fontWeight:700,color:"#64748b",fontSize:11,borderBottom:"1px solid #e2e8f0"}}>AMOUNT</th>
+                <th style={{padding:"8px 14px",textAlign:"center",fontWeight:700,color:"#64748b",fontSize:11,borderBottom:"1px solid #e2e8f0"}}>🍽️ FOOD</th>
+                <th style={{padding:"8px 14px",textAlign:"center",fontWeight:700,color:"#64748b",fontSize:11,borderBottom:"1px solid #e2e8f0"}}>DAILY TOTAL</th>
                 <th style={{padding:"8px 14px",textAlign:"center",fontWeight:700,color:"#64748b",fontSize:11,borderBottom:"1px solid #e2e8f0"}}>CUMULATIVE</th>
                 <th style={{padding:"8px 14px",textAlign:"center",fontWeight:700,color:"#64748b",fontSize:11,borderBottom:"1px solid #e2e8f0"}}>NOTE</th>
                 <th style={{padding:"8px 14px",borderBottom:"1px solid #e2e8f0"}}></th>
@@ -2799,16 +2849,22 @@ function ForemanReport({workLogs, employees, onDelete}) {
             </thead>
             <tbody>
               {(()=>{
-                let cumHrs=0;
+                let cumHrs=0; let cumTotal=0;
                 return e.logs.map((l,i)=>{
                   cumHrs+=l.hours||0;
+                  cumTotal+=(l.totalDay||l.amount||0);
                   return(
                     <tr key={l.id} style={{borderBottom:"1px solid #f1f5f9",background:i%2===0?"#fff":"#f8fafc"}}>
                       <td style={{padding:"8px 14px",fontWeight:700,color:"#1a1a2e"}}>📅 {l.date}</td>
-                      <td style={{padding:"8px 14px",textAlign:"center",fontWeight:800,color:"#0f766e",fontSize:15}}>{l.hours}</td>
-                      <td style={{padding:"8px 14px",textAlign:"center",fontWeight:700,color:"#1A7A4A"}}>${l.amount||l.hours}</td>
+                      <td style={{padding:"8px 14px",textAlign:"center",fontWeight:800,color:"#0f766e",fontSize:15}}>{l.hours} hrs</td>
                       <td style={{padding:"8px 14px",textAlign:"center"}}>
-                        <span style={{background:"rgba(15,118,110,0.1)",color:"#0f766e",padding:"3px 10px",borderRadius:8,fontWeight:800,fontSize:13}}>{cumHrs} hrs</span>
+                        {l.hasFood?<span style={{fontWeight:700,color:"#1A7A4A",fontSize:12}}>🍽️ ${l.foodAmount||0}</span>:<span style={{color:"#cbd5e1",fontSize:12}}>—</span>}
+                      </td>
+                      <td style={{padding:"8px 14px",textAlign:"center",fontWeight:800,color:"#1d4ed8"}}>
+                        ${l.totalDay||l.amount||0}
+                      </td>
+                      <td style={{padding:"8px 14px",textAlign:"center"}}>
+                        <span style={{background:"rgba(15,118,110,0.1)",color:"#0f766e",padding:"3px 10px",borderRadius:8,fontWeight:800,fontSize:12}}>${cumTotal}</span>
                       </td>
                       <td style={{padding:"8px 14px",textAlign:"center",color:"#64748b",fontSize:12}}>{l.note||"—"}</td>
                       <td style={{padding:"8px 14px",textAlign:"center"}}>
@@ -2821,9 +2877,10 @@ function ForemanReport({workLogs, employees, onDelete}) {
             </tbody>
             <tfoot>
               <tr style={{background:"#f0fdf4",borderTop:"2px solid #0f766e"}}>
-                <td style={{padding:"10px 14px",fontWeight:800,color:"#0f766e"}}>Total for {selMonth}</td>
-                <td style={{padding:"10px 14px",textAlign:"center",fontWeight:900,color:"#0f766e",fontSize:16}}>{e.totalHrs}</td>
-                <td style={{padding:"10px 14px",textAlign:"center",fontWeight:900,color:"#1A7A4A",fontSize:16}}>${e.totalAmt}</td>
+                <td style={{padding:"10px 14px",fontWeight:800,color:"#0f766e"}}>Total</td>
+                <td style={{padding:"10px 14px",textAlign:"center",fontWeight:900,color:"#0f766e"}}>{e.totalHrs} hrs</td>
+                <td style={{padding:"10px 14px",textAlign:"center",fontWeight:800,color:"#1A7A4A"}}>{e.totalFood>0?`🍽️ $${e.totalFood}`:"—"}</td>
+                <td style={{padding:"10px 14px",textAlign:"center",fontWeight:900,color:"#1d4ed8",fontSize:15}}>${e.totalAmt}</td>
                 <td colSpan={3}/>
               </tr>
             </tfoot>
