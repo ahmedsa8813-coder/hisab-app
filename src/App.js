@@ -272,6 +272,27 @@ export default function App() {
   const addTx = async () => {
     if(!form.amount||!form.date)return;
 
+    // صرف على العمل
+    if(form.isWorkExpense&&user.role==="accountant"){
+      if(!form.amount||!form.date)return;
+      const amt=Number(form.amount);
+      const srcProjId   = form.projectId||"";
+      const srcProjName = projs.find(p=>p.id===srcProjId)?.name||"";
+      await addDoc(collection(db,"transactions"),{
+        userId:user.id, userName:user.name,
+        projectId:srcProjId, projectName:srcProjName,
+        type:"صرف", amount:amt,
+        currency:form.currency,
+        note:`📤 ${form.workExpenseType||"صرف على العمل"}${form.note?" — "+form.note:""}`,
+        date:form.date, image:null,
+        isPersonal:false, isAdvance:false, isWorkExpense:true,
+        createdAt:new Date().toISOString(),
+      });
+      setFormOK(true);
+      setTimeout(()=>{setFormOK(false);setForm({type:"صرف",projectId:"",amount:"",currency:"دينار",note:"",date:today(),image:null,isPersonal:false,isAdvance:false,advanceTo:"",advanceIsPersonal:false,receiveType:"",generalLabel:"",isForeman:false,foremanId:"",foremanName:"",fundSource:"",isWorkExpense:false,workExpenseType:""});setView("home");},1500);
+      return;
+    }
+
     // سحب شخصي لأحمد
     if(form.isPersonal&&user.role==="accountant"){
       const amt=Number(form.amount);
@@ -1424,9 +1445,21 @@ export default function App() {
                     border:`2px solid ${form.isPersonal?"#6B3FA0":C.cardBorder}`,
                     background:form.isPersonal?"rgba(107,63,160,0.08)":C.bg2,
                     cursor:"pointer",textAlign:"right"}}
-                    onClick={()=>setForm(f=>({...f,isPersonal:true,isAdvance:false,isForeman:false,advanceTo:"",foremanId:""}))}>
+                    onClick={()=>setForm(f=>({...f,isPersonal:true,isAdvance:false,isForeman:false,isWorkExpense:false,advanceTo:"",foremanId:""}))}>
                     <div style={{width:30,height:30,borderRadius:9,background:"linear-gradient(135deg,#6B3FA0,#5B21B6)",display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontSize:13,fontWeight:800,flexShrink:0}}>أ</div>
                     <div style={{fontSize:13,fontWeight:700,color:form.isPersonal?"#6B3FA0":C.text}}>👤 سحب شخصي</div>
+                  </button>
+                  {/* صرف على العمل */}
+                  <button style={{display:"flex",alignItems:"center",gap:8,padding:"10px 12px",borderRadius:12,
+                    border:`2px solid ${form.isWorkExpense?"#C0392B":C.cardBorder}`,
+                    background:form.isWorkExpense?"rgba(192,57,43,0.08)":C.bg2,
+                    cursor:"pointer",textAlign:"right",gridColumn:"1/-1"}}
+                    onClick={()=>setForm(f=>({...f,isWorkExpense:true,isPersonal:false,isAdvance:false,isForeman:false,advanceTo:"",foremanId:"",type:"صرف"}))}>
+                    <div style={{width:30,height:30,borderRadius:9,background:"linear-gradient(135deg,#C0392B,#A93226)",display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontSize:16,fontWeight:800,flexShrink:0}}>📤</div>
+                    <div>
+                      <div style={{fontSize:13,fontWeight:700,color:form.isWorkExpense?"#C0392B":C.text}}>صرف على العمل</div>
+                      <div style={{fontSize:10,color:C.textSm}}>مواد، مستلزمات، مصاريف مشروع...</div>
+                    </div>
                   </button>
                 </div>
               </>
@@ -1483,8 +1516,20 @@ export default function App() {
               </>
             )}
 
+            {/* صرف على العمل */}
+            {form.isWorkExpense&&(
+              <>
+                <div style={{height:1,background:C.cardBorder,margin:"12px 0"}}/>
+                <div style={{background:"rgba(192,57,43,0.06)",border:`1px solid rgba(192,57,43,0.2)`,borderRadius:10,padding:"10px 14px",fontSize:13,color:"#C0392B",fontWeight:600}}>
+                  📤 صرف على العمل — سيُسجَّل على {form.projectId?`مشروع "${projs.find(p=>p.id===form.projectId)?.name}"`:'"الصندوق العام"'} باسم أحمد
+                </div>
+                <div style={S.fLbl}>نوع الصرف / الوصف</div>
+                <input style={S.inp} placeholder="مثال: مواد بناء، أجور عمال، مستلزمات..." value={form.workExpenseType||""} onChange={e=>setForm(f=>({...f,workExpenseType:e.target.value}))}/>
+              </>
+            )}
+
             {/* المبلغ والعملة والتاريخ */}
-            {(form.advanceTo||form.isForeman||form.isPersonal)&&(
+            {(form.advanceTo||form.isForeman||form.isPersonal||form.isWorkExpense)&&(
               <>
                 <div style={{height:1,background:C.cardBorder,margin:"16px 0"}}/>
                 <div style={{fontWeight:800,fontSize:14,color:C.text,marginBottom:10}}>
@@ -3785,7 +3830,7 @@ function ConfirmTxModal({form, projs, USERS, foremen, C, S, fmt, fmtD, onConfirm
 
   // تحديد نوع المعاملة بشكل واضح
   const getTxType = () => {
-    if(form.isPersonal)  return {label:"👤 سحب شخصي", color:"#6B3FA0", bg:"rgba(107,63,160,0.1)"};
+    if(form.isWorkExpense) return {label:`📤 صرف على العمل — ${form.workExpenseType||"مصروف"}`, color:"#C0392B", bg:"rgba(192,57,43,0.08)"};
     if(form.isForeman)   return {label:`👷 دفع لفورمن — ${foreman?.name||""}`, color:"#b45309", bg:"rgba(180,83,9,0.1)"};
     if(form.isAdvance&&form.advanceIsPersonal) return {label:`👤 قرض شخصي لـ ${receiver?.name||""} — ${form.projectId?`مشروع ${projs.find(p=>p.id===form.projectId)?.name}`:"صندوق عام"}`, color:"#C0392B", bg:"rgba(192,57,43,0.1)"};
     if(form.isAdvance&&form.projectId)   return {label:`💼 دفعة عمل لـ ${receiver?.name||""} — مشروع ${projs.find(p=>p.id===form.projectId)?.name||""}`, color:"#2557A7", bg:"rgba(37,87,167,0.1)"};
