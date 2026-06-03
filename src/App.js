@@ -68,6 +68,7 @@ export default function App() {
   const [selProj, setSelProj] = useState(null);
   const [pfFrom,  setPfFrom]  = useState("");
   const [pfTo,    setPfTo]    = useState("");
+  const [pfType,  setPfType]  = useState("all"); // all | استلام | صرف
   const [viewImg, setViewImg] = useState(null);
   const [editTx,  setEditTx]  = useState(null);
   const [foremen, setForemen] = useState([]); // قائمة الفورمنية // المعاملة قيد التعديل
@@ -580,10 +581,14 @@ export default function App() {
 
   const projRep = (p,from,to) => {
     if(!p)return null;
-    const pt=txs.filter(t=>t.projectId===p.id&&t.type==="صرف"&&(!from||t.date>=from)&&(!to||t.date<=to));
-    const total=pt.reduce((s,t)=>s+t.amount,0);
+    const allProjTx = txs.filter(t=>t.projectId===p.id&&(!from||t.date>=from)&&(!to||t.date<=to));
+    const pt   = allProjTx.filter(t=>t.type==="صرف");
+    const inc  = allProjTx.filter(t=>t.type==="استلام");
+    const total= pt.reduce((s,t)=>s+t.amount,0);
+    const totalInc = inc.reduce((s,t)=>s+t.amount,0);
+    const balance  = totalInc - total; // الرصيد = استلام - صرف
     const byEmp=WORKERS.map(u=>{const ut=pt.filter(t=>t.userId===u.id);return{...u,spent:ut.reduce((s,t)=>s+t.amount,0),cnt:ut.length};}).filter(u=>u.spent>0);
-    return{p,pt,total,rem:(p.value||0)-total,byEmp};
+    return{p,pt,inc,total,totalInc,balance,rem:(p.value||0)-total,byEmp,allProjTx};
   };
   const pr = selProj ? projRep(selProj,pfFrom,pfTo) : null;
 
@@ -1456,16 +1461,38 @@ export default function App() {
         <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:4}}>{!D&&<BackBtn/>}<div style={S.secTitle}>💰 الكشف المالي للمشاريع</div></div>
         {!selProj ? (
           <div style={D?S.txGrid:{}}>{projs.map(p=>{
-            const r=projRep(p,"",""); const pct=p.value?Math.min(100,Math.round(r.total/p.value*100)):0;
+            const r=projRep(p,"","");
+            const pct=p.value?Math.min(100,Math.round(r.total/p.value*100)):0;
+            const balColor = r.balance>=0?"#1A7A4A":"#C0392B";
             return(
-              <button key={p.id} style={S.projRepCard} onClick={()=>{setSelProj(p);setPfFrom("");setPfTo("");}}>
-                <div style={{fontWeight:800,fontSize:15,marginBottom:4,letterSpacing:-0.3}}>{p.name}</div>
-                <div style={{fontSize:12,color:"#9ca3af",marginBottom:10}}>{p.specialization||p.spec} · {p.province}</div>
+              <button key={p.id} style={S.projRepCard} onClick={()=>{setSelProj(p);setPfFrom("");setPfTo("");setPfType("all");}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:4}}>
+                  <div style={{fontWeight:800,fontSize:15,letterSpacing:-0.3,textAlign:"right"}}>{p.name}</div>
+                  <div style={{fontSize:11,background:`rgba(193,123,47,0.1)`,color:C.gold,padding:"3px 8px",borderRadius:6,fontWeight:700,whiteSpace:"nowrap",marginRight:8}}>{p.specialization||p.spec}</div>
+                </div>
+                <div style={{fontSize:12,color:C.textSm,marginBottom:12}}>📍 {p.province}</div>
+
+                {/* الصندوق */}
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:10}}>
+                  <div style={{background:"rgba(26,122,74,0.08)",borderRadius:10,padding:"8px 6px",textAlign:"center"}}>
+                    <div style={{fontSize:10,color:C.textSm,fontWeight:700,marginBottom:3}}>↓ استلام</div>
+                    <div style={{fontSize:13,fontWeight:800,color:"#1A7A4A"}}>{fmtD(r.totalInc)}</div>
+                  </div>
+                  <div style={{background:"rgba(192,57,43,0.08)",borderRadius:10,padding:"8px 6px",textAlign:"center"}}>
+                    <div style={{fontSize:10,color:C.textSm,fontWeight:700,marginBottom:3}}>↑ صرف</div>
+                    <div style={{fontSize:13,fontWeight:800,color:"#C0392B"}}>{fmtD(r.total)}</div>
+                  </div>
+                  <div style={{background:r.balance>=0?"rgba(26,122,74,0.08)":"rgba(192,57,43,0.08)",borderRadius:10,padding:"8px 6px",textAlign:"center"}}>
+                    <div style={{fontSize:10,color:C.textSm,fontWeight:700,marginBottom:3}}>الرصيد</div>
+                    <div style={{fontSize:13,fontWeight:800,color:balColor}}>{fmtD(Math.abs(r.balance))}</div>
+                  </div>
+                </div>
+
                 {p.value>0&&<>
-                  <div style={S.progBar}><div style={{...S.progFill,width:`${pct}%`}}/></div>
-                  <div style={{display:"flex",justifyContent:"space-between",fontSize:12,marginTop:8}}>
-                    <span style={{color:"#f87171"}}>صُرف: {fmtD(r.total)}</span>
-                    <span style={{color:"#34d399"}}>باقي: {fmtD(p.value-r.total)}</span>
+                  <div style={S.progBar}><div style={{...S.progFill,width:`${pct}%`,background:pct>=90?"linear-gradient(90deg,#C0392B,#e74c3c)":pct>=60?"linear-gradient(90deg,#b45309,#f39c12)":"linear-gradient(90deg,#1A7A4A,#27ae60)"}}/></div>
+                  <div style={{display:"flex",justifyContent:"space-between",fontSize:11,marginTop:6,color:C.textSm}}>
+                    <span>قيمة المشروع: {fmtD(p.value)}</span>
+                    <span style={{fontWeight:700,color:pct>=90?"#C0392B":"#1A7A4A"}}>{toAr(pct)}% مصروف</span>
                   </div>
                 </>}
               </button>
@@ -1487,28 +1514,79 @@ export default function App() {
               </div>
               <div style={{flex:1}}>
                 {pr&&<>
-                  <div style={{display:"grid",gridTemplateColumns:D?"repeat(4,1fr)":"1fr 1fr",gap:10,marginBottom:16}}>
-                    {[["قيمة المشروع",selProj.value,"linear-gradient(135deg,#1d4ed8,#2563eb)"],["إجمالي المصروف",pr.total,"linear-gradient(135deg,#7f1d1d,#991b1b)"],[ pr.rem>=0?"المتبقي":"تجاوز",Math.abs(pr.rem),pr.rem>=0?"linear-gradient(135deg,#065f46,#047857)":"linear-gradient(135deg,#7f1d1d,#991b1b)"],["نسبة الصرف",null,"linear-gradient(135deg,#b45309,#92400e)"]].map(([l,v,bg],i)=>(
-                      <div key={i} style={{background:bg,borderRadius:16,padding:16}}>
-                        <div style={{fontSize:11,color:"rgba(255,255,255,0.7)",marginBottom:6,fontWeight:600}}>{l}</div>
-                        <div style={{fontSize:18,fontWeight:900,letterSpacing:-0.5}}>{i===3?(selProj.value?toAr(Math.min(100,Math.round(pr.total/selProj.value*100)))+"%":"—"):fmtD(v)}</div>
+                  {/* صندوق المشروع الكامل */}
+                  <div style={{background:"linear-gradient(135deg,#1e3a5f,#1d4ed8)",borderRadius:18,padding:18,marginBottom:16,boxShadow:C.shadowMd}}>
+                    <div style={{fontSize:13,color:"rgba(255,255,255,0.8)",fontWeight:700,marginBottom:12}}>🏦 صندوق المشروع</div>
+                    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10,marginBottom:12}}>
+                      <div style={{background:"rgba(26,122,74,0.3)",borderRadius:12,padding:"12px 10px",textAlign:"center"}}>
+                        <div style={{fontSize:11,color:"rgba(255,255,255,0.8)",marginBottom:4,fontWeight:700}}>↓ إجمالي الاستلام</div>
+                        <div style={{fontSize:18,fontWeight:900,color:"#34d399"}}>{fmtD(pr.totalInc)}</div>
+                        <div style={{fontSize:10,color:"rgba(255,255,255,0.6)",marginTop:2}}>{toAr(pr.inc.length)} معاملة</div>
                       </div>
-                    ))}
+                      <div style={{background:"rgba(192,57,43,0.3)",borderRadius:12,padding:"12px 10px",textAlign:"center"}}>
+                        <div style={{fontSize:11,color:"rgba(255,255,255,0.8)",marginBottom:4,fontWeight:700}}>↑ إجمالي الصرف</div>
+                        <div style={{fontSize:18,fontWeight:900,color:"#f87171"}}>{fmtD(pr.total)}</div>
+                        <div style={{fontSize:10,color:"rgba(255,255,255,0.6)",marginTop:2}}>{toAr(pr.pt.length)} معاملة</div>
+                      </div>
+                      <div style={{background:pr.balance>=0?"rgba(26,122,74,0.3)":"rgba(192,57,43,0.3)",borderRadius:12,padding:"12px 10px",textAlign:"center"}}>
+                        <div style={{fontSize:11,color:"rgba(255,255,255,0.8)",marginBottom:4,fontWeight:700}}>الرصيد الحالي</div>
+                        <div style={{fontSize:18,fontWeight:900,color:pr.balance>=0?"#34d399":"#f87171"}}>{fmtD(Math.abs(pr.balance))}</div>
+                        <div style={{fontSize:10,color:"rgba(255,255,255,0.7)",marginTop:2}}>{pr.balance>=0?"✅ موجب":"⚠️ سالب"}</div>
+                      </div>
+                    </div>
+                    {selProj.value>0&&(
+                      <>
+                        <div style={{display:"flex",justifyContent:"space-between",fontSize:12,color:"rgba(255,255,255,0.7)",marginBottom:6}}>
+                          <span>قيمة المشروع: {fmtD(selProj.value)}</span>
+                          <span>نسبة الصرف: {toAr(Math.min(100,Math.round(pr.total/selProj.value*100)))}%</span>
+                        </div>
+                        <div style={{background:"rgba(255,255,255,0.15)",borderRadius:999,height:8,overflow:"hidden"}}>
+                          <div style={{background:pr.total/selProj.value>=0.9?"#f87171":"#34d399",height:"100%",borderRadius:999,width:`${Math.min(100,Math.round(pr.total/selProj.value*100))}%`,transition:"width 0.5s"}}/>
+                        </div>
+                      </>
+                    )}
                   </div>
-                  {selProj.value>0&&<div style={{...S.progBar,marginBottom:20}}><div style={{...S.progFill,width:`${Math.min(100,Math.round(pr.total/selProj.value*100))}%`}}/></div>}
-                  <div style={{...S.secTitle,fontSize:16}}>تفصيل مصروفات الموظفين</div>
-                  {pr.byEmp.length===0?<div style={S.empty}>ما في مصروفات</div>:pr.byEmp.map(e=>(
+
+                  {/* تفصيل الصرف بالموظفين */}
+                  <div style={{...S.secTitle,fontSize:15,marginBottom:12}}>👥 الصرف بالأشخاص</div>
+                  {pr.byEmp.length===0?<div style={{...S.empty,padding:20}}>ما في مصروفات</div>:pr.byEmp.map(e=>(
                     <div key={e.id} style={{...S.txCard,marginBottom:10}}>
                       <div style={{display:"flex",alignItems:"center",gap:10}}>
                         <div style={{...S.av,width:38,height:38,fontSize:16,borderRadius:12,background:avatarBg(e.role)}}>{e.name[0]}</div>
-                        <div style={{flex:1}}><div style={{fontWeight:700,fontSize:15}}>{e.name}</div><div style={{fontSize:11,color:"#6b7280"}}>{toAr(e.cnt)} معاملة</div></div>
-                        <div style={{textAlign:"left"}}><div style={{fontSize:16,fontWeight:900,color:"#f87171",letterSpacing:-0.5}}>{fmtD(e.spent)}</div>{selProj.value>0&&<div style={{fontSize:11,color:"#9ca3af"}}>{toAr(Math.round(e.spent/selProj.value*100))}%</div>}</div>
+                        <div style={{flex:1}}>
+                          <div style={{fontWeight:700,fontSize:14,color:C.text}}>{e.name}</div>
+                          <div style={{fontSize:11,color:C.textSm}}>{toAr(e.cnt)} معاملة</div>
+                        </div>
+                        <div style={{textAlign:"left"}}>
+                          <div style={{fontSize:15,fontWeight:900,color:"#C0392B"}}>{fmtD(e.spent)}</div>
+                          {pr.total>0&&<div style={{fontSize:11,color:C.textSm}}>{toAr(Math.round(e.spent/pr.total*100))}% من الصرف</div>}
+                        </div>
                       </div>
-                      <div style={{...S.progBar,marginTop:10,height:6}}><div style={{...S.progFill,width:`${selProj.value?Math.min(100,Math.round(e.spent/selProj.value*100)):0}%`,background:"#f87171"}}/></div>
+                      {pr.total>0&&<div style={{...S.progBar,marginTop:8,height:5}}><div style={{...S.progFill,width:`${Math.min(100,Math.round(e.spent/pr.total*100))}%`,background:"#f87171",height:"100%"}}/></div>}
                     </div>
                   ))}
-                  <div style={{...S.secTitle,fontSize:16,marginTop:24}}>تفاصيل المعاملات</div>
-                  <div style={D?S.txGrid:{}}>{pr.pt.map(t=><TxCard key={t.id} t={t} showUser onDelete={()=>delTx(t.id)} onImg={setViewImg} onEdit={setEditTx}/>)}</div>
+
+                  {/* كل المعاملات */}
+                  <div style={{...S.secTitle,fontSize:15,marginTop:20,marginBottom:12}}>📋 كل معاملات المشروع</div>
+
+                  {/* فلتر النوع */}
+                  <div style={{display:"flex",gap:8,marginBottom:12}}>
+                    {[["all","الكل",C.gold],["استلام","↓ استلام","#1A7A4A"],["صرف","↑ صرف","#C0392B"]].map(([v,l,col])=>(
+                      <button key={v} style={{...S.tBtn,flex:1,
+                        background:pfType===v?`rgba(${v==="استلام"?"26,122,74":v==="صرف"?"192,57,43":"193,123,47"},0.12)`:"transparent",
+                        border:`1px solid ${pfType===v?col:C.cardBorder}`,
+                        color:pfType===v?col:C.textMd,fontWeight:pfType===v?700:500,
+                      }} onClick={()=>setPfType(v)}>{l}</button>
+                    ))}
+                  </div>
+
+                  {pr.allProjTx.filter(t=>pfType==="all"||t.type===pfType).length===0?(
+                    <div style={S.empty}>ما في معاملات</div>
+                  ):(
+                    <div style={D?S.txGrid:{}}>{pr.allProjTx.filter(t=>pfType==="all"||t.type===pfType).map(t=>(
+                      <TxCard key={t.id} t={t} showUser onDelete={()=>delTx(t.id)} onImg={setViewImg} onEdit={setEditTx}/>
+                    ))}</div>
+                  )}
                 </>}
               </div>
             </div>
