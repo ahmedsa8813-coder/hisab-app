@@ -981,23 +981,7 @@ export default function App() {
         {!D&&<button style={S.goldBtn} onClick={()=>{setView("add");setForm({type:user.role==="accountant"?"استلام":"صرف",projectId:"",amount:"",currency:"دينار",note:"",date:today(),image:null,isPersonal:false,isAdvance:false,advanceTo:""});}}>
           {user.role==="accountant"?"💰 استلام أو سلفة":"➕ تسجيل مصروف"}
         </button>}
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12,flexWrap:"wrap",gap:8}}>
-          <div style={S.secTitle}>سجل المعاملات</div>
-          {user.role==="accountant"&&(
-            <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
-              {[["all","الكل",C.gold],["استلام","↓ استلام","#1A7A4A"],["صرف","↑ صرف","#C0392B"]].map(([v,l,col])=>(
-                <button key={v} style={{
-                  padding:"6px 12px",borderRadius:8,border:`1px solid`,cursor:"pointer",
-                  fontSize:12,fontWeight:700,
-                  background:fuType===v?`rgba(${v==="استلام"?"26,122,74":v==="صرف"?"192,57,43":"193,123,47"},0.1)`:"transparent",
-                  color:fuType===v?col:C.textMd,
-                  borderColor:fuType===v?col:C.cardBorder,
-                }} onClick={()=>setFuType(v)}>{l}</button>
-              ))}
-            </div>
-          )}
-        </div>
-        {/* ملخص السلف لأحمد */}
+        {/* السلف الشخصية لأحمد */}
         {user.role==="accountant"&&(()=>{
           const myPersonalDebts = personalDebts.filter(d=>d.creditorId===user.id);
           const totalOwed = myPersonalDebts.filter(d=>d.status!=="مسدد كامل").reduce((s,d)=>s+(d.remaining||d.amount),0);
@@ -1012,23 +996,76 @@ export default function App() {
                 <DebtEditCard key={d.id} debt={d}
                   onPay={payPersonalDebt}
                   onDelete={delPersonalDebt}
-                  onEdit={async(id,updates)=>{
-                    await setDoc(doc(db,"personalDebts",id),updates,{merge:true});
-                  }}
+                  onEdit={async(id,updates)=>{await setDoc(doc(db,"personalDebts",id),updates,{merge:true});}}
                   S={S} C={C} fmtD={fmtD}
                 />
               ))}
             </div>
           );
         })()}
-        {(()=>{
-          const filtered = user.role==="accountant"&&fuType!=="all"?myTxs.filter(t=>t.type===fuType):myTxs;
-          return filtered.length===0?<div style={S.empty}>ما عندك معاملات بعد</div>:(
-            <div style={D?S.txGrid:{}}>{filtered.map(t=>(
-              <TxCard key={t.id} t={t} onImg={setViewImg}
-                onDelete={user.role==="accountant"?()=>delTx(t.id):undefined}
-                onEdit={user.role==="accountant"?setEditTx:undefined}
-              />
+
+        {/* قائمة المعاملات مقسمة لأحمد */}
+        {user.role==="accountant"?(()=>{
+          const recTxs = myTxs.filter(t=>t.type==="استلام");
+          const spdTxs = myTxs.filter(t=>t.type==="صرف");
+          const totRec = recTxs.reduce((s,t)=>s+t.amount,0);
+          const totSpd = spdTxs.reduce((s,t)=>s+t.amount,0);
+          return(
+            <div>
+              {/* ملخص سريع */}
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:16}}>
+                <div style={{background:"rgba(26,122,74,0.08)",border:"1px solid rgba(26,122,74,0.2)",borderRadius:12,padding:"10px 14px",textAlign:"center"}}>
+                  <div style={{fontSize:11,color:C.textSm,fontWeight:700,marginBottom:3}}>↓ إجمالي الاستلام</div>
+                  <div style={{fontSize:16,fontWeight:900,color:"#1A7A4A"}}>{fmtD(totRec)}</div>
+                  <div style={{fontSize:11,color:C.textSm,marginTop:2}}>{toAr(recTxs.length)} معاملة</div>
+                </div>
+                <div style={{background:"rgba(192,57,43,0.06)",border:"1px solid rgba(192,57,43,0.15)",borderRadius:12,padding:"10px 14px",textAlign:"center"}}>
+                  <div style={{fontSize:11,color:C.textSm,fontWeight:700,marginBottom:3}}>↑ إجمالي الصرف</div>
+                  <div style={{fontSize:16,fontWeight:900,color:C.red}}>{fmtD(totSpd)}</div>
+                  <div style={{fontSize:11,color:C.textSm,marginTop:2}}>{toAr(spdTxs.length)} معاملة</div>
+                </div>
+              </div>
+
+              {/* قسم الاستلام */}
+              <div style={{marginBottom:20}}>
+                <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10,paddingBottom:8,borderBottom:`2px solid rgba(26,122,74,0.2)`}}>
+                  <div style={{width:8,height:8,borderRadius:"50%",background:"#1A7A4A"}}/>
+                  <div style={{fontWeight:800,fontSize:15,color:"#1A7A4A"}}>↓ الاستلام</div>
+                  <span style={{fontSize:12,color:C.textSm,marginRight:"auto"}}>{toAr(recTxs.length)} معاملة</span>
+                </div>
+                {recTxs.length===0?(
+                  <div style={{...S.empty,padding:16,fontSize:13}}>ما في استلامات</div>
+                ):(
+                  <div style={D?S.txGrid:{}}>{recTxs.map(t=>(
+                    <TxCard key={t.id} t={t} onImg={setViewImg}
+                      onDelete={()=>delTx(t.id)} onEdit={setEditTx}/>
+                  ))}</div>
+                )}
+              </div>
+
+              {/* قسم الصرف */}
+              <div>
+                <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10,paddingBottom:8,borderBottom:`2px solid rgba(192,57,43,0.2)`}}>
+                  <div style={{width:8,height:8,borderRadius:"50%",background:C.red}}/>
+                  <div style={{fontWeight:800,fontSize:15,color:C.red}}>↑ الصرف</div>
+                  <span style={{fontSize:12,color:C.textSm,marginRight:"auto"}}>{toAr(spdTxs.length)} معاملة</span>
+                </div>
+                {spdTxs.length===0?(
+                  <div style={{...S.empty,padding:16,fontSize:13}}>ما في مصروفات</div>
+                ):(
+                  <div style={D?S.txGrid:{}}>{spdTxs.map(t=>(
+                    <TxCard key={t.id} t={t} onImg={setViewImg}
+                      onDelete={()=>delTx(t.id)} onEdit={setEditTx}/>
+                  ))}</div>
+                )}
+              </div>
+            </div>
+          );
+        })():(()=>{
+          // بقية الموظفين — قائمة عادية
+          return myTxs.length===0?<div style={S.empty}>ما عندك معاملات بعد</div>:(
+            <div style={D?S.txGrid:{}}>{myTxs.map(t=>(
+              <TxCard key={t.id} t={t} onImg={setViewImg}/>
             ))}</div>
           );
         })()}
