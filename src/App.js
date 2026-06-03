@@ -19,6 +19,28 @@ const SPECS     = ["مقاولات","ديكور","واجهات"];
 const PROVINCES = ["بغداد","البصرة","نينوى","أربيل","النجف","كربلاء","الأنبار","ديالى","صلاح الدين","بابل","واسط","ذي قار","المثنى","القادسية","ميسان","كركوك","السليمانية","دهوك","حلبجة"];
 
 const toAr = n => String(n).replace(/\d/g, d => "٠١٢٣٤٥٦٧٨٩"[d]);
+
+// تحويل الرقم لكلمات بالعربي
+const numToWords = (n, currency="دينار") => {
+  if(!n||isNaN(n)) return "";
+  const num = Math.floor(Number(n));
+  if(num===0) return "صفر";
+  const ones = ["","واحد","اثنان","ثلاثة","أربعة","خمسة","ستة","سبعة","ثمانية","تسعة","عشرة","أحد عشر","اثنا عشر","ثلاثة عشر","أربعة عشر","خمسة عشر","ستة عشر","سبعة عشر","ثمانية عشر","تسعة عشر"];
+  const tens = ["","","عشرون","ثلاثون","أربعون","خمسون","ستون","سبعون","ثمانون","تسعون"];
+  const h = ["","مئة","مئتان","ثلاثمئة","أربعمئة","خمسمئة","ستمئة","سبعمئة","ثمانمئة","تسعمئة"];
+  const readGroup = g => {
+    if(g===0) return "";
+    if(g<20) return ones[g];
+    if(g<100) return tens[Math.floor(g/10)]+(g%10?" و"+ones[g%10]:"");
+    return h[Math.floor(g/100)]+(g%100?" و"+readGroup(g%100):"");
+  };
+  const parts = [];
+  if(num>=1000000000){ parts.push(readGroup(Math.floor(num/1000000000))+" مليار"); }
+  if(num%1000000000>=1000000){ parts.push(readGroup(Math.floor((num%1000000000)/1000000))+" مليون"); }
+  if(num%1000000>=1000){ parts.push(readGroup(Math.floor((num%1000000)/1000))+" ألف"); }
+  if(num%1000>0){ parts.push(readGroup(num%1000)); }
+  return parts.join(" و") + " " + currency;
+};
 const fmtD = n => toAr(Number(n||0).toLocaleString("ar-IQ")) + " د.ع";
 const fmt  = (n,c) => toAr(Number(n||0).toLocaleString("ar-IQ")) + (c==="دولار"?" $":" د.ع");
 
@@ -630,7 +652,7 @@ export default function App() {
     ? [{icon:"🏠",label:"الرئيسية",v:"adminHome"},{icon:"🏗️",label:"المشاريع",v:"adminProjects"},{icon:"👷",label:"الموظفون",v:"adminEmployees"},{icon:"📋",label:"المهام",v:"adminTasks"},{icon:"📊",label:"التقارير",v:"adminReports"}]
     : [{icon:"📊",label:"الملخص",v:"home"},{icon:"📄",label:"الكشوفات",v:"statements"},{icon:"📋",label:"المعاملات",v:"allTx"},{icon:"🏗️",label:"المشاريع",v:"projects"},{icon:"💰",label:"المالية",v:"projReport"},{icon:"🏢",label:"الشركة",v:"company"},{icon:"💳",label:"الديون",v:"debts"},{icon:"💵",label:"الرواتب",v:"salaries"},{icon:"👷",label:"الفورمنية",v:"foremen"},{icon:"⚖️",label:"افتتاحي",v:"opening"}];
   const navWorker = user?.role==="accountant"
-    ? [{icon:"🏠",label:"الرئيسية",v:"home"},{icon:"➕",label:"استلام/سلفة",v:"add"},{icon:"📄",label:"كشف حسابي",v:"myStatement"},{icon:"💵",label:"الرواتب",v:"salaries"}]
+    ? [{icon:"🏠",label:"الرئيسية",v:"home"},{icon:"↓",label:"استلام",v:"addReceive"},{icon:"↑",label:"صرف",v:"addSpend"},{icon:"📄",label:"كشفي",v:"myStatement"},{icon:"💵",label:"الرواتب",v:"salaries"}]
     : user?.role==="foreman"
     ? [{icon:"🏠",label:"Home",v:"home"},{icon:"⏱️",label:"Log Hours",v:"logHours"},{icon:"📊",label:"Report",v:"hoursReport"}]
     : [{icon:"🏠",label:"الرئيسية",v:"home"},{icon:"➕",label:"تسجيل صرف",v:"add"},{icon:"📄",label:"كشف حسابي",v:"myStatement"}];
@@ -979,9 +1001,23 @@ export default function App() {
             </div>
           </div>
         </div>
-        {!D&&<button style={S.goldBtn} onClick={()=>{setView("add");setForm({type:user.role==="accountant"?"استلام":"صرف",projectId:"",amount:"",currency:"دينار",note:"",date:today(),image:null,isPersonal:false,isAdvance:false,advanceTo:""});}}>
-          {user.role==="accountant"?"💰 استلام أو سلفة":"➕ تسجيل مصروف"}
-        </button>}
+        {!D&&user.role==="accountant"&&(
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:0}}>
+            <button style={{...S.goldBtn,background:"linear-gradient(135deg,#1A7A4A,#147A40)",color:"#fff",marginBottom:0}}
+              onClick={()=>{setForm({type:"استلام",projectId:"",amount:"",currency:"دينار",note:"",date:today(),image:null,isPersonal:false,isAdvance:false,advanceTo:"",advanceIsPersonal:false,receiveType:"",generalLabel:"",isForeman:false,foremanId:"",foremanName:""});setView("addReceive");}}>
+              ↓ استلام
+            </button>
+            <button style={{...S.goldBtn,background:"linear-gradient(135deg,#C0392B,#A93226)",color:"#fff",marginBottom:0}}
+              onClick={()=>{setForm({type:"صرف",projectId:"",amount:"",currency:"دينار",note:"",date:today(),image:null,isPersonal:false,isAdvance:false,advanceTo:"",advanceIsPersonal:false,receiveType:"",generalLabel:"",isForeman:false,foremanId:"",foremanName:""});setView("addSpend");}}>
+              ↑ صرف / سلفة
+            </button>
+          </div>
+        )}
+        {!D&&user.role!=="accountant"&&(
+          <button style={S.goldBtn} onClick={()=>{setForm({type:"صرف",projectId:"",amount:"",currency:"دينار",note:"",date:today(),image:null,isPersonal:false,isAdvance:false,advanceTo:""});setView("add");}}>
+            ➕ تسجيل مصروف
+          </button>
+        )}
         {/* السلف الشخصية لأحمد */}
         {user.role==="accountant"&&(()=>{
           const myPersonalDebts = personalDebts.filter(d=>d.creditorId===user.id);
@@ -1083,6 +1119,188 @@ export default function App() {
         onEdit={user.role==="accountant"?setEditTx:undefined}
       />;
     }
+
+    // AHMED - صفحة الاستلام
+    if(user.role==="accountant"&&view==="addReceive") return (
+      <div style={D?{maxWidth:600}:{}}>
+        <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:20}}>
+          <BackBtn to="home"/>
+          <div style={{...S.secTitle,color:"#1A7A4A"}}>↓ تسجيل استلام</div>
+        </div>
+        {formOK?(
+          <div style={{textAlign:"center",padding:60}}>
+            <div style={{fontSize:60,marginBottom:12}}>✅</div>
+            <div style={{fontSize:20,fontWeight:800,color:"#1A7A4A"}}>تم تسجيل الاستلام!</div>
+          </div>
+        ):(
+          <div style={S.formCard}>
+            {/* نوع الاستلام */}
+            <div style={S.fLbl}>مصدر الاستلام</div>
+            <div style={S.tRow}>
+              <button style={{...S.tBtn,...(form.receiveType==="project"?{background:"rgba(26,122,74,0.15)",border:`1px solid #1A7A4A`,color:"#1A7A4A"}:{})}}
+                onClick={()=>setForm(f=>({...f,receiveType:"project",generalLabel:"",type:"استلام"}))}>🏗️ من مشروع</button>
+              <button style={{...S.tBtn,...(form.receiveType==="general"?{background:`rgba(193,123,47,0.15)`,border:`1px solid ${C.gold}`,color:C.gold}:{})}}
+                onClick={()=>setForm(f=>({...f,receiveType:"general",projectId:"",type:"استلام"}))}>📝 بند عام</button>
+            </div>
+
+            {form.receiveType==="project"&&(<>
+              <div style={S.fLbl}>المشروع</div>
+              <select style={S.sel} value={form.projectId} onChange={e=>setForm(f=>({...f,projectId:e.target.value}))}>
+                <option value="">اختر المشروع</option>
+                {projs.map(p=><option key={p.id} value={p.id}>{p.name} — {p.specialization||p.spec}</option>)}
+              </select>
+            </>)}
+            {form.receiveType==="general"&&(<>
+              <div style={S.fLbl}>اسم البند</div>
+              <input style={S.inp} placeholder="مثال: دفعة عميل، إيجار..." value={form.generalLabel||""} onChange={e=>setForm(f=>({...f,generalLabel:e.target.value}))}/>
+            </>)}
+
+            <div style={S.fLbl}>المبلغ</div>
+            <input style={{...S.inp,fontSize:20,fontWeight:800,textAlign:"center"}} type="number" placeholder="٠" value={form.amount} onChange={e=>setForm(f=>({...f,amount:e.target.value}))}/>
+            {form.amount&&Number(form.amount)>0&&(
+              <div style={{background:"rgba(26,122,74,0.06)",border:"1px solid rgba(26,122,74,0.2)",borderRadius:10,padding:"8px 14px",marginTop:4,fontSize:13,color:"#1A7A4A",fontWeight:600,textAlign:"center"}}>
+                {numToWords(form.amount, form.currency)}
+              </div>
+            )}
+
+            <div style={S.fLbl}>العملة</div>
+            <div style={S.tRow}>
+              <button style={{...S.tBtn,...(form.currency==="دينار"?{background:"rgba(37,87,167,0.15)",border:`1px solid #2557A7`,color:"#2557A7"}:{})}} onClick={()=>setForm(f=>({...f,currency:"دينار"}))}>🇮🇶 دينار</button>
+              <button style={{...S.tBtn,...(form.currency==="دولار"?{background:"rgba(26,122,74,0.15)",border:`1px solid #1A7A4A`,color:"#1A7A4A"}:{})}} onClick={()=>setForm(f=>({...f,currency:"دولار"}))}>🇺🇸 دولار</button>
+            </div>
+            <div style={S.fLbl}>التاريخ</div>
+            <input style={S.inp} type="date" value={form.date} onChange={e=>setForm(f=>({...f,date:e.target.value}))}/>
+            <div style={S.fLbl}>ملاحظة (اختياري)</div>
+            <input style={S.inp} placeholder="..." value={form.note} onChange={e=>setForm(f=>({...f,note:e.target.value}))}/>
+            <button style={{...S.subBtn,background:"linear-gradient(135deg,#1A7A4A,#147A40)",color:"#fff"}} onClick={()=>setConfirmTx(true)}>👁️ مراجعة وتأكيد</button>
+            <button style={S.canBtn} onClick={()=>setView("home")}>إلغاء</button>
+          </div>
+        )}
+      </div>
+    );
+
+    // AHMED - صفحة الصرف والسلف
+    if(user.role==="accountant"&&view==="addSpend") return (
+      <div style={D?{maxWidth:600}:{}}>
+        <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:20}}>
+          <BackBtn to="home"/>
+          <div style={{...S.secTitle,color:C.red}}>↑ تسجيل صرف / سلفة</div>
+        </div>
+        {formOK?(
+          <div style={{textAlign:"center",padding:60}}>
+            <div style={{fontSize:60,marginBottom:12}}>✅</div>
+            <div style={{fontSize:20,fontWeight:800,color:C.red}}>تم التسجيل!</div>
+          </div>
+        ):(
+          <div style={S.formCard}>
+            {/* نوع الصرف */}
+            <div style={S.fLbl}>نوع الصرف</div>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8}}>
+              <button style={{...S.tBtn,...(form.isAdvance?{background:`rgba(193,123,47,0.15)`,border:`1px solid ${C.gold}`,color:C.gold}:{})}}
+                onClick={()=>setForm(f=>({...f,isAdvance:true,isForeman:false,isPersonal:false,type:"صرف",projectId:""}))}>
+                💸 سلفة لشخص
+              </button>
+              <button style={{...S.tBtn,...(form.isForeman?{background:"rgba(180,83,9,0.15)",border:`1px solid #b45309`,color:"#b45309"}:{})}}
+                onClick={()=>setForm(f=>({...f,isForeman:true,isAdvance:false,isPersonal:false,type:"صرف",projectId:"",advanceTo:""}))}>
+                👷 دفع لفورمن
+              </button>
+              <button style={{...S.tBtn,...(form.isPersonal?{background:"rgba(107,63,160,0.15)",border:`1px solid #6B3FA0`,color:"#6B3FA0"}:{})}}
+                onClick={()=>setForm(f=>({...f,isPersonal:true,isAdvance:false,isForeman:false,type:"صرف",projectId:""}))}>
+                👤 سحب شخصي
+              </button>
+              <button style={{...S.tBtn,...(!form.isAdvance&&!form.isForeman&&!form.isPersonal&&form.type==="صرف"?{background:"rgba(192,57,43,0.1)",border:`1px solid #C0392B`,color:"#C0392B"}:{})}}
+                onClick={()=>setForm(f=>({...f,isAdvance:false,isForeman:false,isPersonal:false,type:"صرف"}))}>
+                📤 صرف عام
+              </button>
+            </div>
+
+            {/* سحب شخصي */}
+            {form.isPersonal&&(
+              <div style={{background:"rgba(107,63,160,0.08)",border:`1px solid rgba(107,63,160,0.2)`,borderRadius:10,padding:"10px 14px",marginBottom:8,fontSize:13,color:"#6B3FA0",fontWeight:600}}>
+                ⚠️ ينقص من رصيدك ويُحسب ضمن حصتك (١٥%)
+              </div>
+            )}
+
+            {/* دفع لفورمن */}
+            {form.isForeman&&(<>
+              <div style={S.fLbl}>اختر الفورمن</div>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+                {foremen.map(f=>{
+                  const proj=projs.find(p=>p.id===f.projectId);
+                  return(
+                    <button key={f.id} style={{display:"flex",alignItems:"center",gap:8,padding:"10px 12px",borderRadius:12,border:`2px solid ${form.foremanId===f.id?"#b45309":C.cardBorder}`,background:form.foremanId===f.id?"rgba(180,83,9,0.08)":C.bg2,cursor:"pointer",textAlign:"right"}}
+                      onClick={()=>setForm(x=>({...x,foremanId:f.id,foremanName:f.name,projectId:f.projectId||""}))}>
+                      <div style={{width:30,height:30,borderRadius:9,background:"linear-gradient(135deg,#b45309,#92400e)",display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontSize:13,fontWeight:800,flexShrink:0}}>{f.name[0]}</div>
+                      <div><div style={{fontSize:13,fontWeight:700,color:form.foremanId===f.id?"#b45309":C.text}}>{f.name}</div>{proj&&<div style={{fontSize:10,color:C.textSm}}>{proj.name}</div>}</div>
+                    </button>
+                  );
+                })}
+              </div>
+            </>)}
+
+            {/* سلفة لشخص */}
+            {form.isAdvance&&(<>
+              <div style={S.fLbl}>اختر الشخص</div>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+                {WORKERS.filter(u=>u.id!=="ahmed").map(u=>(
+                  <button key={u.id} style={{display:"flex",alignItems:"center",gap:8,padding:"10px 12px",borderRadius:12,border:`2px solid ${form.advanceTo===u.id?C.gold:C.cardBorder}`,background:form.advanceTo===u.id?`rgba(193,123,47,0.08)`:C.bg2,cursor:"pointer",textAlign:"right"}}
+                    onClick={()=>setForm(f=>({...f,advanceTo:u.id}))}>
+                    <div style={{...S.av,width:30,height:30,fontSize:13,borderRadius:9,background:avatarBg(u.role),flexShrink:0}}>{u.name[0]}</div>
+                    <div style={{fontSize:13,fontWeight:700,color:form.advanceTo===u.id?C.gold:C.text}}>{u.name}</div>
+                  </button>
+                ))}
+              </div>
+              {form.advanceTo&&(<>
+                <div style={S.fLbl}>مصدر الدفعة</div>
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
+                  <button style={{...S.tBtn,...(!form.advanceIsPersonal&&form.projectId?{background:"rgba(37,87,167,0.15)",border:`1px solid #2557A7`,color:"#2557A7"}:{})}}
+                    onClick={()=>setForm(f=>({...f,advanceIsPersonal:false}))}>🏗️ مشروع</button>
+                  <button style={{...S.tBtn,...(!form.advanceIsPersonal&&!form.projectId?{background:`rgba(193,123,47,0.15)`,border:`1px solid ${C.gold}`,color:C.gold}:{})}}
+                    onClick={()=>setForm(f=>({...f,advanceIsPersonal:false,projectId:""}))}>📦 عام</button>
+                  <button style={{...S.tBtn,...(form.advanceIsPersonal?{background:"rgba(107,63,160,0.15)",border:`1px solid #6B3FA0`,color:"#6B3FA0"}:{})}}
+                    onClick={()=>setForm(f=>({...f,advanceIsPersonal:true,projectId:""}))}>👤 شخصي</button>
+                </div>
+                {!form.advanceIsPersonal&&(
+                  <select style={{...S.sel,marginTop:8}} value={form.projectId} onChange={e=>setForm(f=>({...f,projectId:e.target.value}))}>
+                    <option value="">📦 صندوق عام</option>
+                    {projs.map(p=><option key={p.id} value={p.id}>{p.name} — {p.specialization||p.spec}</option>)}
+                  </select>
+                )}
+              </>)}
+            </>)}
+
+            {/* صرف عام */}
+            {!form.isAdvance&&!form.isForeman&&!form.isPersonal&&(<>
+              <div style={S.fLbl}>المشروع (اختياري)</div>
+              <select style={S.sel} value={form.projectId} onChange={e=>setForm(f=>({...f,projectId:e.target.value}))}>
+                <option value="">📦 صندوق عام</option>
+                {projs.map(p=><option key={p.id} value={p.id}>{p.name} — {p.specialization||p.spec}</option>)}
+              </select>
+            </>)}
+
+            {/* المبلغ والعملة والتاريخ */}
+            <div style={S.fLbl}>المبلغ</div>
+            <input style={{...S.inp,fontSize:20,fontWeight:800,textAlign:"center"}} type="number" placeholder="٠" value={form.amount} onChange={e=>setForm(f=>({...f,amount:e.target.value}))}/>
+            {form.amount&&Number(form.amount)>0&&(
+              <div style={{background:"rgba(192,57,43,0.06)",border:"1px solid rgba(192,57,43,0.15)",borderRadius:10,padding:"8px 14px",marginTop:4,fontSize:13,color:C.red,fontWeight:600,textAlign:"center"}}>
+                {numToWords(form.amount, form.currency)}
+              </div>
+            )}
+            <div style={S.fLbl}>العملة</div>
+            <div style={S.tRow}>
+              <button style={{...S.tBtn,...(form.currency==="دينار"?{background:"rgba(37,87,167,0.15)",border:`1px solid #2557A7`,color:"#2557A7"}:{})}} onClick={()=>setForm(f=>({...f,currency:"دينار"}))}>🇮🇶 دينار</button>
+              <button style={{...S.tBtn,...(form.currency==="دولار"?{background:"rgba(26,122,74,0.15)",border:`1px solid #1A7A4A`,color:"#1A7A4A"}:{})}} onClick={()=>setForm(f=>({...f,currency:"دولار"}))}>🇺🇸 دولار</button>
+            </div>
+            <div style={S.fLbl}>التاريخ</div>
+            <input style={S.inp} type="date" value={form.date} onChange={e=>setForm(f=>({...f,date:e.target.value}))}/>
+            <div style={S.fLbl}>ملاحظة (اختياري)</div>
+            <input style={S.inp} placeholder="..." value={form.note} onChange={e=>setForm(f=>({...f,note:e.target.value}))}/>
+            <button style={{...S.subBtn,background:"linear-gradient(135deg,#C0392B,#A93226)",color:"#fff"}} onClick={()=>setConfirmTx(true)}>👁️ مراجعة وتأكيد</button>
+            <button style={S.canBtn} onClick={()=>setView("home")}>إلغاء</button>
+          </div>
+        )}
+      </div>
+    );
 
     // ADD TX
     if(user.role!=="manager"&&view==="add") return (
@@ -3192,7 +3410,10 @@ function ConfirmTxModal({form, projs, USERS, foremen, C, S, fmt, fmtD, onConfirm
 
   const rows = [
     ["النوع",        <span style={{fontWeight:800,color:txType.color}}>{txType.label}</span>],
-    ["المبلغ",       <span style={{fontWeight:900,fontSize:20,color:form.type==="صرف"||form.isPersonal||form.isAdvance||form.isForeman?"#C0392B":"#1A7A4A"}}>{ar(form.amount)} {form.currency==="دولار"?"$":"د.ع"}</span>],
+    ["المبلغ",       <div style={{textAlign:"left"}}>
+      <div style={{fontWeight:900,fontSize:20,color:form.type==="صرف"||form.isPersonal||form.isAdvance||form.isForeman?"#C0392B":"#1A7A4A"}}>{ar(form.amount)} {form.currency==="دولار"?"$":"د.ع"}</div>
+      <div style={{fontSize:11,color:C.textSm,marginTop:2,fontStyle:"italic"}}>{numToWords(form.amount,form.currency)}</div>
+    </div>],
     ["العملة",       form.currency==="دولار"?"🇺🇸 دولار":"🇮🇶 دينار"],
     ["التاريخ",      `📅 ${form.date}`],
     proj&&["المشروع", `🏗️ ${proj.name} — ${proj.specialization||proj.spec}`],
