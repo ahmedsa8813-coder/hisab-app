@@ -309,32 +309,37 @@ export default function App() {
       if(!form.foremanId)return;
       const amt=Number(form.amount);
       const foreman=foremen.find(f=>f.id===form.foremanId);
-      // صرف على أحمد مرتبط بالفورمن
+      // استخدم المشروع من النموذج أو من الفورمن
+      const srcProjId   = form.projectId||foreman?.projectId||"";
+      const srcProjName = projs.find(p=>p.id===srcProjId)?.name||"";
+
+      // ١. صرف على أحمد — مرتبط بالمشروع والفورمن
       await addDoc(collection(db,"transactions"),{
         userId:user.id, userName:user.name,
-        projectId:form.projectId||foreman?.projectId||"",
-        projectName:projs.find(p=>p.id==(form.projectId||foreman?.projectId))?.name||"",
+        projectId:srcProjId, projectName:srcProjName,
         type:"صرف", amount:amt,
         currency:form.currency,
-        note:`دفعة للفورمن ${foreman?.name||""}${form.note?" — "+form.note:""}`,
+        note:`💰 دفع للفورمن ${foreman?.name||""}${srcProjName?" — "+srcProjName:""}${form.note?" — "+form.note:""}`,
         date:form.date, image:null,
         isPersonal:false, isAdvance:false, isForeman:true,
         foremanId:form.foremanId, foremanName:foreman?.name||"",
         createdAt:new Date().toISOString(),
       });
-      // استلام عند الفورمن (مرتبط به)
+
+      // ٢. استلام عند الفورمن — يبين بكشف حسابه
       await addDoc(collection(db,"transactions"),{
-        userId:"foreman", userName:foreman?.name||"Foreman",
-        projectId:form.projectId||foreman?.projectId||"",
-        projectName:projs.find(p=>p.id==(form.projectId||foreman?.projectId))?.name||"",
+        userId:form.foremanId,           // ← معرّف الفورمن الصحيح
+        userName:foreman?.name||"فورمن",
+        projectId:srcProjId, projectName:srcProjName,
         type:"استلام", amount:amt,
         currency:form.currency,
-        note:`استلام من أحمد${form.note?" — "+form.note:""}`,
+        note:`استلام من أحمد${srcProjName?" — "+srcProjName:""}${form.note?" — "+form.note:""}`,
         date:form.date, image:null,
         isPersonal:false, isAdvance:false, isForeman:true,
         foremanId:form.foremanId, foremanName:foreman?.name||"",
         createdAt:new Date().toISOString(),
       });
+
       setFormOK(true);
       setTimeout(()=>{setFormOK(false);setForm({type:"استلام",projectId:"",amount:"",currency:"دينار",note:"",date:today(),image:null,isPersonal:false,isAdvance:false,advanceTo:"",advanceIsPersonal:false,receiveType:"",generalLabel:"",isForeman:false,foremanId:"",foremanName:""});setView("home");},1500);
       return;
@@ -2797,11 +2802,11 @@ function ForemenPage({D,foremen,projs,txs,onAdd,onDel,S,C,fmt,fmtD,toAr,today,Ba
   const foremanTxs = (foremanId) => txs.filter(t=>t.foremanId===foremanId||t.note?.includes(foremen.find(f=>f.id===foremanId)?.name||"NOMATCH"));
 
   const getForemanStats = (f) => {
-    const proj = projs.find(p=>p.id===f.projectId);
-    // المبالغ المستلمة من أحمد (استلام في معاملات التحويل لهذا الفورمن)
-    const received = txs.filter(t=>t.foremanId===f.id&&t.type==="استلام"&&t.userId==="foreman").reduce((s,t)=>s+t.amount,0);
-    const spent    = txs.filter(t=>t.foremanId===f.id&&t.type==="صرف"&&t.userId==="foreman").reduce((s,t)=>s+t.amount,0);
-    return {proj, received, spent, balance: received-spent};
+    // يشمل: معاملات مرتبطة بـ foremanId أو سجلة بـ userId الفورمن
+    const fTxs = txs.filter(t=>t.foremanId===f.id||t.userId===f.id);
+    const received = fTxs.filter(t=>t.type==="استلام").reduce((s,t)=>s+t.amount,0);
+    const spent    = fTxs.filter(t=>t.type==="صرف").reduce((s,t)=>s+t.amount,0);
+    return {fTxs, received, spent, balance: received-spent};
   };
 
   return (
@@ -2908,7 +2913,7 @@ function ForemenPage({D,foremen,projs,txs,onAdd,onDel,S,C,fmt,fmtD,toAr,today,Ba
                   }} onClick={e=>{
                     e.stopPropagation();
                     // طباعة كشف الفورمن
-                    const fTxs = txs.filter(t=>t.foremanId===f.id&&t.userId==="foreman");
+                    const fTxs = stats.fTxs;
                     const totalR = fTxs.filter(t=>t.type==="استلام").reduce((s,t)=>s+t.amount,0);
                     const totalS = fTxs.filter(t=>t.type==="صرف").reduce((s,t)=>s+t.amount,0);
                     const bal    = stats.received - stats.spent;
@@ -3014,7 +3019,7 @@ function ForemenPage({D,foremen,projs,txs,onAdd,onDel,S,C,fmt,fmtD,toAr,today,Ba
                     <div style={{fontWeight:800,fontSize:14,color:C.text,marginBottom:12}}>📋 كشف الحساب التفصيلي</div>
 
                     {/* جدول المعاملات */}
-                    {txs.filter(t=>t.foremanId===f.id&&t.userId==="foreman").length===0?(
+                    {stats.fTxs.length===0?(
                       <div style={{textAlign:"center",color:C.textSm,padding:20,fontSize:13,background:C.bg2,borderRadius:10}}>
                         ما في معاملات مرتبطة بهذا الفورمن
                       </div>
