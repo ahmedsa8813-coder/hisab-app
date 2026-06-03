@@ -202,7 +202,8 @@ export default function App() {
   const [viewImg, setViewImg] = useState(null);
   const [editTx,  setEditTx]  = useState(null);
   const [confirmTx, setConfirmTx] = useState(false); // popup تأكيد المعاملة
-  const [foremen, setForemen] = useState([]); // قائمة الفورمنية // المعاملة قيد التعديل
+  const [foremen, setForemen] = useState([]);
+  const [foremanTrust, setForemanTrust] = useState([]); // أمانات الفورمنية
   const [OBform,  setOBform]  = useState({});
   const [OBok,    setOBok]    = useState(false);
   const [compForm,setCompForm]= useState({});
@@ -247,6 +248,7 @@ export default function App() {
     u.push(onSnapshot(query(collection(db,"salaryAdvances"),orderBy("date","desc")), s => setSalaryAdvances(s.docs.map(d=>({id:d.id,...d.data()})))));
     u.push(onSnapshot(query(collection(db,"workLogs"),orderBy("date","desc")), s => setWorkLogs(s.docs.map(d=>({id:d.id,...d.data()})))));
     u.push(onSnapshot(collection(db,"foremen"), s => setForemen(s.docs.map(d=>({id:d.id,...d.data()})))));
+    u.push(onSnapshot(query(collection(db,"foremanTrust"),orderBy("date","desc")), s => setForemanTrust(s.docs.map(d=>({id:d.id,...d.data()})))));
     // تحميل سعر الصرف المحفوظ
     onSnapshot(doc(db,"settings","exchangeRate"), s => { if(s.exists()&&s.data().rate) setExchangeRate(s.data().rate); });
     return () => u.forEach(f=>f());
@@ -313,7 +315,7 @@ export default function App() {
       const srcProjId   = form.projectId||foreman?.projectId||"";
       const srcProjName = projs.find(p=>p.id===srcProjId)?.name||"";
 
-      // ١. صرف على أحمد — مرتبط بالمشروع والفورمن
+      // صرف على أحمد والمشروع فقط — الفورمن وسيط
       await addDoc(collection(db,"transactions"),{
         userId:user.id, userName:user.name,
         projectId:srcProjId, projectName:srcProjName,
@@ -326,17 +328,13 @@ export default function App() {
         createdAt:new Date().toISOString(),
       });
 
-      // ٢. استلام عند الفورمن — يبين بكشف حسابه
-      await addDoc(collection(db,"transactions"),{
-        userId:form.foremanId,           // ← معرّف الفورمن الصحيح
-        userName:foreman?.name||"فورمن",
-        projectId:srcProjId, projectName:srcProjName,
-        type:"استلام", amount:amt,
-        currency:form.currency,
-        note:`استلام من أحمد${srcProjName?" — "+srcProjName:""}${form.note?" — "+form.note:""}`,
-        date:form.date, image:null,
-        isPersonal:false, isAdvance:false, isForeman:true,
+      // تسجيل أمانة عند الفورمن (ليست في الصندوق — مجرد تتبع)
+      await addDoc(collection(db,"foremanTrust"),{
         foremanId:form.foremanId, foremanName:foreman?.name||"",
+        projectId:srcProjId, projectName:srcProjName,
+        amount:amt, currency:form.currency,
+        date:form.date, note:form.note||"",
+        settled:false, settledAmount:0,
         createdAt:new Date().toISOString(),
       });
 
@@ -483,6 +481,32 @@ export default function App() {
     });
   };
   const delForeman = async id => { if(window.confirm("تحذف هذا الفورمن؟")) await deleteDoc(doc(db,"foremen",id)); };
+
+  // تسوية أمانة الفورمن
+  const settleForeman = async (trust, settleAmt) => {
+    const amt = Number(settleAmt);
+    if(!amt||amt<=0) return;
+    const newSettled = (trust.settledAmount||0) + amt;
+    const isDone = newSettled >= trust.amount;
+    // تحديث الأمانة
+    await setDoc(doc(db,"foremanTrust",trust.id),{
+      settledAmount: newSettled,
+      settled: isDone,
+      settledDate: today(),
+    },{merge:true});
+    // تسجيل صرف على الفورمن (تسوية)
+    await addDoc(collection(db,"transactions"),{
+      userId: trust.foremanId, userName: trust.foremanName,
+      projectId: trust.projectId||"", projectName: trust.projectName||"",
+      type:"صرف", amount:amt, currency:trust.currency,
+      note:`تسوية حساب${isDone?" (مكتملة)":""}${trust.note?" — "+trust.note:""}`,
+      date:today(), image:null,
+      isPersonal:false, isAdvance:false, isForeman:true,
+      foremanId:trust.foremanId, foremanName:trust.foremanName,
+      isForemanSettle:true,
+      createdAt:new Date().toISOString(),
+    });
+  };
 
   const addDebt = async () => {
     if(!debtForm.name.trim()||!debtForm.amount) return;
@@ -2772,7 +2796,8 @@ export default function App() {
     if(user.role==="manager"&&view==="foremen") return (
       <ForemenPage
         D={D} foremen={foremen} projs={projs} txs={txs}
-        onAdd={addForeman} onDel={delForeman}
+        foremanTrust={foremanTrust}
+        onAdd={addForeman} onDel={delForeman} onSettle={settleForeman}
         S={S} C={C} fmt={fmt} fmtD={fmtD} toAr={toAr} today={today}
         BackBtn={BackBtn}
       />
@@ -2783,11 +2808,13 @@ export default function App() {
 }
 
 
-function ForemenPage({D,foremen,projs,txs,onAdd,onDel,S,C,fmt,fmtD,toAr,today,BackBtn}) {
+function ForemenPage({D,foremen,projs,txs,foremanTrust,onAdd,onDel,onSettle,S,C,fmt,fmtD,toAr,today,BackBtn}) {
   const [showForm, setShowForm] = useState(false);
   const [form, setForm]         = useState({name:"",projectId:"",phone:"",note:""});
   const [selForeman, setSelForeman] = useState(null);
   const [saving, setSaving]     = useState(false);
+  const [settleId, setSettleId] = useState(null); // trust id قيد التسوية
+  const [settleAmt, setSettleAmt] = useState("");
 
   const save = async () => {
     if(!form.name.trim()||saving) return;
@@ -2798,15 +2825,15 @@ function ForemenPage({D,foremen,projs,txs,onAdd,onDel,S,C,fmt,fmtD,toAr,today,Ba
     setShowForm(false);
   };
 
-  // كشف حساب الفورمن
-  const foremanTxs = (foremanId) => txs.filter(t=>t.foremanId===foremanId||t.note?.includes(foremen.find(f=>f.id===foremanId)?.name||"NOMATCH"));
-
+  // حساب الأمانات لكل فورمن
   const getForemanStats = (f) => {
-    // يشمل: معاملات مرتبطة بـ foremanId أو سجلة بـ userId الفورمن
+    const fTrust  = foremanTrust.filter(t=>t.foremanId===f.id);
+    const totalReceived = fTrust.reduce((s,t)=>s+t.amount,0);           // كل ما استلم
+    const totalSettled  = fTrust.reduce((s,t)=>s+(t.settledAmount||0),0); // كل ما سوّى
+    const pending       = totalReceived - totalSettled;                   // عنده غير مسوّى
+    // معاملات عمل من txs
     const fTxs = txs.filter(t=>t.foremanId===f.id||t.userId===f.id);
-    const received = fTxs.filter(t=>t.type==="استلام").reduce((s,t)=>s+t.amount,0);
-    const spent    = fTxs.filter(t=>t.type==="صرف").reduce((s,t)=>s+t.amount,0);
-    return {fTxs, received, spent, balance: received-spent};
+    return {fTrust, fTxs, totalReceived, totalSettled, pending};
   };
 
   return (
