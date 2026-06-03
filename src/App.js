@@ -1214,38 +1214,100 @@ export default function App() {
     if(user.role!=="manager"&&view==="home") return (
       <div>
 
-        <div style={D?{display:"flex",gap:12,marginBottom:4}:{}}>
-          <div style={{...S.balCard,background:dinSt.b>=0?"linear-gradient(135deg,#065f46,#047857)":"linear-gradient(135deg,#7f1d1d,#991b1b)",flex:D?1:undefined,marginBottom:D?0:12}}>
-            <div style={S.balLbl}>{user.role==="accountant"?"🏦 صندوق أحمد — دينار":"🇮🇶 صندوقك — دينار عراقي"}</div>
-            <div style={S.balAmt}>{fmt(Math.abs(dinSt.b),"دينار")}</div>
-            <div style={{fontSize:14,fontWeight:800,color:"rgba(255,255,255,0.9)",margin:"4px 0 10px"}}>
-              {dinSt.b>0?"✅ مطلوب منك":dinSt.b<0?"⚠️ أنت طالب":"◼️ متوازن"}
-            </div>
-            <div style={S.balRow}>
-              <span style={S.balSt}>↓ استلمت {fmt(dinSt.r,"دينار")}</span>
-              <span style={S.balSt}>↑ صرفت {fmt(dinSt.s,"دينار")}</span>
-            </div>
-            {user.role==="partner"&&(myOB.personalWithdraw>0||myTxs.filter(t=>t.isPersonal&&t.type==="صرف").length>0)&&(
-              <div style={{marginTop:10,paddingTop:10,borderTop:"1px solid rgba(255,255,255,0.15)",display:"flex",justifyContent:"space-between"}}>
-                <span style={{fontSize:12,color:"rgba(255,255,255,0.7)"}}>👤 منها سحب شخصي</span>
-                <span style={{fontSize:13,fontWeight:800,color:"#c4b5fd"}}>
-                  {fmtD(myTxs.filter(t=>t.isPersonal&&t.type==="صرف").reduce((s,t)=>s+t.amount,0)+(myOB.personalWithdraw||0))}
-                </span>
+        {/* بطاقتا الرصيد — عمل وشخصي */}
+        {(()=>{
+          const workTxs     = myTxs.filter(t=>!t.isPersonal);
+          const personalTxs = myTxs.filter(t=>t.isPersonal);
+          const myOB = OBs[user.id]||{};
+
+          // حساب العمل — دينار
+          const workDinR = workTxs.filter(t=>t.type==="استلام"&&(t.currency==="دينار"||!t.currency)).reduce((s,t)=>s+t.amount,0)+(myOB.dinarReceived||0);
+          const workDinS = workTxs.filter(t=>t.type==="صرف"&&(t.currency==="دينار"||!t.currency)).reduce((s,t)=>s+t.amount,0)+(myOB.dinarSpent||0);
+          const workDinB = workDinR - workDinS;
+
+          // حساب العمل — دولار
+          const workDolR = workTxs.filter(t=>t.type==="استلام"&&t.currency==="دولار").reduce((s,t)=>s+t.amount,0)+(myOB.dollarReceived||0);
+          const workDolS = workTxs.filter(t=>t.type==="صرف"&&t.currency==="دولار").reduce((s,t)=>s+t.amount,0)+(myOB.dollarSpent||0);
+          const workDolB = workDolR - workDolS;
+
+          // الحساب الشخصي
+          const persR = personalTxs.filter(t=>t.type==="استلام").reduce((s,t)=>s+t.amount,0);
+          const persS = personalTxs.filter(t=>t.type==="صرف").reduce((s,t)=>s+t.amount,0)+(myOB.personalWithdraw||0);
+
+          // السلف المستحقة على الشخص
+          const myDebts = personalDebts.filter(d=>d.debtorId===user.id&&d.status!=="مسدد كامل");
+          const totalOwedByMe = myDebts.reduce((s,d)=>s+(d.remaining||d.amount||0),0);
+
+          return (<>
+            {/* 💼 حساب العمل */}
+            <div style={{background:workDinB>=0?"linear-gradient(135deg,#065f46,#047857)":"linear-gradient(135deg,#7f1d1d,#991b1b)",borderRadius:18,padding:18,marginBottom:10,boxShadow:C.shadowMd}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:10}}>
+                <div style={{fontSize:12,color:"rgba(255,255,255,0.85)",fontWeight:700}}>💼 حساب العمل</div>
+                <div style={{fontSize:11,color:"rgba(255,255,255,0.6)"}}>
+                  {workDinB>0?"مطلوب منك":workDinB<0?"أنت طالب":"متوازن"}
+                </div>
               </div>
-            )}
-          </div>
-          <div style={{...S.balCard,background:dolSt.b>=0?"linear-gradient(135deg,#1e40af,#2563eb)":"linear-gradient(135deg,#7f1d1d,#991b1b)",flex:D?1:undefined,marginBottom:16}}>
-            <div style={S.balLbl}>{user.role==="accountant"?"🏦 صندوق أحمد — دولار":"🇺🇸 صندوقك — دولار أمريكي"}</div>
-            <div style={S.balAmt}>{fmt(Math.abs(dolSt.b),"دولار")}</div>
-            <div style={{fontSize:14,fontWeight:800,color:"rgba(255,255,255,0.9)",margin:"4px 0 10px"}}>
-              {dolSt.b>0?"✅ مطلوب منك":dolSt.b<0?"⚠️ أنت طالب":"◼️ متوازن"}
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+                {/* دينار */}
+                <div style={{background:"rgba(255,255,255,0.12)",borderRadius:12,padding:"12px"}}>
+                  <div style={{fontSize:10,color:"rgba(255,255,255,0.7)",marginBottom:4}}>🇮🇶 دينار</div>
+                  <div style={{fontSize:20,fontWeight:900,color:"#fff"}}>{fmtD(Math.abs(workDinB))}</div>
+                  <div style={{fontSize:10,color:"rgba(255,255,255,0.6)",marginTop:4}}>
+                    ↓{fmtD(workDinR)} ↑{fmtD(workDinS)}
+                  </div>
+                </div>
+                {/* دولار */}
+                <div style={{background:"rgba(255,255,255,0.12)",borderRadius:12,padding:"12px"}}>
+                  <div style={{fontSize:10,color:"rgba(255,255,255,0.7)",marginBottom:4}}>🇺🇸 دولار</div>
+                  <div style={{fontSize:20,fontWeight:900,color:"#fff"}}>{fmt(Math.abs(workDolB),"دولار")}</div>
+                  <div style={{fontSize:10,color:"rgba(255,255,255,0.6)",marginTop:4}}>
+                    ↓{fmt(workDolR,"دولار")} ↑{fmt(workDolS,"دولار")}
+                  </div>
+                </div>
+              </div>
             </div>
-            <div style={S.balRow}>
-              <span style={S.balSt}>↓ استلمت {fmt(dolSt.r,"دولار")}</span>
-              <span style={S.balSt}>↑ صرفت {fmt(dolSt.s,"دولار")}</span>
+
+            {/* 👤 الحساب الشخصي */}
+            <div style={{background:"linear-gradient(135deg,#4c1d95,#6B3FA0)",borderRadius:18,padding:18,marginBottom:10,boxShadow:C.shadowMd}}>
+              <div style={{fontSize:12,color:"rgba(255,255,255,0.85)",fontWeight:700,marginBottom:10}}>👤 الحساب الشخصي</div>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+                <div style={{background:"rgba(255,255,255,0.12)",borderRadius:12,padding:"12px",textAlign:"center"}}>
+                  <div style={{fontSize:10,color:"rgba(255,255,255,0.7)",marginBottom:4}}>↓ استلمت سلف</div>
+                  <div style={{fontSize:18,fontWeight:900,color:"#c4b5fd"}}>{fmtD(persR)}</div>
+                </div>
+                <div style={{background:"rgba(255,255,255,0.12)",borderRadius:12,padding:"12px",textAlign:"center"}}>
+                  <div style={{fontSize:10,color:"rgba(255,255,255,0.7)",marginBottom:4}}>↑ سددت</div>
+                  <div style={{fontSize:18,fontWeight:900,color:"#c4b5fd"}}>{fmtD(persS)}</div>
+                </div>
+              </div>
+              {/* السلف المستحقة عليه */}
+              {totalOwedByMe>0&&(
+                <div style={{marginTop:10,background:"rgba(255,255,255,0.08)",borderRadius:10,padding:"10px 12px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                  <span style={{fontSize:12,color:"rgba(255,255,255,0.8)"}}>⏳ سلف باقية بذمتك</span>
+                  <span style={{fontSize:15,fontWeight:900,color:"#fca5a5"}}>{fmtD(totalOwedByMe)}</span>
+                </div>
+              )}
+              {myDebts.length>0&&(
+                <div style={{marginTop:8}}>
+                  {myDebts.map(d=>(
+                    <div key={d.id} style={{background:"rgba(255,255,255,0.06)",borderRadius:8,padding:"8px 10px",marginBottom:4,display:"flex",justifyContent:"space-between"}}>
+                      <div>
+                        <div style={{fontSize:12,color:"rgba(255,255,255,0.85)",fontWeight:600}}>من {d.creditorName}</div>
+                        <div style={{fontSize:10,color:"rgba(255,255,255,0.5)"}}>{d.date}</div>
+                      </div>
+                      <div style={{fontSize:13,fontWeight:800,color:"#fca5a5"}}>{fmt(d.remaining||d.amount,d.currency)}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
-          </div>
-        </div>
+
+            {/* زر كشف الحساب */}
+            {!D&&<button style={{...S.goldBtn,marginBottom:10}} onClick={()=>setView("myStatement")}>
+              📄 كشف حسابي الكامل
+            </button>}
+          </>);
+        })()}
         {!D&&user.role==="accountant"&&(
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:0}}>
             <button style={{...S.goldBtn,background:"linear-gradient(135deg,#1A7A4A,#147A40)",color:"#fff",marginBottom:0}}
