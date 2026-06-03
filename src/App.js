@@ -213,8 +213,9 @@ export default function App() {
         if(!form.projectId)return;
       }
     }
-    if(form.isAdvance&&!form.advanceIsPersonal&&!form.projectId)return;
     if(form.isAdvance&&!form.advanceTo)return;
+    // السلفة الشخصية لا تحتاج مشروع
+    // السلفة للصندوق العام أيضاً لا تحتاج مشروع
 
     const p=projs.find(p=>p.id===form.projectId);
     const projName=p?`${p.name} - ${p.spec||p.specialization} - ${p.province}`:"";
@@ -1178,11 +1179,15 @@ export default function App() {
 
                     {form.advanceTo&&(
                       <>
-                        <div style={S.fLbl}>نوع الدفعة</div>
-                        <div style={S.tRow}>
-                          <button style={{...S.tBtn,...(!form.advanceIsPersonal?{background:"rgba(37,87,167,0.15)",border:`1px solid #2557A7`,color:"#2557A7"}:{})}}
+                        <div style={S.fLbl}>مصدر الدفعة</div>
+                        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
+                          <button style={{...S.tBtn,...(!form.advanceIsPersonal&&form.projectId?{background:"rgba(37,87,167,0.15)",border:`1px solid #2557A7`,color:"#2557A7"}:{})}}
                             onClick={()=>setForm(f=>({...f,advanceIsPersonal:false}))}>
-                            🏗️ للمشروع
+                            🏗️ من مشروع
+                          </button>
+                          <button style={{...S.tBtn,...(!form.advanceIsPersonal&&!form.projectId?{background:"rgba(193,123,47,0.15)",border:`1px solid ${C.gold}`,color:C.gold}:{})}}
+                            onClick={()=>setForm(f=>({...f,advanceIsPersonal:false,projectId:""}))}>
+                            📦 صندوق عام
                           </button>
                           <button style={{...S.tBtn,...(form.advanceIsPersonal?{background:"rgba(107,63,160,0.15)",border:`1px solid #6B3FA0`,color:"#6B3FA0"}:{})}}
                             onClick={()=>setForm(f=>({...f,advanceIsPersonal:true,projectId:""}))}>
@@ -1190,16 +1195,29 @@ export default function App() {
                           </button>
                         </div>
 
+                        {/* اختيار المشروع */}
                         {!form.advanceIsPersonal&&(
                           <>
-                            <div style={S.fLbl}>المشروع</div>
-                            <select style={S.sel} value={form.projectId} onChange={e=>setForm(f=>({...f,projectId:e.target.value}))}>
-                              <option value="">اختر المشروع</option>
-                              {projs.map(p=><option key={p.id} value={p.id}>{p.name} - {p.spec||p.specialization} - {p.province}</option>)}
-                            </select>
-                            <div style={{background:"rgba(37,87,167,0.08)",border:`1px solid rgba(37,87,167,0.2)`,borderRadius:10,padding:"10px 14px",marginTop:8,fontSize:13,color:"#2557A7",fontWeight:600}}>
-                              💡 ستتسجل كمصروف مشروع باسم {USERS.find(u=>u.id===form.advanceTo)?.name}
-                            </div>
+                            {form.projectId||form.projectId===""?(
+                              <>
+                                <div style={S.fLbl}>المشروع</div>
+                                <select style={S.sel} value={form.projectId} onChange={e=>setForm(f=>({...f,projectId:e.target.value}))}>
+                                  <option value="">📦 صندوق عام (بدون مشروع)</option>
+                                  {projs.map(p=><option key={p.id} value={p.id}>{p.name} — {p.specialization||p.spec}</option>)}
+                                </select>
+                                <div style={{
+                                  background:form.projectId?"rgba(37,87,167,0.08)":"rgba(193,123,47,0.08)",
+                                  border:`1px solid ${form.projectId?"rgba(37,87,167,0.2)":"rgba(193,123,47,0.2)"}`,
+                                  borderRadius:10,padding:"10px 14px",marginTop:8,fontSize:13,
+                                  color:form.projectId?"#2557A7":C.gold,fontWeight:600
+                                }}>
+                                  {form.projectId
+                                    ?`💡 ستتسجل على مشروع "${projs.find(p=>p.id===form.projectId)?.name}" باسم ${USERS.find(u=>u.id===form.advanceTo)?.name}`
+                                    :`💡 ستتسجل من الصندوق العام باسم ${USERS.find(u=>u.id===form.advanceTo)?.name}`
+                                  }
+                                </div>
+                              </>
+                            ):null}
                           </>
                         )}
 
@@ -3162,7 +3180,8 @@ function ConfirmTxModal({form, projs, USERS, foremen, C, S, fmt, fmtD, onConfirm
     if(form.isPersonal)  return {label:"👤 سحب شخصي", color:"#6B3FA0", bg:"rgba(107,63,160,0.1)"};
     if(form.isForeman)   return {label:`👷 دفع لفورمن — ${foreman?.name||""}`, color:"#b45309", bg:"rgba(180,83,9,0.1)"};
     if(form.isAdvance&&form.advanceIsPersonal) return {label:`💳 سلفة شخصية لـ ${receiver?.name||""}`, color:"#C0392B", bg:"rgba(192,57,43,0.1)"};
-    if(form.isAdvance)   return {label:`💸 دفعة مشروع لـ ${receiver?.name||""}`, color:C.gold, bg:"rgba(193,123,47,0.1)"};
+    if(form.isAdvance&&form.projectId)   return {label:`💸 دفعة مشروع لـ ${receiver?.name||""} — ${projs.find(p=>p.id===form.projectId)?.name||""}`, color:C.gold, bg:"rgba(193,123,47,0.1)"};
+    if(form.isAdvance)   return {label:`📦 دفعة صندوق عام لـ ${receiver?.name||""}`, color:C.gold, bg:"rgba(193,123,47,0.1)"};
     if(form.type==="استلام"&&form.receiveType==="general") return {label:`📝 استلام عام — ${form.generalLabel||""}`, color:"#1A7A4A", bg:"rgba(26,122,74,0.1)"};
     if(form.type==="استلام") return {label:"↓ استلام", color:"#1A7A4A", bg:"rgba(26,122,74,0.1)"};
     return {label:"↑ صرف", color:"#C0392B", bg:"rgba(192,57,43,0.1)"};
@@ -3177,6 +3196,7 @@ function ConfirmTxModal({form, projs, USERS, foremen, C, S, fmt, fmtD, onConfirm
     ["العملة",       form.currency==="دولار"?"🇺🇸 دولار":"🇮🇶 دينار"],
     ["التاريخ",      `📅 ${form.date}`],
     proj&&["المشروع", `🏗️ ${proj.name} — ${proj.specialization||proj.spec}`],
+    form.isAdvance&&!form.advanceIsPersonal&&!form.projectId&&["المصدر", "📦 الصندوق العام"],
     form.generalLabel&&["البند",    `📝 ${form.generalLabel}`],
     form.note&&["ملاحظة",  form.note],
     foreman&&["الفورمن",   `👷 ${foreman.name}`],
