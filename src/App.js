@@ -165,12 +165,18 @@ export default function App() {
     // سحب شخصي لأحمد
     if(form.isPersonal&&user.role==="accountant"){
       const amt=Number(form.amount);
+      const srcProjId   = form.projectId||"";
+      const srcProjName = projs.find(p=>p.id===srcProjId)?.name||"";
+      const srcLabel    = srcProjId?srcProjName:"الصندوق العام";
+
+      // يتسجل على المشروع (أو الصندوق العام) كصرف
       await addDoc(collection(db,"transactions"),{
         userId:user.id, userName:user.name,
-        projectId:"", projectName:"",
+        projectId:srcProjId,
+        projectName:srcProjName,
         type:"صرف", amount:amt,
         currency:form.currency,
-        note:`سحب شخصي${form.note?" — "+form.note:""}`,
+        note:`👤 سحب شخصي — من ${srcLabel}${form.note?" — "+form.note:""}`,
         date:form.date, image:null,
         isPersonal:true, isAdvance:false,
         createdAt:new Date().toISOString(),
@@ -181,6 +187,7 @@ export default function App() {
         creditorId:"company", creditorName:"الشركة",
         amount:amt, currency:form.currency,
         remaining:amt, status:"غير مسدد",
+        projectId:srcProjId, projectName:srcProjName,
         note:form.note||"", date:form.date,
         createdAt:new Date().toISOString(),
       });
@@ -1320,11 +1327,18 @@ export default function App() {
               </>
             )}
 
-            {/* سحب شخصي - توضيح */}
+            {/* سحب شخصي - توضيح + اختيار المصدر */}
             {form.isPersonal&&(
-              <div style={{background:"rgba(107,63,160,0.08)",border:`1px solid rgba(107,63,160,0.2)`,borderRadius:10,padding:"10px 14px",fontSize:13,color:"#6B3FA0",fontWeight:600}}>
-                ⚠️ ينقص من رصيدك ويُحسب ضمن حصتك (١٥%)
-              </div>
+              <>
+                <div style={S.fLbl}>من أي صندوق؟</div>
+                <select style={S.sel} value={form.projectId} onChange={e=>setForm(f=>({...f,projectId:e.target.value}))}>
+                  <option value="">📦 الصندوق العام</option>
+                  {projs.map(p=><option key={p.id} value={p.id}>{p.name} — {p.specialization||p.spec}</option>)}
+                </select>
+                <div style={{background:"rgba(107,63,160,0.08)",border:`1px solid rgba(107,63,160,0.2)`,borderRadius:10,padding:"10px 14px",marginTop:8,fontSize:13,color:"#6B3FA0",fontWeight:600}}>
+                  ⚠️ ينقص من رصيدك وسيبين في كشف {form.projectId?`مشروع "${projs.find(p=>p.id===form.projectId)?.name}"`:'"الصندوق العام"'}
+                </div>
+              </>
             )}
 
             {/* المبلغ والعملة والتاريخ */}
