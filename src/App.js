@@ -71,6 +71,7 @@ export default function App() {
   const [pfType,  setPfType]  = useState("all"); // all | استلام | صرف
   const [viewImg, setViewImg] = useState(null);
   const [editTx,  setEditTx]  = useState(null);
+  const [confirmTx, setConfirmTx] = useState(false); // popup تأكيد المعاملة
   const [foremen, setForemen] = useState([]); // قائمة الفورمنية // المعاملة قيد التعديل
   const [OBform,  setOBform]  = useState({});
   const [OBok,    setOBok]    = useState(false);
@@ -748,6 +749,12 @@ export default function App() {
     <div style={D?S.appWrapD:S.appWrap}>
       {viewImg&&<div style={S.overlay} onClick={()=>setViewImg(null)}><img src={viewImg} style={S.fullImg} alt="وصل"/></div>}
       {editTx&&<EditTxModal tx={editTx} projs={projs} onSave={saveTxEdit} onClose={()=>setEditTx(null)} S={S} C={C} today={today}/>}
+      {confirmTx&&<ConfirmTxModal
+        form={form} projs={projs} USERS={USERS} foremen={foremen}
+        C={C} S={S} fmt={fmt} fmtD={fmtD}
+        onConfirm={async()=>{setConfirmTx(false);await addTx();}}
+        onClose={()=>setConfirmTx(false)}
+      />}
 
       {/* HEADER */}
       <div style={D?S.headerD:S.header}>
@@ -1264,7 +1271,7 @@ export default function App() {
               ...S.subBtn,
               ...(form.isPersonal?{background:`linear-gradient(135deg,#6B3FA0,#5B21B6)`,color:"#fff"}:{}),
               ...(form.isAdvance?{background:`linear-gradient(135deg,${C.gold},${C.goldD})`,color:"#000"}:{}),
-            }} onClick={addTx}>💾 حفظ</button>
+            }} onClick={()=>setConfirmTx(true)}>👁️ مراجعة وتأكيد</button>
             <button style={S.canBtn} onClick={()=>setView("home")}>إلغاء</button>
           </div>
         )}
@@ -3102,6 +3109,94 @@ function ForemanOTForm({employees, onSubmit}) {
       }} onClick={submit} disabled={!f.employeeId||!amt||loading}>
         {loading?"Saving...":"⏰ Submit Overtime"}
       </button>
+    </div>
+  );
+}
+
+function ConfirmTxModal({form, projs, USERS, foremen, C, S, fmt, fmtD, onConfirm, onClose}) {
+  const [saving, setSaving] = useState(false);
+
+  const proj    = projs.find(p=>p.id===form.projectId);
+  const receiver= USERS.find(u=>u.id===form.advanceTo);
+  const foreman = foremen.find(f=>f.id===form.foremanId);
+
+  // تحديد نوع المعاملة بشكل واضح
+  const getTxType = () => {
+    if(form.isPersonal)  return {label:"👤 سحب شخصي", color:"#6B3FA0", bg:"rgba(107,63,160,0.1)"};
+    if(form.isForeman)   return {label:`👷 دفع لفورمن — ${foreman?.name||""}`, color:"#b45309", bg:"rgba(180,83,9,0.1)"};
+    if(form.isAdvance&&form.advanceIsPersonal) return {label:`💳 سلفة شخصية لـ ${receiver?.name||""}`, color:"#C0392B", bg:"rgba(192,57,43,0.1)"};
+    if(form.isAdvance)   return {label:`💸 دفعة مشروع لـ ${receiver?.name||""}`, color:C.gold, bg:"rgba(193,123,47,0.1)"};
+    if(form.type==="استلام"&&form.receiveType==="general") return {label:`📝 استلام عام — ${form.generalLabel||""}`, color:"#1A7A4A", bg:"rgba(26,122,74,0.1)"};
+    if(form.type==="استلام") return {label:"↓ استلام", color:"#1A7A4A", bg:"rgba(26,122,74,0.1)"};
+    return {label:"↑ صرف", color:"#C0392B", bg:"rgba(192,57,43,0.1)"};
+  };
+
+  const txType = getTxType();
+  const ar = n => String(Number(n).toLocaleString("ar-IQ")).replace(/\d/g,d=>"٠١٢٣٤٥٦٧٨٩"[d]);
+
+  const rows = [
+    ["النوع",        <span style={{fontWeight:800,color:txType.color}}>{txType.label}</span>],
+    ["المبلغ",       <span style={{fontWeight:900,fontSize:20,color:form.type==="صرف"||form.isPersonal||form.isAdvance||form.isForeman?"#C0392B":"#1A7A4A"}}>{ar(form.amount)} {form.currency==="دولار"?"$":"د.ع"}</span>],
+    ["العملة",       form.currency==="دولار"?"🇺🇸 دولار":"🇮🇶 دينار"],
+    ["التاريخ",      `📅 ${form.date}`],
+    proj&&["المشروع", `🏗️ ${proj.name} — ${proj.specialization||proj.spec}`],
+    form.generalLabel&&["البند",    `📝 ${form.generalLabel}`],
+    form.note&&["ملاحظة",  form.note],
+    foreman&&["الفورمن",   `👷 ${foreman.name}`],
+    receiver&&["المستلم",  `👤 ${receiver.name}`],
+  ].filter(Boolean);
+
+  return (
+    <div style={{position:"fixed",inset:0,background:"rgba(44,24,16,0.6)",zIndex:600,display:"flex",alignItems:"center",justifyContent:"center",padding:16,backdropFilter:"blur(4px)"}}
+      onClick={onClose}>
+      <div style={{background:"#fff",borderRadius:24,padding:24,width:"100%",maxWidth:440,boxShadow:"0 24px 80px rgba(0,0,0,0.25)"}}
+        onClick={e=>e.stopPropagation()}>
+
+        {/* العنوان */}
+        <div style={{textAlign:"center",marginBottom:20}}>
+          <div style={{fontSize:40,marginBottom:8}}>📋</div>
+          <div style={{fontWeight:900,fontSize:20,color:C.text}}>مراجعة القيد</div>
+          <div style={{fontSize:13,color:C.textSm,marginTop:4}}>تأكد من البيانات قبل الحفظ</div>
+        </div>
+
+        {/* بطاقة التفاصيل */}
+        <div style={{background:C.bg2,borderRadius:16,padding:16,marginBottom:20,border:`1px solid ${C.cardBorder}`}}>
+          {/* شريط النوع */}
+          <div style={{background:txType.bg,border:`1px solid ${txType.color}22`,borderRadius:10,padding:"10px 14px",marginBottom:12,textAlign:"center",fontWeight:800,fontSize:15,color:txType.color}}>
+            {txType.label}
+          </div>
+          {/* التفاصيل */}
+          {rows.map(([label,val],i)=>(
+            <div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 4px",borderBottom:i<rows.length-1?`1px solid ${C.cardBorder}`:"none"}}>
+              <span style={{fontSize:12,color:C.textSm,fontWeight:600,minWidth:70}}>{label}</span>
+              <span style={{fontSize:13,color:C.text,fontWeight:700,textAlign:"left"}}>{val}</span>
+            </div>
+          ))}
+        </div>
+
+        {/* صورة الوصل */}
+        {form.image&&(
+          <img src={form.image} style={{width:"100%",maxHeight:120,objectFit:"cover",borderRadius:12,marginBottom:16}} alt="وصل"/>
+        )}
+
+        {/* أزرار */}
+        <div style={{display:"flex",gap:10}}>
+          <button style={{
+            flex:2,padding:16,borderRadius:14,border:"none",cursor:saving?"not-allowed":"pointer",
+            background:saving?"#e2e8f0":"linear-gradient(135deg,#1A7A4A,#147A40)",
+            color:saving?"#94a3b8":"#fff",fontSize:16,fontWeight:900,
+            boxShadow:saving?"none":"0 6px 20px rgba(26,122,74,0.3)",
+          }} disabled={saving} onClick={async()=>{setSaving(true);await onConfirm();}}>
+            {saving?"⏳ جاري الحفظ...":"✅ تأكيد الحفظ"}
+          </button>
+          <button style={{
+            flex:1,padding:16,borderRadius:14,border:`1px solid ${C.cardBorder}`,
+            background:"transparent",color:C.textMd,fontSize:14,fontWeight:700,cursor:"pointer",
+          }} onClick={onClose}>
+            ← تعديل
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
