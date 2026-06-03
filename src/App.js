@@ -240,7 +240,12 @@ export default function App() {
     u.push(onSnapshot(collection(db,"projects"), s => setProjs(s.docs.map(d=>({id:d.id,...d.data()})))));
     u.push(onSnapshot(collection(db,"openingBalances"), s => { const o={}; s.docs.forEach(d=>{o[d.id]=d.data();}); setOBs(o); }));
     u.push(onSnapshot(doc(db,"settings","company"), s => { if(s.exists()) setCompSet(s.data()); }));
-    u.push(onSnapshot(query(collection(db,"debts"),orderBy("createdAt","desc")), s => setDebts(s.docs.map(d=>({id:d.id,...d.data()})))));
+    u.push(onSnapshot(query(collection(db,"debts"),orderBy("createdAt","desc")), s => {
+      const dList = s.docs.map(d=>({id:d.id,...d.data()}));
+      // migration: الديون القديمة ما عندها remaining
+      dList.forEach(d=>{ if(d.remaining===undefined){ setDoc(doc(db,"debts",d.id),{remaining:d.amount,paidAmount:0},{merge:true}); }});
+      setDebts(dList);
+    }));
     u.push(onSnapshot(query(collection(db,"personalDebts"),orderBy("createdAt","desc")), s => setPersonalDebts(s.docs.map(d=>({id:d.id,...d.data()})))));
     u.push(onSnapshot(collection(db,"salaryEmployees"), s => setSalaryEmployees(s.docs.map(d=>({id:d.id,...d.data()})))));
     u.push(onSnapshot(query(collection(db,"salaryPayments"),orderBy("date","desc")), s => setSalaryPayments(s.docs.map(d=>({id:d.id,...d.data()})))));
@@ -3227,69 +3232,50 @@ function ForemenPage({D,foremen,projs,txs,foremanTrust,onAdd,onDel,onSettle,S,C,
                 {/* كشف الحساب التفصيلي */}
                 {selForeman?.id===f.id&&(
                   <div style={{marginTop:14,borderTop:`1px solid ${C.cardBorder}`,paddingTop:14}}>
-                    <div style={{fontWeight:800,fontSize:14,color:C.text,marginBottom:12}}>📋 كشف الحساب التفصيلي</div>
-
-                    {/* جدول المعاملات */}
-                    {stats.fTxs.length===0?(
-                      <div style={{textAlign:"center",color:C.textSm,padding:20,fontSize:13,background:C.bg2,borderRadius:10}}>
-                        ما في معاملات مرتبطة بهذا الفورمن
+                    <div style={{fontWeight:800,fontSize:14,color:C.text,marginBottom:12}}>📋 الأمانات والتسويات</div>
+                    {stats.fTrust.length===0?(
+                      <div style={{textAlign:"center",color:C.textSm,padding:16,fontSize:13,background:C.bg2,borderRadius:10}}>
+                        ما في دفعات لهذا الفورمن بعد
                       </div>
                     ):(
                       <>
-                        <div style={{...S.formCard,padding:0,overflow:"hidden"}}>
-                          <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
-                            <thead>
-                              <tr style={{background:"#b45309"}}>
-                                {["التاريخ","النوع","المبلغ","المشروع","ملاحظة"].map(h=>(
-                                  <th key={h} style={{padding:"8px 10px",color:"#fff",fontWeight:700,fontSize:11,textAlign:"center"}}>{h}</th>
-                                ))}
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {txs.filter(t=>t.foremanId===f.id&&t.userId==="foreman").map((t,i)=>(
-                                <tr key={t.id} style={{borderBottom:`1px solid ${C.cardBorder}`,background:i%2===0?"#fff":C.bg}}>
-                                  <td style={{padding:"8px 10px",textAlign:"center",color:C.textMd,fontSize:11}}>📅 {t.date}</td>
-                                  <td style={{padding:"8px 10px",textAlign:"center"}}>
-                                    <span style={{fontWeight:700,color:t.type==="استلام"?"#1A7A4A":C.red,background:t.type==="استلام"?"rgba(26,122,74,0.1)":"rgba(192,57,43,0.08)",padding:"2px 8px",borderRadius:6,fontSize:11}}>
-                                      {t.type}
-                                    </span>
-                                  </td>
-                                  <td style={{padding:"8px 10px",textAlign:"center",fontWeight:800,color:t.type==="استلام"?"#1A7A4A":C.red}}>
-                                    {fmt(t.amount,t.currency)}
-                                  </td>
-                                  <td style={{padding:"8px 10px",textAlign:"center",color:C.textSm,fontSize:11}}>
-                                    {t.projectName||"—"}
-                                  </td>
-                                  <td style={{padding:"8px 10px",textAlign:"center",color:C.textSm,fontSize:11}}>
-                                    {t.note||"—"}
-                                  </td>
-                                </tr>
-                              ))}
-                            </tbody>
-                            <tfoot>
-                              <tr style={{background:C.bg2,borderTop:`2px solid #b45309`}}>
-                                <td colSpan={2} style={{padding:"8px 10px",fontWeight:800,color:C.text,textAlign:"right"}}>الإجمالي</td>
-                                <td style={{padding:"8px 10px",textAlign:"center",fontWeight:900,color:"#b45309"}}>
-                                  ↓ {fmtD(stats.received)} | ↑ {fmtD(stats.spent)}
-                                </td>
-                                <td colSpan={2}/>
-                              </tr>
-                            </tfoot>
-                          </table>
-                        </div>
-                        <div style={{marginTop:10,display:"flex",gap:10}}>
-                          <div style={{flex:1,background:"rgba(26,122,74,0.08)",border:"1px solid rgba(26,122,74,0.2)",borderRadius:10,padding:"10px",textAlign:"center"}}>
-                            <div style={{fontSize:11,color:C.textSm,marginBottom:3}}>↓ استلم</div>
-                            <div style={{fontWeight:800,color:"#1A7A4A"}}>{fmtD(stats.received)}</div>
+                        {stats.fTrust.map((t,i)=>{
+                          const tRemaining = t.amount-(t.settledAmount||0);
+                          const isDone = t.settled||tRemaining<=0;
+                          return(
+                            <div key={t.id} style={{background:isDone?"rgba(26,122,74,0.04)":"rgba(180,83,9,0.04)",border:`1px solid ${isDone?"rgba(26,122,74,0.2)":"rgba(180,83,9,0.2)"}`,borderRadius:12,padding:"12px 14px",marginBottom:8}}>
+                              <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:6}}>
+                                <div>
+                                  <div style={{fontWeight:700,fontSize:13,color:C.text}}>دفعة #{toAr(i+1)}</div>
+                                  <div style={{fontSize:11,color:C.textSm}}>📅 {t.date} {t.projectName&&`· 🏗️ ${t.projectName}`}</div>
+                                  {t.note&&<div style={{fontSize:11,color:C.textSm}}>📝 {t.note}</div>}
+                                </div>
+                                <div style={{textAlign:"left"}}>
+                                  <div style={{fontWeight:800,color:"#b45309"}}>{fmtD(t.amount)} ← دُفع</div>
+                                  {t.settledAmount>0&&<div style={{fontSize:11,color:"#1A7A4A",fontWeight:600}}>✅ سُوِّي: {fmtD(t.settledAmount)}</div>}
+                                  {!isDone&&<div style={{fontSize:12,fontWeight:800,color:C.red}}>⏳ باقي: {fmtD(tRemaining)}</div>}
+                                </div>
+                              </div>
+                              {isDone?(
+                                <div style={{background:"rgba(26,122,74,0.1)",borderRadius:8,padding:"6px 12px",fontSize:12,color:"#1A7A4A",fontWeight:700,textAlign:"center"}}>✅ مسوّاة بالكامل</div>
+                              ):(
+                                <ForemanSettleRow trust={t} onSettle={onSettle} S={S} C={C} fmtD={fmtD}/>
+                              )}
+                            </div>
+                          );
+                        })}
+                        <div style={{background:C.bg2,borderRadius:10,padding:"12px 14px",display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginTop:8}}>
+                          <div style={{textAlign:"center"}}>
+                            <div style={{fontSize:10,color:C.textSm,fontWeight:700}}>إجمالي الدفع</div>
+                            <div style={{fontWeight:800,color:"#b45309"}}>{fmtD(stats.totalReceived)}</div>
                           </div>
-                          <div style={{flex:1,background:"rgba(192,57,43,0.08)",border:"1px solid rgba(192,57,43,0.2)",borderRadius:10,padding:"10px",textAlign:"center"}}>
-                            <div style={{fontSize:11,color:C.textSm,marginBottom:3}}>↑ صرف</div>
-                            <div style={{fontWeight:800,color:C.red}}>{fmtD(stats.spent)}</div>
+                          <div style={{textAlign:"center"}}>
+                            <div style={{fontSize:10,color:C.textSm,fontWeight:700}}>إجمالي التسوية</div>
+                            <div style={{fontWeight:800,color:"#1A7A4A"}}>{fmtD(stats.totalSettled)}</div>
                           </div>
-                          <div style={{flex:1,background:stats.balance>=0?"rgba(26,122,74,0.08)":"rgba(192,57,43,0.08)",border:`1px solid ${stats.balance>=0?"rgba(26,122,74,0.2)":"rgba(192,57,43,0.2)"}`,borderRadius:10,padding:"10px",textAlign:"center"}}>
-                            <div style={{fontSize:11,color:C.textSm,marginBottom:3}}>الرصيد</div>
-                            <div style={{fontWeight:900,fontSize:15,color:stats.balance>=0?"#1A7A4A":C.red}}>{fmtD(Math.abs(stats.balance))}</div>
-                            <div style={{fontSize:10,color:stats.balance>=0?"#1A7A4A":C.red}}>{stats.balance>=0?"✅ له":"⚠️ عليه"}</div>
+                          <div style={{textAlign:"center"}}>
+                            <div style={{fontSize:10,color:C.textSm,fontWeight:700}}>⏳ بذمته</div>
+                            <div style={{fontWeight:900,color:stats.pending>0?C.red:"#1A7A4A"}}>{fmtD(stats.pending)}</div>
                           </div>
                         </div>
                       </>
@@ -4256,6 +4242,48 @@ function MyStatementPage({user,myTxs,OBs,projs,D,S,C,fmt,fmtD,toAr,BackBtn,onImg
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+function ForemanSettleRow({trust, onSettle, S, C, fmtD}) {
+  const [mode,   setMode]   = useState(null);
+  const [amt,    setAmt]    = useState("");
+  const [saving, setSaving] = useState(false);
+  const remaining = trust.amount-(trust.settledAmount||0);
+
+  if(!mode) return (
+    <div style={{display:"flex",gap:6,marginTop:6}}>
+      <button style={{flex:1,background:"linear-gradient(135deg,#1A7A4A,#147A40)",border:"none",borderRadius:8,padding:"7px 0",color:"#fff",fontSize:12,fontWeight:700,cursor:"pointer"}}
+        onClick={()=>{setMode("full");setAmt(String(remaining));}}>✅ تسوية كاملة</button>
+      <button style={{flex:1,background:"rgba(37,87,167,0.08)",border:"1px solid rgba(37,87,167,0.3)",borderRadius:8,padding:"7px 0",color:"#2557A7",fontSize:12,fontWeight:700,cursor:"pointer"}}
+        onClick={()=>setMode("partial")}>💳 تسوية جزئية</button>
+    </div>
+  );
+
+  return (
+    <div style={{marginTop:6,background:"rgba(26,122,74,0.04)",border:"1px solid rgba(26,122,74,0.2)",borderRadius:10,padding:"10px"}}>
+      <div style={{fontSize:11,color:"#1A7A4A",fontWeight:700,marginBottom:6}}>
+        {mode==="full"?"✅ تسوية كاملة":"💳 تسوية جزئية"} — الباقي: {fmtD(remaining)}
+      </div>
+      {mode==="partial"&&(
+        <input style={{width:"100%",background:"#F5F0E8",border:"1px solid #E2D9CC",borderRadius:8,padding:"7px 10px",fontSize:13,fontWeight:700,outline:"none",marginBottom:6,boxSizing:"border-box"}}
+          type="number" placeholder="أدخل المبلغ المسوّى" value={amt} onChange={e=>setAmt(e.target.value)} autoFocus/>
+      )}
+      {mode==="full"&&<div style={{background:"rgba(26,122,74,0.08)",borderRadius:8,padding:"6px",fontSize:13,fontWeight:700,color:"#1A7A4A",marginBottom:6,textAlign:"center"}}>{fmtD(remaining)}</div>}
+      <div style={{display:"flex",gap:6}}>
+        <button style={{flex:2,background:"linear-gradient(135deg,#1A7A4A,#147A40)",border:"none",borderRadius:8,padding:"7px 0",color:"#fff",fontSize:12,fontWeight:700,cursor:saving?"not-allowed":"pointer",opacity:saving?0.7:1}}
+          disabled={saving} onClick={async()=>{
+            const payAmt = mode==="full"?remaining:Number(amt);
+            if(!payAmt||payAmt<=0) return;
+            setSaving(true);
+            await onSettle(trust, payAmt);
+            setSaving(false);
+            setMode(null);setAmt("");
+          }}>{saving?"جاري...":"💾 تأكيد التسوية"}</button>
+        <button style={{flex:1,background:"transparent",border:"1px solid #E2D9CC",borderRadius:8,padding:"7px 0",color:"#9B846D",fontSize:12,cursor:"pointer"}}
+          onClick={()=>{setMode(null);setAmt("");}}>إلغاء</button>
+      </div>
     </div>
   );
 }
