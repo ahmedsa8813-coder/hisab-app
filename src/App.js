@@ -390,21 +390,26 @@ export default function App() {
   const payPersonalDebt = async (debt, payAmount) => {
     const amt = Number(payAmount);
     if(!amt||amt<=0) return;
-    const newRemaining = Math.max(0, (debt.remaining||debt.amount) - amt);
-    const newStatus = newRemaining<=0?"مسدد كامل":"مسدد جزئي";
+    const remaining = debt.remaining||debt.amount;
+    const newRemaining = Math.max(0, remaining - amt);
+    const isFull = newRemaining <= 0;
+    const newStatus = isFull?"مسدد كامل":"مسدد جزئي";
     // تحديث الدين
     await setDoc(doc(db,"personalDebts",debt.id),{
       remaining: newRemaining,
       status: newStatus,
       lastPayment: today(),
+      lastPaymentAmount: amt,
     },{merge:true});
-    // استلام لأحمد
+    // استلام لأحمد — يتسجل على نفس مشروع الدين لو موجود
     await addDoc(collection(db,"transactions"),{
-      userId: debt.creditorId, userName: debt.creditorName,
-      projectId:"", projectName:"",
+      userId: debt.creditorId||"ahmed",
+      userName: debt.creditorName||"أحمد",
+      projectId: debt.projectId||"",
+      projectName: debt.projectName||"",
       type:"استلام", amount:amt,
       currency:debt.currency,
-      note:`سداد سلفة من ${debt.debtorName}`,
+      note:`${isFull?"تسديد كامل":"تسديد جزئي"} — سلفة من ${debt.debtorName}${isFull?" ✅":""}`,
       date:today(), image:null, isPersonal:false, isAdvance:false,
       isDebtPayment:true, debtId:debt.id,
       createdAt:new Date().toISOString(),
@@ -3834,20 +3839,61 @@ function DebtEditCard({debt, onPay, onDelete, onEdit, S, C, fmtD}) {
 }
 
 function PayDebtRow({debt, onPay}){
-  const [amt,setAmt]=useState("");
-  const [paying,setPaying]=useState(false);
-  if(!paying) return(
-    <button style={{marginTop:8,fontSize:12,fontWeight:700,color:"#1A7A4A",background:"rgba(26,122,74,0.08)",border:"1px solid rgba(26,122,74,0.2)",borderRadius:8,padding:"6px 14px",cursor:"pointer",width:"100%"}}
-      onClick={()=>setPaying(true)}>✓ تسجيل سداد</button>
+  const [mode,    setMode]    = useState(null); // null | full | partial
+  const [amt,     setAmt]     = useState("");
+  const [saving,  setSaving]  = useState(false);
+  const remaining = debt.remaining||debt.amount;
+  const fmtD2 = n => String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g,",");
+
+  if(!mode) return(
+    <div style={{marginTop:8,display:"flex",gap:6}}>
+      <button style={{flex:1,background:"linear-gradient(135deg,#1A7A4A,#147A40)",border:"none",borderRadius:8,padding:"8px 0",color:"#fff",fontSize:12,fontWeight:700,cursor:"pointer"}}
+        onClick={()=>{setMode("full");setAmt(String(remaining));}}>
+        ✅ تسديد كامل
+      </button>
+      <button style={{flex:1,background:"rgba(37,87,167,0.08)",border:"1px solid rgba(37,87,167,0.3)",borderRadius:8,padding:"8px 0",color:"#2557A7",fontSize:12,fontWeight:700,cursor:"pointer"}}
+        onClick={()=>{setMode("partial");setAmt("");}}>
+        💳 تسديد جزئي
+      </button>
+    </div>
   );
+
   return(
-    <div style={{marginTop:8,display:"flex",gap:8}}>
-      <input style={{flex:1,background:"#F5F0E8",border:"1px solid #E2D9CC",borderRadius:8,padding:"6px 10px",fontSize:13,outline:"none"}}
-        type="number" placeholder="المبلغ المسدد" value={amt} onChange={e=>setAmt(e.target.value)}/>
-      <button style={{background:"linear-gradient(135deg,#1A7A4A,#147A40)",border:"none",borderRadius:8,padding:"6px 14px",color:"#fff",fontSize:12,fontWeight:700,cursor:"pointer"}}
-        onClick={async()=>{await onPay(debt,amt);setAmt("");setPaying(false);}}>حفظ</button>
-      <button style={{background:"transparent",border:"1px solid #E2D9CC",borderRadius:8,padding:"6px 10px",color:"#9B846D",fontSize:12,cursor:"pointer"}}
-        onClick={()=>setPaying(false)}>✕</button>
+    <div style={{marginTop:8,background:"rgba(26,122,74,0.04)",border:"1px solid rgba(26,122,74,0.2)",borderRadius:10,padding:"10px 12px"}}>
+      <div style={{fontSize:11,color:"#1A7A4A",fontWeight:700,marginBottom:8}}>
+        {mode==="full"?"✅ تسديد كامل":"💳 تسديد جزئي"}
+        <span style={{color:"#9B846D",fontWeight:400,marginRight:6}}>— المتبقي: {fmtD2(remaining)}</span>
+      </div>
+      {mode==="full"?(
+        <div style={{background:"rgba(26,122,74,0.08)",borderRadius:8,padding:"8px 12px",fontSize:13,fontWeight:700,color:"#1A7A4A",marginBottom:8,textAlign:"center"}}>
+          المبلغ الكامل: {fmtD2(remaining)} {debt.currency==="دولار"?"$":"د.ع"}
+        </div>
+      ):(
+        <input style={{width:"100%",background:"#F5F0E8",border:"1px solid #E2D9CC",borderRadius:8,padding:"8px 10px",fontSize:14,fontWeight:700,outline:"none",marginBottom:8,boxSizing:"border-box"}}
+          type="number" placeholder="أدخل المبلغ المسدد" value={amt}
+          max={remaining} onChange={e=>setAmt(e.target.value)} autoFocus/>
+      )}
+      {mode==="partial"&&amt&&Number(amt)>0&&(
+        <div style={{fontSize:11,color:"#6b7280",marginBottom:8}}>
+          الباقي بعد السداد: {fmtD2(Math.max(0,remaining-Number(amt)))} {debt.currency==="دولار"?"$":"د.ع"}
+        </div>
+      )}
+      <div style={{display:"flex",gap:6}}>
+        <button style={{flex:2,background:"linear-gradient(135deg,#1A7A4A,#147A40)",border:"none",borderRadius:8,padding:"8px 0",color:"#fff",fontSize:13,fontWeight:700,cursor:saving?"not-allowed":"pointer",opacity:saving?0.7:1}}
+          disabled={saving||(!amt&&mode==="partial")}
+          onClick={async()=>{
+            if(saving)return;
+            if(mode==="partial"&&(!amt||Number(amt)<=0))return;
+            setSaving(true);
+            await onPay(debt, mode==="full"?remaining:Number(amt));
+            setSaving(false);
+            setMode(null);setAmt("");
+          }}>
+          {saving?"جاري الحفظ...":"💾 تأكيد السداد"}
+        </button>
+        <button style={{flex:1,background:"transparent",border:"1px solid #E2D9CC",borderRadius:8,padding:"8px 0",color:"#9B846D",fontSize:12,cursor:"pointer"}}
+          onClick={()=>{setMode(null);setAmt("");}}>إلغاء</button>
+      </div>
     </div>
   );
 }
