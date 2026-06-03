@@ -251,42 +251,46 @@ export default function App() {
     if(form.isAdvance&&form.advanceTo){
       const receiver=USERS.find(u=>u.id===form.advanceTo);
       const isPersonalAdv = form.advanceIsPersonal;
+      const srcProjId   = form.projectId||"";
+      const srcProjName = projs.find(p=>p.id===srcProjId)?.name||"";
+      const srcLabel    = srcProjId?`مشروع ${srcProjName}`:"الصندوق العام";
 
-      // صرف من أحمد دائماً
+      // صرف على أحمد — يتسجل على المشروع أو الصندوق العام
       await addDoc(collection(db,"transactions"),{
         userId:user.id, userName:user.name,
-        projectId:"", projectName:"",
+        projectId:srcProjId, projectName:srcProjName,
         type:"صرف", amount:amt,
         currency:form.currency,
-        note:`${isPersonalAdv?"سلفة شخصية":"دفعة مشروع"} إلى ${receiver?.name||""}${p?" — "+p.name:""}${form.note?" — "+form.note:""}`,
+        note:`${isPersonalAdv?"قرض شخصي":"دفعة عمل"} لـ ${receiver?.name||""} من ${srcLabel}${form.note?" — "+form.note:""}`,
         date:form.date, image:null, isPersonal:false, isAdvance:true,
         advanceTo:form.advanceTo, advanceToName:receiver?.name||"",
         advanceIsPersonal:isPersonalAdv,
+        fundSource:form.fundSource||"general",
         createdAt:new Date().toISOString(),
       });
 
       if(isPersonalAdv){
-        // السلفة الشخصية = دين على الشخص، تتسجل بجدول الديون الداخلية
-        // ما تضاف لصندوق الشخص
+        // قرض شخصي: دين على الشخص — ويتسجل على المشروع بجانب
         await addDoc(collection(db,"personalDebts"),{
           debtorId:form.advanceTo, debtorName:receiver?.name||"",
           creditorId:user.id, creditorName:user.name,
           amount:amt, currency:form.currency,
-          remaining:amt, // المبلغ المتبقي
+          remaining:amt,
           note:form.note||"",
           date:form.date,
           status:"غير مسدد",
-          payments:[], // سجل المدفوعات
+          projectId:srcProjId, projectName:srcProjName,
+          payments:[],
           createdAt:new Date().toISOString(),
         });
       } else {
-        // دفعة مشروع: تضاف للشخص كاستلام مشروع
+        // دفعة عمل: تضاف للشخص كاستلام على نفس المشروع
         await addDoc(collection(db,"transactions"),{
           userId:form.advanceTo, userName:receiver?.name||"",
-          projectId:form.projectId, projectName:projName,
+          projectId:srcProjId, projectName:srcProjName,
           type:"استلام", amount:amt,
           currency:form.currency,
-          note:`استلام دفعة مشروع من أحمد${form.note?" — "+form.note:""}`,
+          note:`استلام دفعة عمل من أحمد — ${srcLabel}${form.note?" — "+form.note:""}`,
           date:form.date, image:null,
           isPersonal:false, isAdvance:true,
           advanceFrom:user.id, advanceFromName:user.name,
@@ -1008,7 +1012,7 @@ export default function App() {
               ↓ استلام
             </button>
             <button style={{...S.goldBtn,background:"linear-gradient(135deg,#C0392B,#A93226)",color:"#fff",marginBottom:0}}
-              onClick={()=>{setForm({type:"صرف",projectId:"",amount:"",currency:"دينار",note:"",date:today(),image:null,isPersonal:false,isAdvance:false,advanceTo:"",advanceIsPersonal:false,receiveType:"",generalLabel:"",isForeman:false,foremanId:"",foremanName:""});setView("addSpend");}}>
+              onClick={()=>{setForm({type:"صرف",projectId:"",amount:"",currency:"دينار",note:"",date:today(),image:null,isPersonal:false,isAdvance:false,advanceTo:"",advanceIsPersonal:false,receiveType:"",generalLabel:"",isForeman:false,foremanId:"",foremanName:"",fundSource:""});setView("addSpend");}}>
               ↑ صرف / سلفة
             </button>
           </div>
@@ -1193,110 +1197,164 @@ export default function App() {
           </div>
         ):(
           <div style={S.formCard}>
-            {/* نوع الصرف */}
-            <div style={S.fLbl}>نوع الصرف</div>
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8}}>
-              <button style={{...S.tBtn,...(form.isAdvance?{background:`rgba(193,123,47,0.15)`,border:`1px solid ${C.gold}`,color:C.gold}:{})}}
-                onClick={()=>setForm(f=>({...f,isAdvance:true,isForeman:false,isPersonal:false,type:"صرف",projectId:""}))}>
-                💸 سلفة لشخص
+
+            {/* ١. المصدر */}
+            <div style={{fontWeight:800,fontSize:14,color:C.text,marginBottom:10}}>
+              <span style={{background:C.gold,color:"#000",borderRadius:999,width:22,height:22,display:"inline-flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:900,marginLeft:6}}>١</span>
+              من أين تدفع؟
+            </div>
+            <div style={S.tRow}>
+              <button style={{...S.tBtn,...(form.fundSource==="general"?{background:`rgba(193,123,47,0.15)`,border:`1px solid ${C.gold}`,color:C.gold}:{})}}
+                onClick={()=>setForm(f=>({...f,fundSource:"general",projectId:"",isForeman:false}))}>
+                📦 صندوق عام
               </button>
-              <button style={{...S.tBtn,...(form.isForeman?{background:"rgba(180,83,9,0.15)",border:`1px solid #b45309`,color:"#b45309"}:{})}}
-                onClick={()=>setForm(f=>({...f,isForeman:true,isAdvance:false,isPersonal:false,type:"صرف",projectId:"",advanceTo:""}))}>
-                👷 دفع لفورمن
-              </button>
-              <button style={{...S.tBtn,...(form.isPersonal?{background:"rgba(107,63,160,0.15)",border:`1px solid #6B3FA0`,color:"#6B3FA0"}:{})}}
-                onClick={()=>setForm(f=>({...f,isPersonal:true,isAdvance:false,isForeman:false,type:"صرف",projectId:""}))}>
-                👤 سحب شخصي
-              </button>
-              <button style={{...S.tBtn,...(!form.isAdvance&&!form.isForeman&&!form.isPersonal&&form.type==="صرف"?{background:"rgba(192,57,43,0.1)",border:`1px solid #C0392B`,color:"#C0392B"}:{})}}
-                onClick={()=>setForm(f=>({...f,isAdvance:false,isForeman:false,isPersonal:false,type:"صرف"}))}>
-                📤 صرف عام
+              <button style={{...S.tBtn,...(form.fundSource==="project"?{background:"rgba(37,87,167,0.15)",border:`1px solid #2557A7`,color:"#2557A7"}:{})}}
+                onClick={()=>setForm(f=>({...f,fundSource:"project"}))}>
+                🏗️ من مشروع
               </button>
             </div>
 
-            {/* سحب شخصي */}
+            {form.fundSource==="project"&&(
+              <select style={S.sel} value={form.projectId} onChange={e=>setForm(f=>({...f,projectId:e.target.value}))}>
+                <option value="">اختر المشروع</option>
+                {projs.map(p=><option key={p.id} value={p.id}>{p.name} — {p.specialization||p.spec}</option>)}
+              </select>
+            )}
+
+            {/* إشعار المصدر */}
+            {(form.fundSource==="general"||(form.fundSource==="project"&&form.projectId))&&(
+              <div style={{background:form.fundSource==="project"?"rgba(37,87,167,0.06)":"rgba(193,123,47,0.06)",border:`1px solid ${form.fundSource==="project"?"rgba(37,87,167,0.2)":"rgba(193,123,47,0.2)"}`,borderRadius:10,padding:"8px 12px",fontSize:12,fontWeight:600,color:form.fundSource==="project"?"#2557A7":C.gold,marginTop:6}}>
+                {form.fundSource==="project"&&form.projectId
+                  ?`✅ سيُسجَّل على مشروع: ${projs.find(p=>p.id===form.projectId)?.name}`
+                  :"✅ سيُسجَّل على الصندوق العام"
+                }
+              </div>
+            )}
+
+            {/* فاصل */}
+            {(form.fundSource==="general"||(form.fundSource==="project"&&form.projectId))&&(
+              <div style={{height:1,background:C.cardBorder,margin:"16px 0"}}/>
+            )}
+
+            {/* ٢. لمن؟ */}
+            {(form.fundSource==="general"||(form.fundSource==="project"&&form.projectId))&&(
+              <>
+                <div style={{fontWeight:800,fontSize:14,color:C.text,marginBottom:10}}>
+                  <span style={{background:C.gold,color:"#000",borderRadius:999,width:22,height:22,display:"inline-flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:900,marginLeft:6}}>٢</span>
+                  لمن تدفع؟
+                </div>
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8}}>
+                  {/* الأشخاص */}
+                  {WORKERS.filter(u=>u.id!=="ahmed").map(u=>(
+                    <button key={u.id} style={{display:"flex",alignItems:"center",gap:8,padding:"10px 12px",borderRadius:12,
+                      border:`2px solid ${form.advanceTo===u.id?C.gold:C.cardBorder}`,
+                      background:form.advanceTo===u.id?`rgba(193,123,47,0.08)`:C.bg2,
+                      cursor:"pointer",textAlign:"right"}}
+                      onClick={()=>setForm(f=>({...f,advanceTo:u.id,isForeman:false,isPersonal:false,isAdvance:true}))}>
+                      <div style={{...S.av,width:30,height:30,fontSize:13,borderRadius:9,background:avatarBg(u.role),flexShrink:0}}>{u.name[0]}</div>
+                      <div style={{fontSize:13,fontWeight:700,color:form.advanceTo===u.id?C.gold:C.text}}>{u.name}</div>
+                    </button>
+                  ))}
+                  {/* الفورمنية */}
+                  {foremen.map(f=>(
+                    <button key={f.id} style={{display:"flex",alignItems:"center",gap:8,padding:"10px 12px",borderRadius:12,
+                      border:`2px solid ${form.foremanId===f.id?"#b45309":C.cardBorder}`,
+                      background:form.foremanId===f.id?"rgba(180,83,9,0.08)":C.bg2,
+                      cursor:"pointer",textAlign:"right"}}
+                      onClick={()=>setForm(x=>({...x,foremanId:f.id,foremanName:f.name,isForeman:true,isAdvance:false,isPersonal:false,advanceTo:"",
+                        projectId:x.fundSource==="project"?x.projectId:(f.projectId||"")}))}>
+                      <div style={{width:30,height:30,borderRadius:9,background:"linear-gradient(135deg,#b45309,#92400e)",display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontSize:13,fontWeight:800,flexShrink:0}}>{f.name[0]}</div>
+                      <div>
+                        <div style={{fontSize:13,fontWeight:700,color:form.foremanId===f.id?"#b45309":C.text}}>{f.name}</div>
+                        <div style={{fontSize:10,color:C.textSm}}>فورمن</div>
+                      </div>
+                    </button>
+                  ))}
+                  {/* سحب شخصي لأحمد */}
+                  <button style={{display:"flex",alignItems:"center",gap:8,padding:"10px 12px",borderRadius:12,
+                    border:`2px solid ${form.isPersonal?"#6B3FA0":C.cardBorder}`,
+                    background:form.isPersonal?"rgba(107,63,160,0.08)":C.bg2,
+                    cursor:"pointer",textAlign:"right"}}
+                    onClick={()=>setForm(f=>({...f,isPersonal:true,isAdvance:false,isForeman:false,advanceTo:"",foremanId:""}))}>
+                    <div style={{width:30,height:30,borderRadius:9,background:"linear-gradient(135deg,#6B3FA0,#5B21B6)",display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontSize:13,fontWeight:800,flexShrink:0}}>أ</div>
+                    <div style={{fontSize:13,fontWeight:700,color:form.isPersonal?"#6B3FA0":C.text}}>👤 سحب شخصي</div>
+                  </button>
+                </div>
+              </>
+            )}
+
+            {/* فاصل */}
+            {(form.advanceTo||form.isForeman||form.isPersonal)&&(
+              <div style={{height:1,background:C.cardBorder,margin:"16px 0"}}/>
+            )}
+
+            {/* ٣. نوع الدفعة — فقط للأشخاص */}
+            {form.advanceTo&&form.isAdvance&&(
+              <>
+                <div style={{fontWeight:800,fontSize:14,color:C.text,marginBottom:10}}>
+                  <span style={{background:C.gold,color:"#000",borderRadius:999,width:22,height:22,display:"inline-flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:900,marginLeft:6}}>٣</span>
+                  نوع الدفعة
+                </div>
+                <div style={S.tRow}>
+                  <button style={{...S.tBtn,...(!form.advanceIsPersonal?{background:"rgba(37,87,167,0.15)",border:`1px solid #2557A7`,color:"#2557A7"}:{})}}
+                    onClick={()=>setForm(f=>({...f,advanceIsPersonal:false}))}>
+                    💼 دفعة عمل
+                  </button>
+                  <button style={{...S.tBtn,...(form.advanceIsPersonal?{background:"rgba(192,57,43,0.1)",border:`1px solid #C0392B`,color:"#C0392B"}:{})}}
+                    onClick={()=>setForm(f=>({...f,advanceIsPersonal:true}))}>
+                    👤 قرض شخصي
+                  </button>
+                </div>
+                {/* توضيح */}
+                <div style={{
+                  background:form.advanceIsPersonal?"rgba(192,57,43,0.06)":"rgba(37,87,167,0.06)",
+                  border:`1px solid ${form.advanceIsPersonal?"rgba(192,57,43,0.2)":"rgba(37,87,167,0.2)"}`,
+                  borderRadius:10,padding:"10px 14px",marginTop:8,fontSize:13,
+                  color:form.advanceIsPersonal?"#C0392B":"#2557A7",fontWeight:600
+                }}>
+                  {form.advanceIsPersonal
+                    ?`💡 قرض شخصي لـ ${USERS.find(u=>u.id===form.advanceTo)?.name} — يتسجل على ${form.projectId?projs.find(p=>p.id===form.projectId)?.name:"الصندوق العام"} ويبين كدين شخصي`
+                    :`💡 دفعة عمل لـ ${USERS.find(u=>u.id===form.advanceTo)?.name} — تتسجل على ${form.projectId?projs.find(p=>p.id===form.projectId)?.name:"الصندوق العام"}`
+                  }
+                </div>
+              </>
+            )}
+
+            {/* سحب شخصي - توضيح */}
             {form.isPersonal&&(
-              <div style={{background:"rgba(107,63,160,0.08)",border:`1px solid rgba(107,63,160,0.2)`,borderRadius:10,padding:"10px 14px",marginBottom:8,fontSize:13,color:"#6B3FA0",fontWeight:600}}>
+              <div style={{background:"rgba(107,63,160,0.08)",border:`1px solid rgba(107,63,160,0.2)`,borderRadius:10,padding:"10px 14px",fontSize:13,color:"#6B3FA0",fontWeight:600}}>
                 ⚠️ ينقص من رصيدك ويُحسب ضمن حصتك (١٥%)
               </div>
             )}
 
-            {/* دفع لفورمن */}
-            {form.isForeman&&(<>
-              <div style={S.fLbl}>اختر الفورمن</div>
-              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
-                {foremen.map(f=>{
-                  const proj=projs.find(p=>p.id===f.projectId);
-                  return(
-                    <button key={f.id} style={{display:"flex",alignItems:"center",gap:8,padding:"10px 12px",borderRadius:12,border:`2px solid ${form.foremanId===f.id?"#b45309":C.cardBorder}`,background:form.foremanId===f.id?"rgba(180,83,9,0.08)":C.bg2,cursor:"pointer",textAlign:"right"}}
-                      onClick={()=>setForm(x=>({...x,foremanId:f.id,foremanName:f.name,projectId:f.projectId||""}))}>
-                      <div style={{width:30,height:30,borderRadius:9,background:"linear-gradient(135deg,#b45309,#92400e)",display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontSize:13,fontWeight:800,flexShrink:0}}>{f.name[0]}</div>
-                      <div><div style={{fontSize:13,fontWeight:700,color:form.foremanId===f.id?"#b45309":C.text}}>{f.name}</div>{proj&&<div style={{fontSize:10,color:C.textSm}}>{proj.name}</div>}</div>
-                    </button>
-                  );
-                })}
-              </div>
-            </>)}
-
-            {/* سلفة لشخص */}
-            {form.isAdvance&&(<>
-              <div style={S.fLbl}>اختر الشخص</div>
-              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
-                {WORKERS.filter(u=>u.id!=="ahmed").map(u=>(
-                  <button key={u.id} style={{display:"flex",alignItems:"center",gap:8,padding:"10px 12px",borderRadius:12,border:`2px solid ${form.advanceTo===u.id?C.gold:C.cardBorder}`,background:form.advanceTo===u.id?`rgba(193,123,47,0.08)`:C.bg2,cursor:"pointer",textAlign:"right"}}
-                    onClick={()=>setForm(f=>({...f,advanceTo:u.id}))}>
-                    <div style={{...S.av,width:30,height:30,fontSize:13,borderRadius:9,background:avatarBg(u.role),flexShrink:0}}>{u.name[0]}</div>
-                    <div style={{fontSize:13,fontWeight:700,color:form.advanceTo===u.id?C.gold:C.text}}>{u.name}</div>
-                  </button>
-                ))}
-              </div>
-              {form.advanceTo&&(<>
-                <div style={S.fLbl}>مصدر الدفعة</div>
-                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
-                  <button style={{...S.tBtn,...(!form.advanceIsPersonal&&form.projectId?{background:"rgba(37,87,167,0.15)",border:`1px solid #2557A7`,color:"#2557A7"}:{})}}
-                    onClick={()=>setForm(f=>({...f,advanceIsPersonal:false}))}>🏗️ مشروع</button>
-                  <button style={{...S.tBtn,...(!form.advanceIsPersonal&&!form.projectId?{background:`rgba(193,123,47,0.15)`,border:`1px solid ${C.gold}`,color:C.gold}:{})}}
-                    onClick={()=>setForm(f=>({...f,advanceIsPersonal:false,projectId:""}))}>📦 عام</button>
-                  <button style={{...S.tBtn,...(form.advanceIsPersonal?{background:"rgba(107,63,160,0.15)",border:`1px solid #6B3FA0`,color:"#6B3FA0"}:{})}}
-                    onClick={()=>setForm(f=>({...f,advanceIsPersonal:true,projectId:""}))}>👤 شخصي</button>
-                </div>
-                {!form.advanceIsPersonal&&(
-                  <select style={{...S.sel,marginTop:8}} value={form.projectId} onChange={e=>setForm(f=>({...f,projectId:e.target.value}))}>
-                    <option value="">📦 صندوق عام</option>
-                    {projs.map(p=><option key={p.id} value={p.id}>{p.name} — {p.specialization||p.spec}</option>)}
-                  </select>
-                )}
-              </>)}
-            </>)}
-
-            {/* صرف عام */}
-            {!form.isAdvance&&!form.isForeman&&!form.isPersonal&&(<>
-              <div style={S.fLbl}>المشروع (اختياري)</div>
-              <select style={S.sel} value={form.projectId} onChange={e=>setForm(f=>({...f,projectId:e.target.value}))}>
-                <option value="">📦 صندوق عام</option>
-                {projs.map(p=><option key={p.id} value={p.id}>{p.name} — {p.specialization||p.spec}</option>)}
-              </select>
-            </>)}
-
             {/* المبلغ والعملة والتاريخ */}
-            <div style={S.fLbl}>المبلغ</div>
-            <input style={{...S.inp,fontSize:20,fontWeight:800,textAlign:"center"}} type="number" placeholder="٠" value={form.amount} onChange={e=>setForm(f=>({...f,amount:e.target.value}))}/>
-            {form.amount&&Number(form.amount)>0&&(
-              <div style={{background:"rgba(192,57,43,0.06)",border:"1px solid rgba(192,57,43,0.15)",borderRadius:10,padding:"8px 14px",marginTop:4,fontSize:13,color:C.red,fontWeight:600,textAlign:"center"}}>
-                {numToWords(form.amount, form.currency)}
-              </div>
+            {(form.advanceTo||form.isForeman||form.isPersonal)&&(
+              <>
+                <div style={{height:1,background:C.cardBorder,margin:"16px 0"}}/>
+                <div style={{fontWeight:800,fontSize:14,color:C.text,marginBottom:10}}>
+                  <span style={{background:C.gold,color:"#000",borderRadius:999,width:22,height:22,display:"inline-flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:900,marginLeft:6}}>{form.advanceTo&&form.isAdvance?"٤":"٣"}</span>
+                  تفاصيل المبلغ
+                </div>
+                <div style={S.fLbl}>المبلغ</div>
+                <input style={{...S.inp,fontSize:20,fontWeight:800,textAlign:"center"}} type="number" placeholder="٠" value={form.amount} onChange={e=>setForm(f=>({...f,amount:e.target.value}))}/>
+                {form.amount&&Number(form.amount)>0&&(
+                  <div style={{background:"rgba(192,57,43,0.06)",border:"1px solid rgba(192,57,43,0.15)",borderRadius:10,padding:"8px 14px",marginTop:4,fontSize:13,color:C.red,fontWeight:600,textAlign:"center"}}>
+                    {numToWords(form.amount, form.currency)}
+                  </div>
+                )}
+                <div style={S.fLbl}>العملة</div>
+                <div style={S.tRow}>
+                  <button style={{...S.tBtn,...(form.currency==="دينار"?{background:"rgba(37,87,167,0.15)",border:`1px solid #2557A7`,color:"#2557A7"}:{})}} onClick={()=>setForm(f=>({...f,currency:"دينار"}))}>🇮🇶 دينار</button>
+                  <button style={{...S.tBtn,...(form.currency==="دولار"?{background:"rgba(26,122,74,0.15)",border:`1px solid #1A7A4A`,color:"#1A7A4A"}:{})}} onClick={()=>setForm(f=>({...f,currency:"دولار"}))}>🇺🇸 دولار</button>
+                </div>
+                <div style={S.fLbl}>التاريخ</div>
+                <input style={S.inp} type="date" value={form.date} onChange={e=>setForm(f=>({...f,date:e.target.value}))}/>
+                <div style={S.fLbl}>ملاحظة (اختياري)</div>
+                <input style={S.inp} placeholder="..." value={form.note} onChange={e=>setForm(f=>({...f,note:e.target.value}))}/>
+                <button style={{...S.subBtn,background:"linear-gradient(135deg,#C0392B,#A93226)",color:"#fff"}} onClick={()=>setConfirmTx(true)}>👁️ مراجعة وتأكيد</button>
+                <button style={S.canBtn} onClick={()=>setView("home")}>إلغاء</button>
+              </>
             )}
-            <div style={S.fLbl}>العملة</div>
-            <div style={S.tRow}>
-              <button style={{...S.tBtn,...(form.currency==="دينار"?{background:"rgba(37,87,167,0.15)",border:`1px solid #2557A7`,color:"#2557A7"}:{})}} onClick={()=>setForm(f=>({...f,currency:"دينار"}))}>🇮🇶 دينار</button>
-              <button style={{...S.tBtn,...(form.currency==="دولار"?{background:"rgba(26,122,74,0.15)",border:`1px solid #1A7A4A`,color:"#1A7A4A"}:{})}} onClick={()=>setForm(f=>({...f,currency:"دولار"}))}>🇺🇸 دولار</button>
-            </div>
-            <div style={S.fLbl}>التاريخ</div>
-            <input style={S.inp} type="date" value={form.date} onChange={e=>setForm(f=>({...f,date:e.target.value}))}/>
-            <div style={S.fLbl}>ملاحظة (اختياري)</div>
-            <input style={S.inp} placeholder="..." value={form.note} onChange={e=>setForm(f=>({...f,note:e.target.value}))}/>
-            <button style={{...S.subBtn,background:"linear-gradient(135deg,#C0392B,#A93226)",color:"#fff"}} onClick={()=>setConfirmTx(true)}>👁️ مراجعة وتأكيد</button>
-            <button style={S.canBtn} onClick={()=>setView("home")}>إلغاء</button>
           </div>
         )}
       </div>
@@ -3397,9 +3455,9 @@ function ConfirmTxModal({form, projs, USERS, foremen, C, S, fmt, fmtD, onConfirm
   const getTxType = () => {
     if(form.isPersonal)  return {label:"👤 سحب شخصي", color:"#6B3FA0", bg:"rgba(107,63,160,0.1)"};
     if(form.isForeman)   return {label:`👷 دفع لفورمن — ${foreman?.name||""}`, color:"#b45309", bg:"rgba(180,83,9,0.1)"};
-    if(form.isAdvance&&form.advanceIsPersonal) return {label:`💳 سلفة شخصية لـ ${receiver?.name||""}`, color:"#C0392B", bg:"rgba(192,57,43,0.1)"};
-    if(form.isAdvance&&form.projectId)   return {label:`💸 دفعة مشروع لـ ${receiver?.name||""} — ${projs.find(p=>p.id===form.projectId)?.name||""}`, color:C.gold, bg:"rgba(193,123,47,0.1)"};
-    if(form.isAdvance)   return {label:`📦 دفعة صندوق عام لـ ${receiver?.name||""}`, color:C.gold, bg:"rgba(193,123,47,0.1)"};
+    if(form.isAdvance&&form.advanceIsPersonal) return {label:`👤 قرض شخصي لـ ${receiver?.name||""} — ${form.projectId?`مشروع ${projs.find(p=>p.id===form.projectId)?.name}`:"صندوق عام"}`, color:"#C0392B", bg:"rgba(192,57,43,0.1)"};
+    if(form.isAdvance&&form.projectId)   return {label:`💼 دفعة عمل لـ ${receiver?.name||""} — مشروع ${projs.find(p=>p.id===form.projectId)?.name||""}`, color:"#2557A7", bg:"rgba(37,87,167,0.1)"};
+    if(form.isAdvance)   return {label:`💼 دفعة عمل لـ ${receiver?.name||""} — صندوق عام`, color:C.gold, bg:"rgba(193,123,47,0.1)"};
     if(form.type==="استلام"&&form.receiveType==="general") return {label:`📝 استلام عام — ${form.generalLabel||""}`, color:"#1A7A4A", bg:"rgba(26,122,74,0.1)"};
     if(form.type==="استلام") return {label:"↓ استلام", color:"#1A7A4A", bg:"rgba(26,122,74,0.1)"};
     return {label:"↑ صرف", color:"#C0392B", bg:"rgba(192,57,43,0.1)"};
