@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useRef } from "react";
 import { db } from "./firebase";
 import { collection, addDoc, onSnapshot, query, orderBy, deleteDoc, doc, setDoc } from "firebase/firestore";
@@ -966,28 +965,24 @@ export default function App() {
         </div>
         {/* ملخص السلف لأحمد */}
         {user.role==="accountant"&&(()=>{
-          const myPersonalDebts = personalDebts.filter(d=>d.creditorId===user.id&&d.status!=="مسدد كامل");
-          const totalOwed = myPersonalDebts.reduce((s,d)=>s+(d.remaining||d.amount),0);
-          if(myPersonalDebts.length===0&&!txs.filter(t=>t.isAdvance&&t.userId===user.id&&t.type==="صرف").length) return null;
+          const myPersonalDebts = personalDebts.filter(d=>d.creditorId===user.id);
+          const totalOwed = myPersonalDebts.filter(d=>d.status!=="مسدد كامل").reduce((s,d)=>s+(d.remaining||d.amount),0);
+          if(myPersonalDebts.length===0) return null;
           return(
             <div style={{background:`rgba(192,57,43,0.06)`,border:`1px solid rgba(192,57,43,0.2)`,borderRadius:14,padding:"14px 16px",marginBottom:16}}>
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
-                <div style={{fontSize:13,fontWeight:700,color:C.red}}>💳 السلف الشخصية (ديون عليهم)</div>
-                <div style={{fontSize:14,fontWeight:800,color:C.red}}>{fmtD(totalOwed)}</div>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+                <div style={{fontSize:13,fontWeight:700,color:C.red}}>💳 السلف الشخصية</div>
+                <div style={{fontSize:14,fontWeight:800,color:C.red}}>مستحق: {fmtD(totalOwed)}</div>
               </div>
               {myPersonalDebts.map(d=>(
-                <div key={d.id} style={{background:C.card,borderRadius:10,padding:"10px 12px",marginBottom:8,border:`1px solid ${C.cardBorder}`}}>
-                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
-                    <div style={{fontWeight:700,fontSize:14}}>{d.debtorName}</div>
-                    <div style={{fontWeight:800,color:C.red,fontSize:14}}>{fmtD(d.remaining||d.amount)}</div>
-                  </div>
-                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                    <div style={{fontSize:11,color:C.textSm}}>📅 {d.date} {d.note&&`· ${d.note}`}</div>
-                    <span style={{fontSize:11,fontWeight:700,color:d.status==="مسدد جزئي"?"#b45309":C.red,background:d.status==="مسدد جزئي"?"rgba(180,83,9,0.1)":"rgba(192,57,43,0.1)",padding:"3px 8px",borderRadius:6}}>{d.status}</span>
-                  </div>
-                  {/* زر سداد سريع */}
-                  <PayDebtRow debt={d} onPay={payPersonalDebt}/>
-                </div>
+                <DebtEditCard key={d.id} debt={d}
+                  onPay={payPersonalDebt}
+                  onDelete={delPersonalDebt}
+                  onEdit={async(id,updates)=>{
+                    await setDoc(doc(db,"personalDebts",id),updates,{merge:true});
+                  }}
+                  S={S} C={C} fmtD={fmtD}
+                />
               ))}
             </div>
           );
@@ -3075,6 +3070,93 @@ function EditTxModal({tx, projs, onSave, onClose, S, C, today}) {
           </button>
           <button style={{...S.canBtn,flex:1,margin:0,padding:14}} onClick={onClose}>إلغاء</button>
         </div>
+      </div>
+    </div>
+  );
+}
+
+function DebtEditCard({debt, onPay, onDelete, onEdit, S, C, fmtD}) {
+  const [editing, setEditing] = useState(false);
+  const [amount,  setAmount]  = useState(String(debt.amount));
+  const [note,    setNote]    = useState(debt.note||"");
+  const [date,    setDate]    = useState(debt.date||"");
+  const [saving,  setSaving]  = useState(false);
+
+  const save = async () => {
+    if(!amount||saving) return;
+    setSaving(true);
+    const newAmt = Number(amount);
+    const paid   = debt.amount - (debt.remaining||debt.amount); // ما تم دفعه
+    const newRem = Math.max(0, newAmt - paid);
+    await onEdit(debt.id, {
+      amount: newAmt,
+      remaining: newRem,
+      note,
+      date,
+      status: newRem<=0?"مسدد كامل":paid>0?"مسدد جزئي":"غير مسدد",
+    });
+    setSaving(false);
+    setEditing(false);
+  };
+
+  const statusColor = debt.status==="مسدد كامل"?"#1A7A4A":debt.status==="مسدد جزئي"?"#b45309":C.red;
+  const statusBg    = debt.status==="مسدد كامل"?"rgba(26,122,74,0.1)":debt.status==="مسدد جزئي"?"rgba(180,83,9,0.1)":"rgba(192,57,43,0.1)";
+
+  if(editing) return (
+    <div style={{background:C.card,borderRadius:12,padding:"14px",marginBottom:8,border:`2px solid #2557A7`}}>
+      <div style={{fontWeight:700,fontSize:13,color:"#2557A7",marginBottom:10}}>✏️ تعديل — {debt.debtorName}</div>
+      <div style={S.fLbl}>المبلغ الأصلي</div>
+      <input style={{...S.inp,fontWeight:800,textAlign:"center",fontSize:16}} type="number" value={amount} onChange={e=>setAmount(e.target.value)}/>
+      <div style={S.fLbl}>التاريخ</div>
+      <input style={S.inp} type="date" value={date} onChange={e=>setDate(e.target.value)}/>
+      <div style={S.fLbl}>ملاحظة</div>
+      <input style={S.inp} placeholder="..." value={note} onChange={e=>setNote(e.target.value)}/>
+      <div style={{display:"flex",gap:8,marginTop:12}}>
+        <button style={{flex:2,...S.subBtn,margin:0,padding:"10px",opacity:saving?0.7:1}} onClick={save} disabled={saving}>
+          {saving?"جاري الحفظ...":"💾 حفظ"}
+        </button>
+        <button style={{flex:1,...S.canBtn,margin:0,padding:"10px"}} onClick={()=>setEditing(false)}>إلغاء</button>
+      </div>
+    </div>
+  );
+
+  return (
+    <div style={{background:C.card,borderRadius:12,padding:"12px 14px",marginBottom:8,border:`1px solid ${C.cardBorder}`}}>
+      {/* الرأس */}
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:8}}>
+        <div>
+          <div style={{fontWeight:800,fontSize:15,color:C.text}}>{debt.debtorName}</div>
+          <div style={{fontSize:11,color:C.textSm,marginTop:2}}>📅 {debt.date} {debt.note&&`· ${debt.note}`}</div>
+        </div>
+        <div style={{textAlign:"left"}}>
+          <div style={{fontWeight:900,color:C.red,fontSize:16}}>{fmtD(debt.remaining||debt.amount)}</div>
+          {debt.remaining<debt.amount&&<div style={{fontSize:10,color:C.textSm}}>من {fmtD(debt.amount)}</div>}
+        </div>
+      </div>
+
+      {/* الحالة */}
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+        <span style={{fontSize:11,fontWeight:700,color:statusColor,background:statusBg,padding:"3px 10px",borderRadius:8}}>
+          {debt.status}
+        </span>
+        {debt.status!=="مسدد كامل"&&(
+          <span style={{fontSize:11,color:C.textSm}}>
+            متبقي: {fmtD(debt.remaining||debt.amount)}
+          </span>
+        )}
+      </div>
+
+      {/* أزرار الإجراءات */}
+      <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+        {debt.status!=="مسدد كامل"&&<div style={{flex:2}}><PayDebtRow debt={debt} onPay={onPay}/></div>}
+        <button style={{
+          flex:1,background:"rgba(37,87,167,0.06)",border:`1px solid rgba(37,87,167,0.2)`,
+          borderRadius:8,padding:"7px 0",color:"#2557A7",fontSize:12,fontWeight:700,cursor:"pointer"
+        }} onClick={()=>setEditing(true)}>✏️ تعديل</button>
+        <button style={{
+          flex:1,background:"rgba(192,57,43,0.06)",border:`1px solid rgba(192,57,43,0.15)`,
+          borderRadius:8,padding:"7px 0",color:C.red,fontSize:12,fontWeight:700,cursor:"pointer"
+        }} onClick={()=>onDelete(debt.id)}>🗑️ حذف</button>
       </div>
     </div>
   );
