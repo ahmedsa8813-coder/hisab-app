@@ -2891,21 +2891,193 @@ function ForemenPage({D,foremen,projs,txs,onAdd,onDel,S,C,fmt,fmtD,toAr,today,Ba
 
                 {f.note&&<div style={{fontSize:12,color:C.textSm,marginTop:8}}>📝 {f.note}</div>}
 
-                {/* تفاصيل المعاملات */}
+                {/* أزرار الكشف والطباعة */}
+                <div style={{display:"flex",gap:8,marginTop:10}}>
+                  <button style={{
+                    flex:1,background:selForeman?.id===f.id?"rgba(37,87,167,0.1)":"transparent",
+                    border:`1px solid ${selForeman?.id===f.id?"#2557A7":C.cardBorder}`,
+                    borderRadius:8,padding:"7px 0",color:selForeman?.id===f.id?"#2557A7":C.textMd,
+                    fontSize:12,fontWeight:700,cursor:"pointer"
+                  }} onClick={e=>{e.stopPropagation();setSelForeman(selForeman?.id===f.id?null:f);}}>
+                    📋 {selForeman?.id===f.id?"إخفاء الكشف":"كشف الحساب"}
+                  </button>
+                  <button style={{
+                    flex:1,background:"rgba(180,83,9,0.08)",border:`1px solid rgba(180,83,9,0.2)`,
+                    borderRadius:8,padding:"7px 0",color:"#b45309",
+                    fontSize:12,fontWeight:700,cursor:"pointer"
+                  }} onClick={e=>{
+                    e.stopPropagation();
+                    // طباعة كشف الفورمن
+                    const fTxs = txs.filter(t=>t.foremanId===f.id&&t.userId==="foreman");
+                    const totalR = fTxs.filter(t=>t.type==="استلام").reduce((s,t)=>s+t.amount,0);
+                    const totalS = fTxs.filter(t=>t.type==="صرف").reduce((s,t)=>s+t.amount,0);
+                    const bal    = stats.received - stats.spent;
+                    const ar = n => String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g,",");
+                    const printDate = new Date().toLocaleDateString("ar-IQ");
+                    const rows = fTxs.map((t,i)=>`
+                      <tr style="background:${i%2===0?"#fff":"#f9f9f9"}">
+                        <td>${t.date}</td>
+                        <td style="color:${t.type==="استلام"?"#1A7A4A":"#C0392B"};font-weight:700">${t.type}</td>
+                        <td style="font-weight:800;color:${t.type==="استلام"?"#1A7A4A":"#C0392B"}">${ar(t.amount)} ${t.currency==="دولار"?"$":"د.ع"}</td>
+                        <td style="color:#666;font-size:11px">${t.note||"—"}</td>
+                      </tr>`).join("");
+                    const html = `<!DOCTYPE html><html dir="rtl" lang="ar">
+<head><meta charset="UTF-8"/><title>كشف فورمن — ${f.name}</title>
+<style>
+  body{font-family:Tahoma,sans-serif;padding:30px;direction:rtl;color:#111;margin:0}
+  .header{border-bottom:3px solid #b45309;padding-bottom:16px;margin-bottom:20px;display:flex;justify-content:space-between;align-items:center}
+  .name{font-size:22px;font-weight:900;color:#b45309}
+  .info{font-size:12px;color:#666;line-height:1.8}
+  .summary{display:flex;gap:12px;margin-bottom:20px;flex-wrap:wrap}
+  .box{border:1px solid #ddd;border-radius:10px;padding:14px 18px;flex:1;min-width:120px;text-align:center}
+  .lbl{font-size:11px;color:#888;margin-bottom:4px;font-weight:600}
+  .val{font-size:18px;font-weight:900}
+  .green{color:#1A7A4A}.red{color:#C0392B}.gold{color:#b45309}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th{background:#b45309;color:#fff;padding:10px 12px;text-align:center}
+  td{padding:9px 12px;border-bottom:1px solid #eee;text-align:center}
+  .footer{margin-top:24px;padding-top:14px;border-top:1px solid #eee;display:flex;justify-content:space-between;font-size:11px;color:#aaa}
+  .bal-box{background:${bal>=0?"#f0fdf4":"#fef2f2"};border:2px solid ${bal>=0?"#1A7A4A":"#C0392B"};border-radius:12px;padding:16px;text-align:center;margin-bottom:20px}
+  @media print{body{padding:15px}}
+</style></head>
+<body>
+  <div class="header">
+    <div>
+      <div class="name">👷 ${f.name}</div>
+      ${proj?`<div style="color:#b45309;font-weight:600;margin-top:4px">🏗️ ${proj.name}</div>`:""}
+      ${f.phone?`<div style="color:#666;font-size:12px;margin-top:2px">📞 ${f.phone}</div>`:""}
+    </div>
+    <div class="info">
+      <div style="font-weight:700;color:#b45309">كشف حساب فورمن</div>
+      <div>تاريخ الطباعة: ${printDate}</div>
+    </div>
+  </div>
+  
+  <div class="summary">
+    <div class="box"><div class="lbl">إجمالي الاستلام</div><div class="val green">${ar(stats.received)} د.ع</div></div>
+    <div class="box"><div class="lbl">إجمالي الصرف</div><div class="val red">${ar(stats.spent)} د.ع</div></div>
+    <div class="box"><div class="lbl">الرصيد</div><div class="val ${bal>=0?"green":"red"}">${ar(Math.abs(bal))} د.ع</div></div>
+  </div>
+  
+  <div class="bal-box">
+    <div style="font-size:14px;font-weight:700;color:${bal>=0?"#1A7A4A":"#C0392B"}">
+      ${bal>=0?"✅ الرصيد لصالح الفورمن":"⚠️ الرصيد على الفورمن"}
+    </div>
+    <div style="font-size:24px;font-weight:900;color:${bal>=0?"#1A7A4A":"#C0392B"};margin-top:6px">
+      ${ar(Math.abs(bal))} دينار
+    </div>
+  </div>
+
+  <table>
+    <thead><tr><th>التاريخ</th><th>النوع</th><th>المبلغ</th><th>ملاحظة</th></tr></thead>
+    <tbody>${rows||"<tr><td colspan='4' style='text-align:center;color:#999;padding:20px'>ما في معاملات</td></tr>"}</tbody>
+    <tfoot>
+      <tr style="background:#fff8e1;border-top:2px solid #b45309">
+        <td colspan="2" style="font-weight:800;text-align:right;padding:10px 12px">الإجمالي</td>
+        <td colspan="2" style="font-weight:900;color:#b45309;font-size:15px">${ar(stats.received)} استلام | ${ar(stats.spent)} صرف</td>
+      </tr>
+    </tfoot>
+  </table>
+
+  <div style="margin-top:30px;display:flex;justify-content:space-between">
+    <div style="text-align:center;width:160px">
+      <div style="border-top:1px solid #999;margin-bottom:8px;margin-top:40px"></div>
+      <div style="font-size:12px;color:#666;font-weight:700">توقيع الفورمن</div>
+    </div>
+    <div style="text-align:center;width:160px">
+      <div style="border-top:1px solid #999;margin-bottom:8px;margin-top:40px"></div>
+      <div style="font-size:12px;color:#666;font-weight:700">توقيع المحاسب</div>
+    </div>
+    <div style="text-align:center;width:160px">
+      <div style="border-top:1px solid #999;margin-bottom:8px;margin-top:40px"></div>
+      <div style="font-size:12px;color:#666;font-weight:700">توقيع المدير</div>
+    </div>
+  </div>
+
+  <div class="footer">
+    <div>نظام حساب</div>
+    <div>${printDate}</div>
+  </div>
+</body></html>`;
+                    const w=window.open("","_blank");
+                    w.document.write(html);
+                    w.document.close();
+                    setTimeout(()=>w.print(),500);
+                  }}>
+                    🖨️ طباعة الكشف
+                  </button>
+                </div>
+
+                {/* كشف الحساب التفصيلي */}
                 {selForeman?.id===f.id&&(
                   <div style={{marginTop:14,borderTop:`1px solid ${C.cardBorder}`,paddingTop:14}}>
-                    <div style={{fontWeight:800,fontSize:14,color:C.text,marginBottom:10}}>📋 كشف حساب الفورمن</div>
+                    <div style={{fontWeight:800,fontSize:14,color:C.text,marginBottom:12}}>📋 كشف الحساب التفصيلي</div>
+
+                    {/* جدول المعاملات */}
                     {txs.filter(t=>t.foremanId===f.id&&t.userId==="foreman").length===0?(
-                      <div style={{textAlign:"center",color:C.textSm,padding:16,fontSize:13}}>ما في معاملات مرتبطة بهذا الفورمن</div>
-                    ):txs.filter(t=>t.foremanId===f.id&&t.userId==="foreman").map(t=>(
-                      <div key={t.id} style={{background:C.bg2,borderRadius:10,padding:"10px 12px",marginBottom:6,display:"flex",justifyContent:"space-between"}}>
-                        <div>
-                          <div style={{fontSize:13,fontWeight:700,color:C.text}}>{t.type}</div>
-                          <div style={{fontSize:11,color:C.textSm}}>📅 {t.date} {t.note&&`· ${t.note}`}</div>
-                        </div>
-                        <div style={{fontWeight:800,fontSize:14,color:t.type==="صرف"?C.red:"#1A7A4A"}}>{fmt(t.amount,t.currency)}</div>
+                      <div style={{textAlign:"center",color:C.textSm,padding:20,fontSize:13,background:C.bg2,borderRadius:10}}>
+                        ما في معاملات مرتبطة بهذا الفورمن
                       </div>
-                    ))}
+                    ):(
+                      <>
+                        <div style={{...S.formCard,padding:0,overflow:"hidden"}}>
+                          <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+                            <thead>
+                              <tr style={{background:"#b45309"}}>
+                                {["التاريخ","النوع","المبلغ","المشروع","ملاحظة"].map(h=>(
+                                  <th key={h} style={{padding:"8px 10px",color:"#fff",fontWeight:700,fontSize:11,textAlign:"center"}}>{h}</th>
+                                ))}
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {txs.filter(t=>t.foremanId===f.id&&t.userId==="foreman").map((t,i)=>(
+                                <tr key={t.id} style={{borderBottom:`1px solid ${C.cardBorder}`,background:i%2===0?"#fff":C.bg}}>
+                                  <td style={{padding:"8px 10px",textAlign:"center",color:C.textMd,fontSize:11}}>📅 {t.date}</td>
+                                  <td style={{padding:"8px 10px",textAlign:"center"}}>
+                                    <span style={{fontWeight:700,color:t.type==="استلام"?"#1A7A4A":C.red,background:t.type==="استلام"?"rgba(26,122,74,0.1)":"rgba(192,57,43,0.08)",padding:"2px 8px",borderRadius:6,fontSize:11}}>
+                                      {t.type}
+                                    </span>
+                                  </td>
+                                  <td style={{padding:"8px 10px",textAlign:"center",fontWeight:800,color:t.type==="استلام"?"#1A7A4A":C.red}}>
+                                    {fmt(t.amount,t.currency)}
+                                  </td>
+                                  <td style={{padding:"8px 10px",textAlign:"center",color:C.textSm,fontSize:11}}>
+                                    {t.projectName||"—"}
+                                  </td>
+                                  <td style={{padding:"8px 10px",textAlign:"center",color:C.textSm,fontSize:11}}>
+                                    {t.note||"—"}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                            <tfoot>
+                              <tr style={{background:C.bg2,borderTop:`2px solid #b45309`}}>
+                                <td colSpan={2} style={{padding:"8px 10px",fontWeight:800,color:C.text,textAlign:"right"}}>الإجمالي</td>
+                                <td style={{padding:"8px 10px",textAlign:"center",fontWeight:900,color:"#b45309"}}>
+                                  ↓ {fmtD(stats.received)} | ↑ {fmtD(stats.spent)}
+                                </td>
+                                <td colSpan={2}/>
+                              </tr>
+                            </tfoot>
+                          </table>
+                        </div>
+                        <div style={{marginTop:10,display:"flex",gap:10}}>
+                          <div style={{flex:1,background:"rgba(26,122,74,0.08)",border:"1px solid rgba(26,122,74,0.2)",borderRadius:10,padding:"10px",textAlign:"center"}}>
+                            <div style={{fontSize:11,color:C.textSm,marginBottom:3}}>↓ استلم</div>
+                            <div style={{fontWeight:800,color:"#1A7A4A"}}>{fmtD(stats.received)}</div>
+                          </div>
+                          <div style={{flex:1,background:"rgba(192,57,43,0.08)",border:"1px solid rgba(192,57,43,0.2)",borderRadius:10,padding:"10px",textAlign:"center"}}>
+                            <div style={{fontSize:11,color:C.textSm,marginBottom:3}}>↑ صرف</div>
+                            <div style={{fontWeight:800,color:C.red}}>{fmtD(stats.spent)}</div>
+                          </div>
+                          <div style={{flex:1,background:stats.balance>=0?"rgba(26,122,74,0.08)":"rgba(192,57,43,0.08)",border:`1px solid ${stats.balance>=0?"rgba(26,122,74,0.2)":"rgba(192,57,43,0.2)"}`,borderRadius:10,padding:"10px",textAlign:"center"}}>
+                            <div style={{fontSize:11,color:C.textSm,marginBottom:3}}>الرصيد</div>
+                            <div style={{fontWeight:900,fontSize:15,color:stats.balance>=0?"#1A7A4A":C.red}}>{fmtD(Math.abs(stats.balance))}</div>
+                            <div style={{fontSize:10,color:stats.balance>=0?"#1A7A4A":C.red}}>{stats.balance>=0?"✅ له":"⚠️ عليه"}</div>
+                          </div>
+                        </div>
+                      </>
+                    )}
                   </div>
                 )}
               </div>
