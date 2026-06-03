@@ -512,27 +512,15 @@ export default function App() {
   const settleForeman = async (trust, settleAmt) => {
     const amt = Number(settleAmt);
     if(!amt||amt<=0) return;
-    const newSettled = (trust.settledAmount||0) + amt;
+    const newSettled = Math.min(trust.amount, (trust.settledAmount||0) + amt);
     const isDone = newSettled >= trust.amount;
-    // تحديث الأمانة
+    // تحديث الأمانة فقط — لا يتسجل في txs لأن الفلوس خرجت بالفعل
     await setDoc(doc(db,"foremanTrust",trust.id),{
       settledAmount: newSettled,
       settled: isDone,
       settledDate: today(),
     },{merge:true});
-    // تسجيل صرف على الفورمن (تسوية)
-    await addDoc(collection(db,"transactions"),{
-      userId: trust.foremanId, userName: trust.foremanName,
-      projectId: trust.projectId||"", projectName: trust.projectName||"",
-      type:"صرف", amount:amt, currency:trust.currency,
-      note:`تسوية حساب${isDone?" (مكتملة)":""}${trust.note?" — "+trust.note:""}`,
-      date:today(), image:null,
-      isPersonal:false, isAdvance:false, isForeman:true,
-      foremanId:trust.foremanId, foremanName:trust.foremanName,
-      isForemanSettle:true,
-      createdAt:new Date().toISOString(),
-    });
-  };
+  };;
 
   const addDebt = async () => {
     if(!debtForm.name.trim()||!debtForm.amount) return;
@@ -794,7 +782,13 @@ export default function App() {
   const dinSt = bal(myTxs,myOB,"دينار");
   const dolSt = bal(myTxs,myOB,"دولار");
 
-  const workerBals = WORKERS.map(u=>{ const list=txs.filter(t=>t.userId===u.id); const ob=OBs[u.id]||{}; const personalW=list.filter(t=>t.type==="صرف"&&t.isPersonal).reduce((s,t)=>s+t.amount,0)+(ob.personalWithdraw||0); return{...u,din:bal(list,ob,"دينار"),dol:bal(list,ob,"دولار"),cnt:list.length,personalW}; });
+  const workerBals = WORKERS.map(u=>{
+        // فقط المعاملات الحقيقية — بدون تسويات فورمن
+        const list = txs.filter(t=>t.userId===u.id && !t.isForemanSettle);
+        const ob   = OBs[u.id]||{};
+        const personalW = list.filter(t=>t.type==="صرف"&&t.isPersonal).reduce((s,t)=>s+t.amount,0)+(ob.personalWithdraw||0);
+        return{...u,din:bal(list,ob,"دينار"),dol:bal(list,ob,"دولار"),cnt:list.length,personalW};
+      });
 
   // الصندوق العام = مجموع كل الاستلامات - مجموع كل المصروفات
   const generalFund = () => {
@@ -803,28 +797,35 @@ export default function App() {
     const allOBdolR = WORKERS.reduce((s,u)=>s+(OBs[u.id]?.dollarReceived||0),0);
     const allOBdolS = WORKERS.reduce((s,u)=>s+(OBs[u.id]?.dollarSpent||0),0);
 
-    // الكاش الحقيقي: معاملات العمل فقط (بدون السلف الشخصية)
-    const dinR = txs.filter(t=>t.type==="استلام"&&(t.currency==="دينار"||!t.currency)&&!t.isPersonal).reduce((s,t)=>s+t.amount,0)+allOBdinR;
-    const dinS = txs.filter(t=>t.type==="صرف"&&(t.currency==="دينار"||!t.currency)&&!t.isPersonal).reduce((s,t)=>s+t.amount,0)+allOBdinS;
-    const dolR = txs.filter(t=>t.type==="استلام"&&t.currency==="دولار"&&!t.isPersonal).reduce((s,t)=>s+t.amount,0)+allOBdolR;
-    const dolS = txs.filter(t=>t.type==="صرف"&&t.currency==="دولار"&&!t.isPersonal).reduce((s,t)=>s+t.amount,0)+allOBdolS;
+    // فلتر المعاملات الحقيقية فقط:
+    // - بدون السلف الشخصية
+    // - بدون تسويات الفورمن (isForemanSettle) لأنها لا تمثل تدفق مالي حقيقي
+    const realTxs = txs.filter(t=>
+      !t.isPersonal &&          // بدون سحوبات شخصية
+      !t.isForemanSettle &&     // بدون تسويات فورمن
+      !t.isDebtPayment          // الديون تُحسب منفصلة
+    );
 
-    // الديون الخارجية غير المسددة (شركة + شخصية)
-    const externalDebts = debts.filter(d=>d.status!=="مسدد كامل").reduce((s,d)=>s+(d.amount||0),0);
-    const personalDebtsTotal = personalDebts.filter(d=>d.status!=="مسدد كامل").reduce((s,d)=>s+(d.remaining||d.amount||0),0);
+    const dinR = realTxs.filter(t=>t.type==="استلام"&&(t.currency==="دينار"||!t.currency)).reduce((s,t)=>s+t.amount,0)+allOBdinR;
+    const dinS = realTxs.filter(t=>t.type==="صرف"&&(t.currency==="دينار"||!t.currency)).reduce((s,t)=>s+t.amount,0)+allOBdinS;
+    const dolR = realTxs.filter(t=>t.type==="استلام"&&t.currency==="دولار").reduce((s,t)=>s+t.amount,0)+allOBdolR;
+    const dolS = realTxs.filter(t=>t.type==="صرف"&&t.currency==="دولار").reduce((s,t)=>s+t.amount,0)+allOBdolS;
+
+    // الديون الخارجية غير المسددة
+    const externalDebts = debts.filter(d=>d.status!=="مسدد كامل").reduce((s,d)=>s+(d.remaining||d.amount||0),0);
+    const personalDebtsTotal = personalDebts.filter(d=>d.status!=="مسدد كامل"&&d.creditorId!=="company").reduce((s,d)=>s+(d.remaining||d.amount||0),0);
     const totalDebts = externalDebts + personalDebtsTotal;
 
-    // الكاش الكلي = الكاش الحقيقي + الديون المستحقة
     const realDinB = dinR-dinS;
     const realDolB = dolR-dolS;
-    const totalDinB = realDinB + totalDebts; // الديون بالدينار فقط للتبسيط
+    const totalDinB = realDinB + totalDebts;
 
     return{
       dinR, dinS, dinB:realDinB,
       dolR, dolS, dolB:realDolB,
       totalDinB, totalDebts, externalDebts, personalDebtsTotal,
     };
-  };
+  };;
 
   const compRep = () => {
     const cap=compSet.capital||0;
