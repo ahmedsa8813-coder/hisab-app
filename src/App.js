@@ -909,7 +909,7 @@ export default function App() {
 
   const navMgr = module==="admin"
     ? [{icon:"🏠",label:"الرئيسية",v:"adminHome"},{icon:"🏗️",label:"المشاريع",v:"adminProjects"},{icon:"👷",label:"الموظفون",v:"adminEmployees"},{icon:"📋",label:"المهام",v:"adminTasks"},{icon:"📊",label:"التقارير",v:"adminReports"}]
-    : [{icon:"📊",label:"الملخص",v:"home"},{icon:"📄",label:"الكشوفات",v:"statements"},{icon:"📋",label:"المعاملات",v:"allTx"},{icon:"🏗️",label:"المشاريع",v:"projects"},{icon:"💰",label:"المالية",v:"projReport"},{icon:"🏢",label:"الشركة",v:"company"},{icon:"💳",label:"الديون",v:"debts"},{icon:"💵",label:"الرواتب",v:"salaries"},{icon:"👷",label:"الفورمنية",v:"foremen"},{icon:"⚖️",label:"افتتاحي",v:"opening"}];
+    : [{icon:"📊",label:"الملخص",v:"home"},{icon:"📄",label:"الكشوفات",v:"statements"},{icon:"📋",label:"المعاملات",v:"allTx"},{icon:"🏗️",label:"المشاريع",v:"projects"},{icon:"💰",label:"المالية",v:"projReport"},{icon:"🏢",label:"الشركة",v:"company"},{icon:"💳",label:"الديون",v:"debts"},{icon:"💵",label:"الرواتب",v:"salaries"},{icon:"👷",label:"الفورمنية",v:"foremen"},{icon:"📈",label:"التقارير",v:"reports"},{icon:"⚖️",label:"افتتاحي",v:"opening"}];
   const navWorker = user?.role==="accountant"
     ? [{icon:"🏠",label:"الرئيسية",v:"home"},{icon:"↓",label:"استلام",v:"addReceive"},{icon:"↑",label:"صرف",v:"addSpend"},{icon:"💳",label:"سداد ديون",v:"payDebts"},{icon:"📄",label:"كشفي",v:"myStatement"},{icon:"💵",label:"الرواتب",v:"salaries"}]
     : user?.role==="foreman"
@@ -2042,8 +2042,47 @@ export default function App() {
     // MANAGER HOME
     if(user.role==="manager"&&view==="home") {
       const GF = generalFund();
+
+      // إشعارات الديون المتأخرة
+      const todayStr = today();
+      const overdueDebts = debts.filter(d=>
+        d.status!=="مسدد كامل" &&
+        d.dueDate && d.dueDate < todayStr
+      );
+      const dueSoonDebts = debts.filter(d=>
+        d.status!=="مسدد كامل" &&
+        d.dueDate &&
+        d.dueDate >= todayStr &&
+        d.dueDate <= todayStr.slice(0,8) + String(Number(todayStr.slice(-2))+7).padStart(2,"0")
+      );
+
       return (
         <div>
+          {/* تنبيهات الديون */}
+          {overdueDebts.length>0&&(
+            <div style={{background:"linear-gradient(135deg,#7f1d1d,#991b1b)",borderRadius:14,padding:"12px 16px",marginBottom:14,cursor:"pointer"}}
+              onClick={()=>setView("debts")}>
+              <div style={{display:"flex",alignItems:"center",gap:10}}>
+                <span style={{fontSize:22}}>🚨</span>
+                <div>
+                  <div style={{fontWeight:800,fontSize:14,color:"#fff"}}>{toAr(overdueDebts.length)} دين متأخر عن موعد السداد!</div>
+                  <div style={{fontSize:12,color:"rgba(255,255,255,0.8)"}}>اضغط لعرض الديون ←</div>
+                </div>
+              </div>
+            </div>
+          )}
+          {dueSoonDebts.length>0&&(
+            <div style={{background:"linear-gradient(135deg,#b45309,#92400e)",borderRadius:14,padding:"12px 16px",marginBottom:14,cursor:"pointer"}}
+              onClick={()=>setView("debts")}>
+              <div style={{display:"flex",alignItems:"center",gap:10}}>
+                <span style={{fontSize:22}}>⏰</span>
+                <div>
+                  <div style={{fontWeight:800,fontSize:14,color:"#fff"}}>{toAr(dueSoonDebts.length)} دين يستحق خلال ٧ أيام</div>
+                  <div style={{fontSize:12,color:"rgba(255,255,255,0.8)"}}>اضغط لعرض الديون ←</div>
+                </div>
+              </div>
+            </div>
+          )}
           {/* مبدّل القسم */}
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14,marginBottom:24}}>
             <button onClick={()=>{setModule("finance");}} style={{
@@ -2631,6 +2670,35 @@ export default function App() {
                 </div>
               ):(
                 <>
+                  {/* زر PDF */}
+                  <button style={{...S.goldBtn,background:"linear-gradient(135deg,#1d4ed8,#1455cc)",color:"#fff",marginBottom:12}} onClick={()=>{
+                    const ar = n=>String(Math.round(n||0)).replace(/\B(?=(\d{3})+(?!\d))/g,",");
+                    const rows = stTxsAll.map(t=>`
+                      <tr>
+                        <td>${t.date}</td>
+                        <td style="color:${t.type==="استلام"?"#1A7A4A":"#C0392B"};font-weight:700">${t.type}</td>
+                        <td style="font-weight:800">${ar(t.amount)} ${t.currency==="دولار"?"$":"د.ع"}</td>
+                        <td>${t.projectName||"—"}</td>
+                        <td style="font-size:11px">${t.note||"—"}</td>
+                      </tr>`).join("");
+                    const html=`<!DOCTYPE html><html dir="rtl" lang="ar"><head><meta charset="UTF-8"/>
+<title>كشف حساب — ${stUserObj?.name}</title>
+<style>body{font-family:Tahoma;padding:20px;direction:rtl}h1{color:#C17B2F;font-size:18px}
+table{width:100%;border-collapse:collapse;font-size:12px}
+th{background:#2C1810;color:#fff;padding:8px 10px}
+td{padding:7px 10px;border-bottom:1px solid #eee}
+.g{color:#1A7A4A;font-weight:800}.r{color:#C0392B;font-weight:800}</style></head>
+<body><h1>📄 كشف حساب — ${stUserObj?.name}</h1>
+<div style="font-size:11px;color:#888;margin-bottom:16px">العملة: ${fuCur} | ${fuFrom?`من ${fuFrom}`:""} ${fuTo?`إلى ${fuTo}`:""}</div>
+<table><thead><tr><th>التاريخ</th><th>النوع</th><th>المبلغ</th><th>المشروع</th><th>الملاحظة</th></tr></thead>
+<tbody>${rows}</tbody></table>
+<div style="margin-top:16px;display:flex;gap:20px">
+<span class="g">↓ استلم: ${ar(stR2)} ${fuCur==="دولار"?"$":"د.ع"}</span>
+<span class="r">↑ صرف: ${ar(stS2)} ${fuCur==="دولار"?"$":"د.ع"}</span>
+</div></body></html>`;
+                    const w=window.open("","_blank");w.document.write(html);w.document.close();setTimeout(()=>w.print(),500);
+                  }}>🖨️ طباعة كشف {stUserObj?.name}</button>
+
                   {/* فصل العمل والشخصي */}
                   {(()=>{
                     const workTxs     = stTxsAll.filter(t=>!t.isPersonal);
@@ -3195,6 +3263,211 @@ export default function App() {
         </div>
       </div>
     );
+
+    // REPORTS — تقارير الأرباح والخسائر
+    if(user.role==="manager"&&view==="reports") {
+      const gf = generalFund();
+      const totalInc  = gf.dinR;
+      const totalExp  = gf.dinS;
+      const netProfit = totalInc - totalExp;
+
+      // ديون مستحقة للشركة (طالبة)
+      const owingPending = debts.filter(d=>d.direction==="owing"&&d.status!=="مسدد كامل").reduce((s,d)=>s+(d.remaining||d.amount||0),0);
+      // ديون على الشركة (مطلوبة)
+      const owedPending  = debts.filter(d=>(d.direction==="owed"||!d.direction)&&d.status!=="مسدد كامل").reduce((s,d)=>s+(d.remaining||d.amount||0),0);
+      // سلف شخصية غير مسددة
+      const personalOwed = personalDebts.filter(d=>d.status!=="مسدد كامل").reduce((s,d)=>s+(d.remaining||d.amount||0),0);
+      // صافي المركز المالي
+      const netPosition  = netProfit + owingPending - owedPending;
+
+      // أرباح الشركاء
+      const partnerProfits = PARTNERS.map(p=>{
+        const shareOfProfit = Math.round(netProfit * (p.share/100));
+        const withdrawn     = workerBals.find(w=>w.id===p.id)?.personalW||0;
+        const remaining     = shareOfProfit - withdrawn;
+        return {...p, shareOfProfit, withdrawn, remaining};
+      });
+
+      // أرباح حسب المشروع
+      const projProfits = projs.map(p=>{
+        const pTxs  = txs.filter(t=>t.projectId===p.id);
+        const inc   = pTxs.filter(t=>t.type==="استلام").reduce((s,t)=>s+t.amount,0);
+        const exp   = pTxs.filter(t=>t.type==="صرف").reduce((s,t)=>s+t.amount,0);
+        return {...p, inc, exp, profit: inc-exp};
+      }).sort((a,b)=>b.profit-a.profit);
+
+      const printReport = () => {
+        const ar = n => String(Math.round(n||0)).replace(/\B(?=(\d{3})+(?!\d))/g,",");
+        const html = `<!DOCTYPE html><html dir="rtl" lang="ar">
+<head><meta charset="UTF-8"/><title>تقرير الأرباح والخسائر</title>
+<style>
+  body{font-family:Tahoma,sans-serif;padding:30px;direction:rtl;color:#111;margin:0}
+  h1{color:#C17B2F;font-size:22px;border-bottom:3px solid #C17B2F;padding-bottom:10px}
+  h2{color:#2C1810;font-size:16px;margin-top:20px}
+  table{width:100%;border-collapse:collapse;margin:10px 0;font-size:13px}
+  th{background:#2C1810;color:#fff;padding:8px 12px;text-align:center}
+  td{padding:8px 12px;border-bottom:1px solid #eee;text-align:center}
+  .green{color:#1A7A4A;font-weight:800} .red{color:#C0392B;font-weight:800}
+  .box{display:inline-block;border:1px solid #ddd;border-radius:8px;padding:12px 20px;margin:6px;min-width:150px;text-align:center}
+  .lbl{font-size:11px;color:#888} .val{font-size:18px;font-weight:900;margin-top:4px}
+  @media print{body{padding:15px}}
+</style></head>
+<body>
+  <h1>📈 تقرير الأرباح والخسائر</h1>
+  <div style="color:#666;font-size:12px;margin-bottom:20px">تاريخ التقرير: ${new Date().toLocaleDateString("ar-IQ")}</div>
+
+  <div>
+    <div class="box"><div class="lbl">إجمالي الإيرادات</div><div class="val green">${ar(totalInc)} د.ع</div></div>
+    <div class="box"><div class="lbl">إجمالي المصروفات</div><div class="val red">${ar(totalExp)} د.ع</div></div>
+    <div class="box"><div class="lbl">صافي الربح</div><div class="val ${netProfit>=0?"green":"red"}">${ar(Math.abs(netProfit))} د.ع</div></div>
+    <div class="box"><div class="lbl">المركز المالي الصافي</div><div class="val ${netPosition>=0?"green":"red"}">${ar(Math.abs(netPosition))} د.ع</div></div>
+  </div>
+
+  <h2>حصص الشركاء من الأرباح</h2>
+  <table>
+    <thead><tr><th>الشريك</th><th>الحصة</th><th>نصيب الربح</th><th>المسحوب</th><th>المتبقي</th></tr></thead>
+    <tbody>
+      ${partnerProfits.map(p=>`
+        <tr>
+          <td>${p.name}</td>
+          <td>${p.share}%</td>
+          <td class="green">${ar(p.shareOfProfit)} د.ع</td>
+          <td class="red">${ar(p.withdrawn)} د.ع</td>
+          <td class="${p.remaining>=0?"green":"red"}">${ar(Math.abs(p.remaining))} د.ع</td>
+        </tr>`).join("")}
+    </tbody>
+  </table>
+
+  <h2>أرباح المشاريع</h2>
+  <table>
+    <thead><tr><th>المشروع</th><th>الإيراد</th><th>المصروف</th><th>صافي الربح</th></tr></thead>
+    <tbody>
+      ${projProfits.map(p=>`
+        <tr>
+          <td>${p.name}</td>
+          <td class="green">${ar(p.inc)} د.ع</td>
+          <td class="red">${ar(p.exp)} د.ع</td>
+          <td class="${p.profit>=0?"green":"red"}">${ar(Math.abs(p.profit))} د.ع</td>
+        </tr>`).join("")}
+    </tbody>
+  </table>
+
+  <h2>الديون والذمم</h2>
+  <table>
+    <thead><tr><th>البند</th><th>المبلغ</th></tr></thead>
+    <tbody>
+      <tr><td>ديون على الشركة (مطلوبة)</td><td class="red">${ar(owedPending)} د.ع</td></tr>
+      <tr><td>ديون للشركة (طالبة)</td><td class="green">${ar(owingPending)} د.ع</td></tr>
+      <tr><td>سلف شخصية غير مسددة</td><td class="red">${ar(personalOwed)} د.ع</td></tr>
+    </tbody>
+  </table>
+</body></html>`;
+        const w=window.open("","_blank");
+        w.document.write(html);
+        w.document.close();
+        setTimeout(()=>w.print(),500);
+      };
+
+      return (
+        <div>
+          <BackBtn/>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20,flexWrap:"wrap",gap:10}}>
+            <div style={S.secTitle}>📈 تقارير الأرباح والخسائر</div>
+            <button style={{...S.goldBtn,width:"auto",padding:"9px 18px",marginBottom:0,background:"linear-gradient(135deg,#1d4ed8,#1455cc)",color:"#fff",fontSize:13}}
+              onClick={printReport}>🖨️ طباعة التقرير</button>
+          </div>
+
+          {/* المؤشرات الرئيسية */}
+          <div style={{display:"grid",gridTemplateColumns:D?"repeat(4,1fr)":"1fr 1fr",gap:10,marginBottom:20}}>
+            {[
+              ["↓ إجمالي الإيرادات",totalInc,"linear-gradient(135deg,#065f46,#047857)","#34d399"],
+              ["↑ إجمالي المصروفات",totalExp,"linear-gradient(135deg,#7f1d1d,#991b1b)","#f87171"],
+              ["💰 صافي الربح",netProfit,netProfit>=0?"linear-gradient(135deg,#1e3a5f,#1d4ed8)":"linear-gradient(135deg,#7f1d1d,#991b1b)","#fff"],
+              ["📊 المركز المالي",netPosition,netPosition>=0?"linear-gradient(135deg,#065f46,#047857)":"linear-gradient(135deg,#7f1d1d,#991b1b)","#fff"],
+            ].map(([l,v,bg,col],i)=>(
+              <div key={i} style={{background:bg,borderRadius:16,padding:16,boxShadow:C.shadowMd,gridColumn:D?"auto":i===2||i===3?"1/-1":"auto"}}>
+                <div style={{fontSize:11,color:"rgba(255,255,255,0.75)",fontWeight:700,marginBottom:6}}>{l}</div>
+                <div style={{fontSize:20,fontWeight:900,color:col,letterSpacing:-0.5}}>{fmtD(Math.abs(v))}</div>
+                {v<0&&<div style={{fontSize:11,color:"rgba(255,255,255,0.7)",marginTop:4}}>⚠️ خسارة</div>}
+              </div>
+            ))}
+          </div>
+
+          {/* الديون والذمم */}
+          <div style={{background:C.card,border:`1px solid ${C.cardBorder}`,borderRadius:16,padding:16,marginBottom:20}}>
+            <div style={{fontWeight:800,fontSize:15,color:C.text,marginBottom:12}}>📋 الديون والذمم</div>
+            <div style={{display:"grid",gridTemplateColumns:D?"1fr 1fr 1fr":"1fr",gap:10}}>
+              <div style={{background:"rgba(192,57,43,0.06)",borderRadius:12,padding:14,textAlign:"center"}}>
+                <div style={{fontSize:12,color:C.textMd,marginBottom:4}}>💳 ديون على الشركة</div>
+                <div style={{fontSize:18,fontWeight:900,color:C.red}}>{fmtD(owedPending)}</div>
+              </div>
+              <div style={{background:"rgba(26,122,74,0.06)",borderRadius:12,padding:14,textAlign:"center"}}>
+                <div style={{fontSize:12,color:C.textMd,marginBottom:4}}>💰 ديون للشركة</div>
+                <div style={{fontSize:18,fontWeight:900,color:"#1A7A4A"}}>{fmtD(owingPending)}</div>
+              </div>
+              <div style={{background:"rgba(107,63,160,0.06)",borderRadius:12,padding:14,textAlign:"center"}}>
+                <div style={{fontSize:12,color:C.textMd,marginBottom:4}}>👤 سلف شخصية</div>
+                <div style={{fontSize:18,fontWeight:900,color:C.purple}}>{fmtD(personalOwed)}</div>
+              </div>
+            </div>
+          </div>
+
+          {/* حصص الشركاء */}
+          <div style={{fontWeight:800,fontSize:15,color:C.text,marginBottom:12}}>👥 حصص الشركاء من الأرباح</div>
+          <div style={D?S.empGrid:{}}>
+            {partnerProfits.map(p=>(
+              <div key={p.id} style={{background:"rgba(124,58,237,0.06)",border:"1px solid rgba(124,58,237,0.2)",borderRadius:16,padding:16,marginBottom:12}}>
+                <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:12}}>
+                  <div style={{...S.av,width:42,height:42,fontSize:18,borderRadius:13,background:"linear-gradient(135deg,#7c3aed,#5b21b6)"}}>{p.name[0]}</div>
+                  <div>
+                    <div style={{fontWeight:800,fontSize:15,color:C.text}}>{p.name}</div>
+                    <div style={{fontSize:12,color:C.purple}}>حصة {toAr(p.share)}% من الأرباح</div>
+                  </div>
+                </div>
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:10}}>
+                  <div style={{background:"rgba(26,122,74,0.08)",borderRadius:10,padding:10,textAlign:"center"}}>
+                    <div style={{fontSize:10,color:C.textSm,marginBottom:3}}>نصيب الربح</div>
+                    <div style={{fontSize:14,fontWeight:800,color:"#1A7A4A"}}>{fmtD(p.shareOfProfit)}</div>
+                  </div>
+                  <div style={{background:"rgba(192,57,43,0.08)",borderRadius:10,padding:10,textAlign:"center"}}>
+                    <div style={{fontSize:10,color:C.textSm,marginBottom:3}}>المسحوب</div>
+                    <div style={{fontSize:14,fontWeight:800,color:C.red}}>{fmtD(p.withdrawn)}</div>
+                  </div>
+                </div>
+                <div style={{background:p.remaining>=0?"rgba(26,122,74,0.1)":"rgba(192,57,43,0.1)",borderRadius:10,padding:10,textAlign:"center",border:`1px solid ${p.remaining>=0?"rgba(26,122,74,0.3)":"rgba(192,57,43,0.3)"}`}}>
+                  <div style={{fontSize:11,color:C.textSm}}>{p.remaining>=0?"المتبقي من حصته":"تجاوز حصته"}</div>
+                  <div style={{fontSize:18,fontWeight:900,color:p.remaining>=0?"#1A7A4A":C.red,marginTop:2}}>{fmtD(Math.abs(p.remaining))}</div>
+                </div>
+                <div style={{...S.progBar,marginTop:10}}>
+                  <div style={{...S.progFill,width:`${p.shareOfProfit?Math.min(100,Math.round(p.withdrawn/p.shareOfProfit*100)):0}%`,background:"linear-gradient(90deg,#7c3aed,#a78bfa)"}}/>
+                </div>
+                <div style={{fontSize:11,color:C.textSm,marginTop:4,textAlign:"center"}}>
+                  {p.shareOfProfit?toAr(Math.min(100,Math.round(p.withdrawn/p.shareOfProfit*100))):0}% مسحوب
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* أرباح المشاريع */}
+          <div style={{fontWeight:800,fontSize:15,color:C.text,marginBottom:12,marginTop:8}}>🏗️ أرباح المشاريع</div>
+          {projProfits.map(p=>(
+            <div key={p.id} style={{background:C.card,border:`1px solid ${p.profit>=0?"rgba(26,122,74,0.2)":"rgba(192,57,43,0.2)"}`,borderRadius:14,padding:14,marginBottom:10,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+              <div>
+                <div style={{fontWeight:700,fontSize:14,color:C.text}}>{p.name}</div>
+                <div style={{fontSize:11,color:C.textSm,marginTop:2}}>{p.specialization||p.spec} — {p.province}</div>
+                <div style={{fontSize:12,color:C.textMd,marginTop:4}}>
+                  ↓ {fmtD(p.inc)} &nbsp;|&nbsp; ↑ {fmtD(p.exp)}
+                </div>
+              </div>
+              <div style={{textAlign:"left"}}>
+                <div style={{fontSize:16,fontWeight:900,color:p.profit>=0?"#1A7A4A":C.red}}>{fmtD(Math.abs(p.profit))}</div>
+                <div style={{fontSize:11,color:p.profit>=0?"#1A7A4A":C.red}}>{p.profit>=0?"✅ ربح":"⚠️ خسارة"}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      );
+    }
 
     // FOREMEN
     if(user.role==="manager"&&view==="foremen") return (
