@@ -2043,240 +2043,186 @@ export default function App() {
     // MANAGER HOME
     if(user.role==="manager"&&view==="home") {
       const GF = generalFund();
-
-      // إشعارات الديون المتأخرة
       const todayStr = today();
-      const overdueDebts = debts.filter(d=>
-        d.status!=="مسدد كامل" &&
-        d.dueDate && d.dueDate < todayStr
-      );
-      const dueSoonDebts = debts.filter(d=>
-        d.status!=="مسدد كامل" &&
-        d.dueDate &&
-        d.dueDate >= todayStr &&
-        d.dueDate <= todayStr.slice(0,8) + String(Number(todayStr.slice(-2))+7).padStart(2,"0")
-      );
+      const overdueDebts = debts.filter(d=>d.status!=="مسدد كامل"&&d.dueDate&&d.dueDate<todayStr);
+      const dueSoonDebts = debts.filter(d=>d.status!=="مسدد كامل"&&d.dueDate&&d.dueDate>=todayStr&&d.dueDate<=todayStr.slice(0,8)+String(Number(todayStr.slice(-2))+7).padStart(2,"0"));
+      const netProfit = GF.dinR - GF.dinS;
 
       return (
         <div>
+
           {/* تنبيهات الديون */}
-          {overdueDebts.length>0&&(
-            <div style={{background:"linear-gradient(135deg,#7f1d1d,#991b1b)",borderRadius:14,padding:"12px 16px",marginBottom:14,cursor:"pointer"}}
-              onClick={()=>setView("debts")}>
-              <div style={{display:"flex",alignItems:"center",gap:10}}>
-                <span style={{fontSize:22}}>🚨</span>
-                <div>
-                  <div style={{fontWeight:800,fontSize:14,color:"#fff"}}>{toAr(overdueDebts.length)} دين متأخر عن موعد السداد!</div>
-                  <div style={{fontSize:12,color:"rgba(255,255,255,0.8)"}}>اضغط لعرض الديون ←</div>
-                </div>
-              </div>
+          {(overdueDebts.length>0||dueSoonDebts.length>0)&&(
+            <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:16}}>
+              {overdueDebts.length>0&&(
+                <button style={{background:"linear-gradient(135deg,#7f1d1d,#991b1b)",borderRadius:14,padding:"12px 16px",border:"none",cursor:"pointer",textAlign:"right",width:"100%"}}
+                  onClick={()=>setView("debts")}>
+                  <div style={{display:"flex",alignItems:"center",gap:10}}>
+                    <span style={{fontSize:24}}>🚨</span>
+                    <div>
+                      <div style={{fontWeight:800,fontSize:14,color:"#fff"}}>{toAr(overdueDebts.length)} دين متأخر عن موعد السداد</div>
+                      <div style={{fontSize:11,color:"rgba(255,255,255,0.7)"}}>اضغط لعرض التفاصيل ←</div>
+                    </div>
+                  </div>
+                </button>
+              )}
+              {dueSoonDebts.length>0&&(
+                <button style={{background:"linear-gradient(135deg,#b45309,#92400e)",borderRadius:14,padding:"12px 16px",border:"none",cursor:"pointer",textAlign:"right",width:"100%"}}
+                  onClick={()=>setView("debts")}>
+                  <div style={{display:"flex",alignItems:"center",gap:10}}>
+                    <span style={{fontSize:24}}>⏰</span>
+                    <div>
+                      <div style={{fontWeight:800,fontSize:14,color:"#fff"}}>{toAr(dueSoonDebts.length)} دين يستحق خلال ٧ أيام</div>
+                      <div style={{fontSize:11,color:"rgba(255,255,255,0.7)"}}>اضغط لعرض التفاصيل ←</div>
+                    </div>
+                  </div>
+                </button>
+              )}
             </div>
           )}
-          {dueSoonDebts.length>0&&(
-            <div style={{background:"linear-gradient(135deg,#b45309,#92400e)",borderRadius:14,padding:"12px 16px",marginBottom:14,cursor:"pointer"}}
-              onClick={()=>setView("debts")}>
-              <div style={{display:"flex",alignItems:"center",gap:10}}>
-                <span style={{fontSize:22}}>⏰</span>
-                <div>
-                  <div style={{fontWeight:800,fontSize:14,color:"#fff"}}>{toAr(dueSoonDebts.length)} دين يستحق خلال ٧ أيام</div>
-                  <div style={{fontSize:12,color:"rgba(255,255,255,0.8)"}}>اضغط لعرض الديون ←</div>
+
+          {/* مبدّل المالية / الإدارة */}
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:20}}>
+            {[
+              {id:"finance",label:"المالية",icon:"💰",desc:"الحسابات والأرصدة",bg:`linear-gradient(135deg,${C.gold},${C.goldD})`,active:module==="finance",action:()=>setModule("finance")},
+              {id:"admin",  label:"الإدارة",icon:"💼",desc:"المشاريع والموظفين",bg:"linear-gradient(135deg,#2557A7,#1d4ed8)",active:module==="admin",action:()=>{setModule("admin");setView("adminHome");}},
+            ].map(m=>(
+              <button key={m.id} onClick={m.action} style={{
+                background:m.active?m.bg:C.card,
+                border:`2px solid ${m.active?m.bg.match(/#\w+/)[0]:C.cardBorder}`,
+                borderRadius:18,padding:"18px 14px",cursor:"pointer",textAlign:"right",
+                boxShadow:m.active?"0 8px 24px rgba(0,0,0,0.2)":C.shadow,
+                transition:"all 0.2s",
+              }}>
+                <div style={{fontSize:30,marginBottom:6}}>{m.icon}</div>
+                <div style={{fontWeight:900,fontSize:16,color:m.active?"#fff":C.text}}>{m.label}</div>
+                <div style={{fontSize:11,color:m.active?"rgba(255,255,255,0.8)":C.textSm,marginTop:3}}>{m.desc}</div>
+                {m.active&&<div style={{marginTop:8,background:"rgba(255,255,255,0.2)",borderRadius:6,padding:"3px 8px",fontSize:10,color:"#fff",display:"inline-block"}}>● نشط</div>}
+              </button>
+            ))}
+          </div>
+
+          {/* الصندوق العام — بطاقة كبيرة */}
+          <div style={{background:"linear-gradient(135deg,#0f2027,#203a43,#2c5364)",borderRadius:22,padding:20,marginBottom:14,boxShadow:"0 8px 32px rgba(0,0,0,0.2)"}}>
+            <div style={{fontSize:12,color:"rgba(255,255,255,0.6)",fontWeight:700,marginBottom:4}}>📊 الصندوق العام</div>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:16}}>
+              <div>
+                <div style={{fontSize:32,fontWeight:900,color:"#fff",letterSpacing:-1}}>{fmtD(Math.abs(GF.dinB))}</div>
+                <div style={{fontSize:13,color:GF.dinB>0?"#34d399":"#f87171",fontWeight:700,marginTop:4}}>
+                  {GF.dinB>0?"✅ رصيد موجب":GF.dinB<0?"⚠️ رصيد سالب":"◼️ متوازن"}
                 </div>
               </div>
+              <div style={{textAlign:"left"}}>
+                <div style={{fontSize:13,color:"rgba(255,255,255,0.5)",marginBottom:4}}>🇺🇸 دولار</div>
+                <div style={{fontSize:18,fontWeight:800,color:"#93c5fd"}}>{fmt(Math.abs(GF.dolB),"دولار")}</div>
+              </div>
             </div>
-          )}
-          {/* مبدّل القسم */}
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14,marginBottom:24}}>
-            <button onClick={()=>{setModule("finance");}} style={{
-              background:module==="finance"?`linear-gradient(135deg,${C.gold},${C.goldD})`:`${C.card}`,
-              border:module==="finance"?`2px solid ${C.gold}`:`2px solid ${C.cardBorder}`,
-              borderRadius:20,padding:"22px 20px",cursor:"pointer",textAlign:"right",
-              boxShadow:module==="finance"?`0 8px 24px rgba(193,123,47,0.25)`:C.shadow,
-              transition:"all 0.25s",
-            }}>
-              <div style={{fontSize:36,marginBottom:8}}>💰</div>
-              <div style={{fontWeight:900,fontSize:18,color:module==="finance"?"#fff":C.text,letterSpacing:-0.5}}>المالية</div>
-              <div style={{fontSize:12,color:module==="finance"?"rgba(255,255,255,0.85)":C.textSm,marginTop:4,fontWeight:600}}>الحسابات والأرصدة والمعاملات</div>
-              {module==="finance"&&<div style={{marginTop:10,background:"rgba(255,255,255,0.2)",borderRadius:8,padding:"4px 10px",fontSize:11,color:"#fff",fontWeight:700,display:"inline-block"}}>✓ نشط</div>}
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
+              {[
+                ["↓ استلام",GF.dinR,"#34d399"],
+                ["↑ صرف",   GF.dinS,"#f87171"],
+                ["💰 صافي", netProfit, netProfit>=0?"#fde68a":"#f87171"],
+              ].map(([l,v,col],i)=>(
+                <div key={i} style={{background:"rgba(255,255,255,0.08)",borderRadius:12,padding:"10px 8px",textAlign:"center"}}>
+                  <div style={{fontSize:10,color:"rgba(255,255,255,0.5)",marginBottom:4}}>{l}</div>
+                  <div style={{fontSize:13,fontWeight:800,color:col}}>{fmtD(v)}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* الديون */}
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:20}}>
+            <button style={{background:"rgba(192,57,43,0.08)",border:"1px solid rgba(192,57,43,0.2)",borderRadius:14,padding:"14px 12px",cursor:"pointer",textAlign:"right"}} onClick={()=>{setDebtDirection("owed");setView("debts");}}>
+              <div style={{fontSize:20,marginBottom:6}}>🔴</div>
+              <div style={{fontWeight:700,fontSize:12,color:C.red}}>الشركة مطلوبة</div>
+              <div style={{fontSize:16,fontWeight:900,color:C.red,marginTop:4}}>{fmtD(GF.externalDebts)}</div>
             </button>
-            <button onClick={()=>{setModule("admin");setView("adminHome");}} style={{
-              background:module==="admin"?"linear-gradient(135deg,#2557A7,#1d4ed8)":C.card,
-              border:module==="admin"?"2px solid #2557A7":`2px solid ${C.cardBorder}`,
-              borderRadius:20,padding:"22px 20px",cursor:"pointer",textAlign:"right",
-              boxShadow:module==="admin"?"0 8px 24px rgba(37,87,167,0.25)":C.shadow,
-              transition:"all 0.25s",
-            }}>
-              <div style={{fontSize:36,marginBottom:8}}>💼</div>
-              <div style={{fontWeight:900,fontSize:18,color:module==="admin"?"#fff":C.text,letterSpacing:-0.5}}>الإدارة</div>
-              <div style={{fontSize:12,color:module==="admin"?"rgba(255,255,255,0.85)":C.textSm,marginTop:4,fontWeight:600}}>متابعة المشاريع والموظفين</div>
-              {module==="admin"&&<div style={{marginTop:10,background:"rgba(255,255,255,0.2)",borderRadius:8,padding:"4px 10px",fontSize:11,color:"#fff",fontWeight:700,display:"inline-block"}}>✓ نشط</div>}
+            <button style={{background:"rgba(26,122,74,0.08)",border:"1px solid rgba(26,122,74,0.2)",borderRadius:14,padding:"14px 12px",cursor:"pointer",textAlign:"right"}} onClick={()=>{setDebtDirection("owing");setView("debts");}}>
+              <div style={{fontSize:20,marginBottom:6}}>🟢</div>
+              <div style={{fontWeight:700,fontSize:12,color:"#1A7A4A"}}>الشركة طالبة</div>
+              <div style={{fontSize:16,fontWeight:900,color:"#1A7A4A",marginTop:4}}>{fmtD(debts.filter(d=>d.direction==="owing"&&d.status!=="مسدد كامل").reduce((s,d)=>s+(d.remaining||d.amount||0),0))}</div>
             </button>
           </div>
-          <div style={S.secTitle}>الصناديق العامة للشركة</div>
 
-          {/* الصندوقان الرئيسيان */}
-          <div style={D?{display:"flex",gap:14,marginBottom:14}:{marginBottom:14}}>
-            {/* الكاش الحقيقي */}
-            <div style={{...S.balCard,background:"linear-gradient(135deg,#065f46,#047857)",flex:D?1:undefined,marginBottom:D?0:12}}>
-              <div style={S.balLbl}>💵 الكاش الحقيقي — دينار</div>
-              <div style={S.balAmt}>{fmt(Math.abs(GF.dinB),"دينار")}</div>
-              <div style={{fontSize:13,fontWeight:700,color:"rgba(255,255,255,0.85)",margin:"4px 0 10px"}}>
-                {GF.dinB>0?"✅ موجب":GF.dinB<0?"⚠️ سالب":"◼️ متوازن"}
-              </div>
-              <div style={S.balRow}>
-                <span style={S.balSt}>↓ {fmt(GF.dinR,"دينار")}</span>
-                <span style={S.balSt}>↑ {fmt(GF.dinS,"دينار")}</span>
-              </div>
-              <div style={{marginTop:8,paddingTop:8,borderTop:"1px solid rgba(255,255,255,0.2)",fontSize:12,color:"rgba(255,255,255,0.7)"}}>
-                معاملات العمل فقط، بدون السلف الشخصية
-              </div>
-            </div>
-            {/* دولار */}
-            <div style={{...S.balCard,background:"linear-gradient(135deg,#1e40af,#2563eb)",flex:D?1:undefined,marginBottom:D?0:12}}>
-              <div style={S.balLbl}>💵 الكاش الحقيقي — دولار</div>
-              <div style={S.balAmt}>{fmt(Math.abs(GF.dolB),"دولار")}</div>
-              <div style={{fontSize:13,fontWeight:700,color:"rgba(255,255,255,0.85)",margin:"4px 0 10px"}}>
-                {GF.dolB>0?"✅ موجب":GF.dolB<0?"⚠️ سالب":"◼️ متوازن"}
-              </div>
-              <div style={S.balRow}>
-                <span style={S.balSt}>↓ {fmt(GF.dolR,"دولار")}</span>
-                <span style={S.balSt}>↑ {fmt(GF.dolS,"دولار")}</span>
-              </div>
-              <div style={{marginTop:8,paddingTop:8,borderTop:"1px solid rgba(255,255,255,0.2)",fontSize:12,color:"rgba(255,255,255,0.7)"}}>
-                معاملات العمل فقط، بدون السلف الشخصية
-              </div>
-            </div>
-          </div>
-
-          {/* الكاش الكلي */}
-          <div style={{...S.balCard,background:"linear-gradient(135deg,#1e3a5f,#1d4ed8)",marginBottom:20}}>
-            <div style={S.balLbl}>📊 الكاش الكلي (الكاش الحقيقي + الديون المستحقة)</div>
-            <div style={S.balAmt}>{fmtD(GF.totalDinB)}</div>
-            <div style={{marginTop:12,display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10}}>
-              <div style={{background:"rgba(255,255,255,0.1)",borderRadius:10,padding:"10px 12px",textAlign:"center"}}>
-                <div style={{fontSize:11,color:"rgba(255,255,255,0.7)",marginBottom:4}}>💵 الكاش الحقيقي</div>
-                <div style={{fontSize:15,fontWeight:800,color:"#fff"}}>{fmtD(GF.dinB)}</div>
-              </div>
-              <div style={{background:"rgba(255,255,255,0.1)",borderRadius:10,padding:"10px 12px",textAlign:"center"}}>
-                <div style={{fontSize:11,color:"rgba(255,255,255,0.7)",marginBottom:4}}>🏢 ديون خارجية</div>
-                <div style={{fontSize:15,fontWeight:800,color:"#fde68a"}}>{fmtD(GF.externalDebts)}</div>
-              </div>
-              <div style={{background:"rgba(255,255,255,0.1)",borderRadius:10,padding:"10px 12px",textAlign:"center"}}>
-                <div style={{fontSize:11,color:"rgba(255,255,255,0.7)",marginBottom:4}}>💳 سلف شخصية</div>
-                <div style={{fontSize:15,fontWeight:800,color:"#fde68a"}}>{fmtD(GF.personalDebtsTotal)}</div>
-              </div>
-            </div>
-            <div style={{marginTop:10,fontSize:12,color:"rgba(255,255,255,0.65)",textAlign:"center"}}>
-              {fmtD(GF.dinB)} + {fmtD(GF.totalDebts)} ديون = {fmtD(GF.totalDinB)}
-            </div>
-          </div>
-
-          {/* حسابات الأشخاص */}
-          <div style={S.secTitle}>صناديق الأشخاص</div>
+          {/* أرصدة الأشخاص */}
+          <div style={{fontWeight:800,fontSize:16,color:C.text,marginBottom:12}}>👥 أرصدة الأشخاص</div>
           <div style={D?S.empGrid:{}}>
             {workerBals.map(e=>{
-              const empPersonalDebt = personalDebts.filter(d=>d.debtorId===e.id&&d.status!=="مسدد كامل");
-              const empDebtTotal = empPersonalDebt.reduce((s,d)=>s+(d.remaining||d.amount||0),0);
+              const empDebt = personalDebts.filter(d=>d.debtorId===e.id&&d.status!=="مسدد كامل").reduce((s,d)=>s+(d.remaining||d.amount||0),0);
+              const isPositive = e.din.b >= 0;
               return(
-              <button key={e.id} style={{...S.empCard,...(e.role==="partner"?{border:"1px solid rgba(124,58,237,0.3)",background:"rgba(124,58,237,0.05)"}:{})}} onClick={()=>{setStUser(e.id);setFuFrom("");setFuTo("");setFuProj("all");setFuCur("دينار");setView("statement");}}>
-                <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:10}}>
-                  <div style={{...S.av,width:42,height:42,fontSize:18,borderRadius:14,background:avatarBg(e.role)}}>{e.name[0]}</div>
-                  <div style={{flex:1}}>
-                    <div style={{fontWeight:800,fontSize:16,letterSpacing:-0.5}}>{e.name}</div>
-                    <div style={{fontSize:12,color:"#6b7280",marginTop:2}}>{toAr(e.cnt)} معاملة</div>
-                  </div>
-                  <div style={{color:"#6b7280",fontSize:14}}>←</div>
-                </div>
-
-                {/* الرصيد الكلي - دينار */}
-                <div style={{background:e.din.b>=0?"rgba(6,95,70,0.2)":"rgba(127,29,29,0.2)",border:`1px solid ${e.din.b>=0?"rgba(6,95,70,0.4)":"rgba(127,29,29,0.4)"}`,borderRadius:10,padding:"10px 12px",marginBottom:8}}>
-                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
-                    <div style={{fontSize:11,color:"rgba(255,255,255,0.6)"}}>🇮🇶 صندوق العمل — دينار</div>
-                    <div style={{fontSize:12,fontWeight:700,color:e.din.b>=0?"#34d399":"#f87171"}}>{e.din.b>0?"مطلوب منه":e.din.b<0?"طالب":"متوازن"}</div>
-                  </div>
-                  <div style={{fontSize:17,fontWeight:900,color:e.din.b>=0?"#34d399":"#f87171",letterSpacing:-0.5,marginBottom:6}}>{fmt(Math.abs(e.din.b),"دينار")}</div>
-                  <div style={{display:"flex",gap:12,fontSize:11,color:"rgba(255,255,255,0.5)"}}>
-                    <span>↓ استلم {fmt(e.din.r,"دينار")}</span>
-                    <span>↑ صرف {fmt(e.din.s,"دينار")}</span>
-                  </div>
-                </div>
-
-                {/* دولار */}
-                {(e.dol.r>0||e.dol.s>0)&&(
-                  <div style={{background:e.dol.b>=0?"rgba(29,64,175,0.2)":"rgba(127,29,29,0.2)",border:`1px solid ${e.dol.b>=0?"rgba(29,64,175,0.4)":"rgba(127,29,29,0.4)"}`,borderRadius:10,padding:"10px 12px"}}>
-                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
-                      <div style={{fontSize:11,color:"rgba(255,255,255,0.6)"}}>🇺🇸 الرصيد الكلي — دولار</div>
-                      <div style={{fontSize:12,fontWeight:700,color:e.dol.b>=0?"#60a5fa":"#f87171"}}>{e.dol.b>0?"مطلوب منه":e.dol.b<0?"طالب":"متوازن"}</div>
+                <button key={e.id} style={{
+                  background:C.card,border:`1px solid ${isPositive?"rgba(26,122,74,0.2)":"rgba(192,57,43,0.2)"}`,
+                  borderRadius:18,padding:16,marginBottom:12,cursor:"pointer",textAlign:"right",
+                  boxShadow:C.shadow,width:"100%",
+                }} onClick={()=>{setStUser(e.id);setFuFrom("");setFuTo("");setFuProj("all");setFuCur("دينار");setView("statements");}}>
+                  <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:12}}>
+                    <div style={{...S.av,width:44,height:44,fontSize:19,borderRadius:14,background:avatarBg(e.role),flexShrink:0}}>{e.name[0]}</div>
+                    <div style={{flex:1}}>
+                      <div style={{fontWeight:800,fontSize:16,color:C.text}}>{e.name}</div>
+                      <div style={{fontSize:11,color:C.textSm,marginTop:2}}>{toAr(e.cnt)} معاملة</div>
                     </div>
-                    <div style={{fontSize:17,fontWeight:900,color:e.dol.b>=0?"#60a5fa":"#f87171",letterSpacing:-0.5,marginBottom:6}}>{fmt(Math.abs(e.dol.b),"دولار")}</div>
-                    <div style={{display:"flex",gap:12,fontSize:11,color:"rgba(255,255,255,0.5)"}}>
-                      <span>↓ استلم {fmt(e.dol.r,"دولار")}</span>
-                      <span>↑ صرف {fmt(e.dol.s,"دولار")}</span>
-                    </div>
+                    <div style={{fontSize:12,color:C.textSm}}>←</div>
                   </div>
-                )}
 
-                {/* السلفة الشخصية — منفصلة عن صندوق العمل */}
-                {empDebtTotal>0&&(
-                  <div style={{background:"rgba(192,57,43,0.12)",border:"1px solid rgba(192,57,43,0.3)",borderRadius:10,padding:"10px 12px",marginTop:6}}>
-                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                      <div style={{fontSize:11,color:"#f87171",fontWeight:700}}>💳 سلفة شخصية مستحقة</div>
-                      <div style={{fontSize:14,fontWeight:900,color:"#f87171"}}>{fmtD(empDebtTotal)}</div>
+                  <div style={{display:"grid",gridTemplateColumns:e.dol.r>0||e.dol.s>0?"1fr 1fr":"1fr",gap:8,marginBottom:empDebt>0?8:0}}>
+                    {/* دينار */}
+                    <div style={{background:isPositive?"rgba(26,122,74,0.08)":"rgba(192,57,43,0.06)",borderRadius:12,padding:"10px 12px"}}>
+                      <div style={{fontSize:10,color:C.textSm,marginBottom:3}}>🇮🇶 دينار</div>
+                      <div style={{fontSize:15,fontWeight:900,color:isPositive?"#1A7A4A":C.red}}>{fmt(Math.abs(e.din.b),"دينار")}</div>
+                      <div style={{fontSize:10,color:isPositive?"#1A7A4A":C.red,marginTop:2}}>{isPositive?"مطلوب منه":"طالب"}</div>
                     </div>
-                    {empPersonalDebt.length>1&&<div style={{fontSize:10,color:"rgba(248,113,113,0.7)",marginTop:3}}>{toAr(empPersonalDebt.length)} سلف</div>}
+                    {/* دولار */}
+                    {(e.dol.r>0||e.dol.s>0)&&(
+                      <div style={{background:e.dol.b>=0?"rgba(37,87,167,0.08)":"rgba(192,57,43,0.06)",borderRadius:12,padding:"10px 12px"}}>
+                        <div style={{fontSize:10,color:C.textSm,marginBottom:3}}>🇺🇸 دولار</div>
+                        <div style={{fontSize:15,fontWeight:900,color:e.dol.b>=0?"#2557A7":C.red}}>{fmt(Math.abs(e.dol.b),"دولار")}</div>
+                        <div style={{fontSize:10,color:e.dol.b>=0?"#2557A7":C.red,marginTop:2}}>{e.dol.b>=0?"مطلوب منه":"طالب"}</div>
+                      </div>
+                    )}
                   </div>
-                )}
-              </button>
+
+                  {empDebt>0&&(
+                    <div style={{background:"rgba(192,57,43,0.08)",border:"1px solid rgba(192,57,43,0.2)",borderRadius:10,padding:"8px 12px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                      <span style={{fontSize:11,color:C.red,fontWeight:600}}>💳 سلفة شخصية مستحقة</span>
+                      <span style={{fontSize:13,fontWeight:800,color:C.red}}>{fmtD(empDebt)}</span>
+                    </div>
+                  )}
+                </button>
               );
             })}
           </div>
 
-          {!D&&module==="finance"&&(
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginTop:4}}>
-              {[["📄 الكشوفات","statements","linear-gradient(135deg,#1A7A4A,#147A40)"],["📋 المعاملات","allTx","linear-gradient(135deg,#1d4ed8,#1455cc)"],["🏗️ المشاريع","projects","linear-gradient(135deg,#065f46,#047857)"],["💰 كشف المشاريع","projReport","linear-gradient(135deg,#b45309,#92400e)"],["🏢 كشف الشركة","company","linear-gradient(135deg,#7c3aed,#5b21b6)"],["💳 الديون","debts","linear-gradient(135deg,#C0392B,#A93226)"],["💵 الرواتب","salaries","linear-gradient(135deg,#1A7A4A,#0f5c36)"]].map(([l,v,bg])=>(
-                <button key={v} style={{...S.goldBtn,background:bg,color:"#fff",marginBottom:0}} onClick={()=>setView(v)}>{l}</button>
-              ))}
-              <button style={{...S.goldBtn,background:"linear-gradient(135deg,#374151,#1f2937)",color:"#fff",gridColumn:"1/-1",marginBottom:0}} onClick={()=>setView("opening")}>⚖️ الأرصدة الافتتاحية</button>
+          {/* اختصارات سريعة */}
+          {!D&&(
+            <div>
+              <div style={{fontWeight:800,fontSize:15,color:C.text,marginBottom:10}}>⚡ اختصارات سريعة</div>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+                {[
+                  ["📄 الكشوفات",   "statements","#1A7A4A"],
+                  ["📋 المعاملات",  "allTx",     "#2557A7"],
+                  ["🏗️ المشاريع",  "projects",  "#065f46"],
+                  ["💰 المالية",    "projReport","#b45309"],
+                  ["📈 التقارير",   "reports",   "#7c3aed"],
+                  ["💳 الديون",     "debts",     "#C0392B"],
+                  ["💵 الرواتب",    "salaries",  "#1A7A4A"],
+                  ["👷 الفورمنية",  "foremen",   "#b45309"],
+                ].map(([l,v,col])=>(
+                  <button key={v} style={{
+                    padding:"12px 10px",borderRadius:12,border:`1px solid ${col}22`,
+                    background:`${col}0d`,color:col,fontWeight:700,fontSize:13,
+                    cursor:"pointer",textAlign:"center",
+                  }} onClick={()=>setView(v)}>{l}</button>
+                ))}
+                <button style={{padding:"12px 10px",borderRadius:12,border:`1px solid rgba(55,65,81,0.3)`,background:"rgba(55,65,81,0.08)",color:"#374151",fontWeight:700,fontSize:13,cursor:"pointer",gridColumn:"1/-1"}} onClick={()=>setView("opening")}>⚖️ الأرصدة الافتتاحية</button>
+              </div>
             </div>
           )}
+
         </div>
       );
     }
-
-    // STATEMENT
-    if(user.role==="manager"&&view==="statement") return (
-      <div>
-        <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:20}}>
-          {!D&&<button style={S.backBtn2} onClick={()=>setView("home")}>←</button>}
-          <div style={{...S.secTitle,margin:0}}>كشف حساب — {USERS.find(u=>u.id===stUser)?.name}</div>
-        </div>
-        <div style={D?{display:"flex",gap:20}:{}}>
-          <div style={D?{width:280,flexShrink:0}:{}}>
-            <div style={S.filterCard}>
-              <div style={S.fLbl}>العملة</div>
-              <div style={S.tRow}>
-                <button style={{...S.tBtn,...(fuCur==="دينار"?{background:"rgba(29,78,216,0.3)",border:"1px solid #2563eb",color:"#60a5fa"}:{})}} onClick={()=>setFuCur("دينار")}>🇮🇶 دينار</button>
-                <button style={{...S.tBtn,...(fuCur==="دولار"?{background:"rgba(29,78,216,0.3)",border:"1px solid #2563eb",color:"#60a5fa"}:{})}} onClick={()=>setFuCur("دولار")}>🇺🇸 دولار</button>
-              </div>
-              <div style={S.fLbl}>المشروع</div>
-              <select style={S.sel} value={fuProj} onChange={e=>setFuProj(e.target.value)}><option value="all">كل المشاريع</option>{projs.map(p=><option key={p.id} value={p.id}>{p.name} - {p.specialization||p.spec} - {p.province}</option>)}</select>
-              <div style={S.fLbl}>من تاريخ</div><input style={S.inp} type="date" value={fuFrom} onChange={e=>setFuFrom(e.target.value)}/>
-              <div style={S.fLbl}>إلى تاريخ</div><input style={S.inp} type="date" value={fuTo} onChange={e=>setFuTo(e.target.value)}/>
-              <button style={{...S.subBtn,background:"linear-gradient(135deg,#1d4ed8,#1455cc)",color:"#fff"}} onClick={pdfPerson}>📄 تصدير PDF</button>
-            </div>
-          </div>
-          <div style={{flex:1}}>
-            <div style={{...S.balCard,background:stB>=0?"linear-gradient(135deg,#065f46,#047857)":"linear-gradient(135deg,#7f1d1d,#991b1b)",marginBottom:16}}>
-              <div style={S.balLbl}>الرصيد — {fuCur}</div>
-              <div style={S.balAmt}>{fmt(Math.abs(stB),fuCur)}</div>
-              <div style={S.balSub}>{stB>=0?"متبقي معه":"عليه"}</div>
-              <div style={S.balRow}><span style={S.balSt}>↓ استلم {fmt(stR,fuCur)}</span><span style={S.balSt}>↑ صرف {fmt(stS,fuCur)}</span></div>
-            </div>
-            {stTxs.length===0?<div style={S.empty}>ما في معاملات</div>:<div style={D?S.txGrid:{}}>{stTxs.map(t=><TxCard key={t.id} t={t} onDelete={()=>delTx(t.id)} onImg={setViewImg} onEdit={setEditTx}/>)}</div>}
-            {!D&&<button style={S.canBtn} onClick={()=>setView("home")}>← رجوع</button>}
-          </div>
-        </div>
-      </div>
-    );
 
     // ALL TX
     if(user.role==="manager"&&view==="allTx") return (
