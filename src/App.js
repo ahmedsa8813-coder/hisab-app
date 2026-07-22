@@ -2241,7 +2241,8 @@ export default function App() {
     // ALL TX
     if(user.role==="manager"&&view==="allTx") return (
       <div>
-        <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:4}}><BackBtn/><div style={S.secTitle}>كل المعاملات</div></div>
+        <BackBtn/>
+          <div style={S.secTitle}>كل المعاملات</div>
         <div style={D?{display:"flex",gap:20}:{}}>
           <div style={D?{width:260,flexShrink:0}:{}}>
             <div style={S.filterCard}>
@@ -2265,7 +2266,8 @@ export default function App() {
     // PROJECTS
     if(user.role==="manager"&&view==="projects") return (
       <div style={D?{maxWidth:720}:{}}>
-        <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:4}}><BackBtn/><div style={S.secTitle}>إدارة المشاريع</div></div>
+        <BackBtn/>
+          <div style={S.secTitle}>إدارة المشاريع</div>
         <div style={S.formCard}>
           <div style={S.fLbl}>اسم المشروع</div>
           <input style={S.inp} placeholder="مثال: برج الأمل" value={newProj.name} onChange={e=>setNewProj(p=>({...p,name:e.target.value}))}/>
@@ -2302,7 +2304,8 @@ export default function App() {
     // PROJECT REPORT
     if(user.role==="manager"&&view==="projReport") return (
       <div>
-        <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:4}}><BackBtn/><div style={S.secTitle}>💰 الكشف المالي للمشاريع</div></div>
+        <BackBtn/>
+          <div style={S.secTitle}>💰 الكشف المالي للمشاريع</div>
         {!selProj ? (
           <div style={D?S.txGrid:{}}>{projs.map(p=>{
             const r=projRep(p,"","");
@@ -2442,7 +2445,8 @@ export default function App() {
     // COMPANY
     if(user.role==="manager"&&view==="company") return (
       <div>
-        <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:4}}><BackBtn/><div style={S.secTitle}>🏢 الكشف المالي للشركة</div></div>
+        <BackBtn/>
+          <div style={S.secTitle}>🏢 الكشف المالي للشركة</div>
         <div style={S.filterCard}>
           <div style={S.fLbl}>رأس المال الكلي (دينار)</div>
           <input style={S.inp} type="number" placeholder={fmtD(compSet.capital||0)} value={compForm.capital??""} onChange={e=>setCompForm(f=>({...f,capital:e.target.value}))}/>
@@ -2497,7 +2501,8 @@ export default function App() {
     // OPENING BALANCES
     if(user.role==="manager"&&view==="opening") return (
       <div style={D?{maxWidth:900}:{}}>
-        <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:4}}><BackBtn/><div style={S.secTitle}>⚖️ الأرصدة الافتتاحية</div></div>
+        <BackBtn/>
+          <div style={S.secTitle}>⚖️ الأرصدة الافتتاحية</div>
         <div style={{fontSize:13,color:"#6b7280",marginBottom:20,fontWeight:500}}>أدخل الأرصدة السابقة لكل شخص قبل بداية استخدام النظام</div>
         {OBok&&<div style={{color:"#34d399",fontSize:14,marginBottom:16,fontWeight:700}}>✅ تم الحفظ!</div>}
         <div style={D?S.empGrid:{}}>
@@ -2562,7 +2567,8 @@ export default function App() {
 
       return (
         <div>
-          <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:4}}><BackBtn/><div style={S.secTitle}>📄 كشف الحسابات</div></div>
+          <BackBtn/>
+          <div style={S.secTitle}>📄 كشف الحسابات</div>
           <div style={D?{display:"flex",gap:20}:{}}>
             {/* فلاتر */}
             <div style={D?{width:300,flexShrink:0}:{}}>
@@ -2831,10 +2837,8 @@ export default function App() {
         <div>
           {/* Header */}
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16,flexWrap:"wrap",gap:10}}>
-            <div style={{display:"flex",alignItems:"center",gap:12}}>
-              <BackBtn/>
-              <div style={S.secTitle}>💳 الديون</div>
-            </div>
+            <BackBtn/>
+          <div style={S.secTitle}>💳 الديون</div>
             <button style={{...S.goldBtn,width:"auto",padding:"9px 18px",marginBottom:0,
               background:debtDirection==="owed"?"linear-gradient(135deg,#C0392B,#A93226)":"linear-gradient(135deg,#2557A7,#1d4ed8)",
               color:"#fff",fontSize:13}}
@@ -3255,10 +3259,8 @@ function ForemenPage({D,foremen,projs,txs,foremanTrust,onAdd,onDel,onSettle,onEd
   return (
     <div>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20,flexWrap:"wrap",gap:10}}>
-        <div style={{display:"flex",alignItems:"center",gap:12}}>
-          <BackBtn/>
+        <BackBtn/>
           <div style={S.secTitle}>👷 الفورمنية</div>
-        </div>
         <button style={{...S.goldBtn,width:"auto",padding:"9px 18px",marginBottom:0,fontSize:13}}
           onClick={()=>setShowForm(v=>!v)}>
           {showForm?"✕ إغلاق":"+ إضافة فورمن"}
@@ -3661,10 +3663,8 @@ function SalariesPage({D,user,isManager,salaryEmployees,salaryPayments,salaryAdv
     <div>
       {/* Header */}
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20,flexWrap:"wrap",gap:10}}>
-        <div style={{display:"flex",alignItems:"center",gap:12}}>
-          <BackBtn/>
+        <BackBtn/>
           <div style={S.secTitle}>💵 الرواتب</div>
-        </div>
         {isManager&&(
           <button style={{...S.goldBtn,width:"auto",padding:"9px 18px",marginBottom:0,fontSize:13}}
             onClick={()=>setAddEmpModal(true)}>+ إضافة موظف</button>
