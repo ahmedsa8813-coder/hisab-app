@@ -238,7 +238,9 @@ export default function App() {
 
   useEffect(() => {
     const u = [];
-    u.push(onSnapshot(query(collection(db,"transactions"),orderBy("date","desc"),limit(500)), s => { setTxs(s.docs.map(d=>({id:d.id,...d.data()}))); setLoading(false); }));
+    u.push(onSnapshot(query(collection(db,"transactions"),orderBy("date","desc"),limit(500)), s => { setTxs(s.docs.map(d=>({id:d.id,...d.data()}))); setLoading(false); }, err => { console.error(err); setLoading(false); }));
+    // fallback: لو Firebase ما رجع بعد 8 ثواني
+    const fallback = setTimeout(()=>setLoading(false), 8000);
     u.push(onSnapshot(collection(db,"projects"), s => setProjs(s.docs.map(d=>({id:d.id,...d.data()})))));
     u.push(onSnapshot(collection(db,"openingBalances"), s => { const o={}; s.docs.forEach(d=>{o[d.id]=d.data();}); setOBs(o); }));
     u.push(onSnapshot(doc(db,"settings","company"), s => { if(s.exists()) setCompSet(s.data()); }));
@@ -258,7 +260,7 @@ export default function App() {
     u.push(onSnapshot(query(collection(db,"foremanTrust"),orderBy("date","desc")), s => setForemanTrust(s.docs.map(d=>({id:d.id,...d.data()})))));
     // تحميل سعر الصرف المحفوظ
     onSnapshot(doc(db,"settings","exchangeRate"), s => { if(s.exists()&&s.data().rate) setExchangeRate(s.data().rate); });
-    return () => u.forEach(f=>f());
+    return () => { u.forEach(f=>f()); clearTimeout(fallback); };
   }, []);
 
   const pickImg = e => {
@@ -1082,7 +1084,16 @@ export default function App() {
   );
 
   function renderView() {
-    if(loading) return <div style={{textAlign:"center",color:"#6b7280",padding:60,fontSize:16}}>⏳ جاري التحميل...</div>;
+    if(loading) return (
+      <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",minHeight:"60vh",gap:16}}>
+        <div style={{fontSize:48}}>📊</div>
+        <div style={{fontSize:18,fontWeight:800,color:C.text}}>نظام حساب</div>
+        <div style={{fontSize:14,color:C.textSm}}>⏳ جاري تحميل البيانات...</div>
+        <div style={{width:200,height:4,background:C.bg3,borderRadius:999,overflow:"hidden",marginTop:8}}>
+          <div style={{width:"60%",height:"100%",background:`linear-gradient(90deg,${C.gold},${C.goldL})`,borderRadius:999,animation:"none"}}/>
+        </div>
+      </div>
+    );
 
     // زر الرجوع المشترك
     const BackBtn = ({to,label}) => (
@@ -2230,7 +2241,7 @@ export default function App() {
     // ALL TX
     if(user.role==="manager"&&view==="allTx") return (
       <div>
-        <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:4}}>{!D&&<BackBtn/>}<div style={S.secTitle}>كل المعاملات</div></div>
+        <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:4}}><BackBtn/><div style={S.secTitle}>كل المعاملات</div></div>
         <div style={D?{display:"flex",gap:20}:{}}>
           <div style={D?{width:260,flexShrink:0}:{}}>
             <div style={S.filterCard}>
@@ -2254,7 +2265,7 @@ export default function App() {
     // PROJECTS
     if(user.role==="manager"&&view==="projects") return (
       <div style={D?{maxWidth:720}:{}}>
-        <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:4}}>{!D&&<BackBtn/>}<div style={S.secTitle}>إدارة المشاريع</div></div>
+        <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:4}}><BackBtn/><div style={S.secTitle}>إدارة المشاريع</div></div>
         <div style={S.formCard}>
           <div style={S.fLbl}>اسم المشروع</div>
           <input style={S.inp} placeholder="مثال: برج الأمل" value={newProj.name} onChange={e=>setNewProj(p=>({...p,name:e.target.value}))}/>
@@ -2291,7 +2302,7 @@ export default function App() {
     // PROJECT REPORT
     if(user.role==="manager"&&view==="projReport") return (
       <div>
-        <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:4}}>{!D&&<BackBtn/>}<div style={S.secTitle}>💰 الكشف المالي للمشاريع</div></div>
+        <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:4}}><BackBtn/><div style={S.secTitle}>💰 الكشف المالي للمشاريع</div></div>
         {!selProj ? (
           <div style={D?S.txGrid:{}}>{projs.map(p=>{
             const r=projRep(p,"","");
@@ -2431,7 +2442,7 @@ export default function App() {
     // COMPANY
     if(user.role==="manager"&&view==="company") return (
       <div>
-        <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:4}}>{!D&&<BackBtn/>}<div style={S.secTitle}>🏢 الكشف المالي للشركة</div></div>
+        <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:4}}><BackBtn/><div style={S.secTitle}>🏢 الكشف المالي للشركة</div></div>
         <div style={S.filterCard}>
           <div style={S.fLbl}>رأس المال الكلي (دينار)</div>
           <input style={S.inp} type="number" placeholder={fmtD(compSet.capital||0)} value={compForm.capital??""} onChange={e=>setCompForm(f=>({...f,capital:e.target.value}))}/>
@@ -2486,7 +2497,7 @@ export default function App() {
     // OPENING BALANCES
     if(user.role==="manager"&&view==="opening") return (
       <div style={D?{maxWidth:900}:{}}>
-        <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:4}}>{!D&&<BackBtn/>}<div style={S.secTitle}>⚖️ الأرصدة الافتتاحية</div></div>
+        <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:4}}><BackBtn/><div style={S.secTitle}>⚖️ الأرصدة الافتتاحية</div></div>
         <div style={{fontSize:13,color:"#6b7280",marginBottom:20,fontWeight:500}}>أدخل الأرصدة السابقة لكل شخص قبل بداية استخدام النظام</div>
         {OBok&&<div style={{color:"#34d399",fontSize:14,marginBottom:16,fontWeight:700}}>✅ تم الحفظ!</div>}
         <div style={D?S.empGrid:{}}>
@@ -2551,7 +2562,7 @@ export default function App() {
 
       return (
         <div>
-          <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:4}}>{!D&&<BackBtn/>}<div style={S.secTitle}>📄 كشف الحسابات</div></div>
+          <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:4}}><BackBtn/><div style={S.secTitle}>📄 كشف الحسابات</div></div>
           <div style={D?{display:"flex",gap:20}:{}}>
             {/* فلاتر */}
             <div style={D?{width:300,flexShrink:0}:{}}>
@@ -2821,7 +2832,7 @@ export default function App() {
           {/* Header */}
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16,flexWrap:"wrap",gap:10}}>
             <div style={{display:"flex",alignItems:"center",gap:12}}>
-              {!D&&<BackBtn/>}
+              <BackBtn/>
               <div style={S.secTitle}>💳 الديون</div>
             </div>
             <button style={{...S.goldBtn,width:"auto",padding:"9px 18px",marginBottom:0,
