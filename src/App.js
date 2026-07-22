@@ -848,7 +848,8 @@ export default function App() {
     const realTxs = txs.filter(t=>
       !t.isPersonal &&          // بدون سحوبات شخصية
       !t.isForemanSettle &&     // بدون تسويات فورمن
-      !t.isDebtPayment          // الديون تُحسب منفصلة
+      !t.isDebtPayment &&       // الديون تُحسب منفصلة
+      !t.isOvertime             // الأوفر تايم يُحسب عبر جدوله
     );
 
     const dinR = realTxs.filter(t=>t.type==="استلام"&&(t.currency==="دينار"||!t.currency)).reduce((s,t)=>s+t.amount,0)+allOBdinR;
