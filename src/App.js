@@ -1102,9 +1102,9 @@ export default function App() {
         background:C.card,border:`1px solid ${C.cardBorder}`,
         borderRadius:10,padding:"8px 16px",color:C.textMd,
         fontSize:13,fontWeight:700,cursor:"pointer",
-        boxShadow:C.shadow,marginBottom:20,
+        boxShadow:C.shadow,flexShrink:0,
       }} onClick={()=>setView(to||"home")}>
-        ← {label||"رجوع للرئيسية"}
+        ← {label||"رجوع"}
       </button>
     );
 
