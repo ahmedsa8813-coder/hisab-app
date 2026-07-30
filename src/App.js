@@ -608,63 +608,107 @@ function SalaryPage({salaries, onAdd, onDelete}) {
 
 // ══════════ الشاشة الرئيسية ══════════
 function HomePage({receipts, spends, salaries, onNavigate}) {
-  const totR = receipts.filter(r=>r.currency==="دينار"||!r.currency).reduce((s,r)=>s+r.amount,0);
-  const totS = spends.filter(s=>s.currency==="دينار"||!s.currency).reduce((s,r)=>s+r.amount,0);
-  const totSal = salaries.filter(s=>s.currency==="دينار"||!s.currency).reduce((s,r)=>s+r.amount,0);
-  const net  = totR - totS - totSal;
+  const totR   = receipts.filter(r=>r.currency==="دينار"||!r.currency).reduce((s,r)=>s+r.amount,0);
+  const totS   = spends.filter(r=>r.currency==="دينار"||!r.currency).reduce((s,r)=>s+r.amount,0);
+  const totSal = salaries.filter(r=>r.currency==="دينار"||!r.currency).reduce((s,r)=>s+r.amount,0);
+  const net    = totR - totS - totSal;
 
   const ACTIONS = [
-    {id:"receive", icon:"↓", label:"استلام",   color:C.green,  bg:"rgba(22,101,52,0.08)",  border:"rgba(22,101,52,0.2)"},
-    {id:"spend",   icon:"↑", label:"مصروف",    color:C.red,    bg:"rgba(153,27,27,0.08)",  border:"rgba(153,27,27,0.2)"},
-    {id:"report",  icon:"📊", label:"تقرير",    color:C.blue,   bg:"rgba(30,64,175,0.08)",  border:"rgba(30,64,175,0.2)"},
-    {id:"salary",  icon:"💵", label:"راتب",     color:C.purple, bg:"rgba(107,33,168,0.08)", border:"rgba(107,33,168,0.2)"},
+    {id:"receive",  label:"استلام",  sub:"تسجيل دخل",    icon:"⬇",  bg:"#166534", shadow:"rgba(22,101,52,0.35)"},
+    {id:"spend",    label:"مصروف",   sub:"تسجيل صرف",    icon:"⬆",  bg:"#991B1B", shadow:"rgba(153,27,27,0.35)"},
+    {id:"projects", label:"المشاريع",sub:"إدارة مشاريع", icon:"🏗",  bg:"#92400E", shadow:"rgba(146,64,14,0.35)"},
+    {id:"report",   label:"التقرير", sub:"ملخص مالي",    icon:"📊",  bg:"#1E40AF", shadow:"rgba(30,64,175,0.35)"},
+    {id:"salary",   label:"الرواتب", sub:"دفع الرواتب",  icon:"💵",  bg:"#6B21A8", shadow:"rgba(107,33,168,0.35)"},
   ];
 
   return (
-    <div style={{padding:20}}>
-      {/* اسم النظام */}
-      <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:24}}>
-        <div style={{fontSize:28,fontWeight:900,color:C.gold}}>حساب</div>
-        <div style={{fontSize:13,color:C.muted,marginTop:4}}>النظام المالي</div>
+    <div style={{padding:20,paddingBottom:0}}>
+
+      {/* Header */}
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:22}}>
+        <div>
+          <div style={{fontSize:26,fontWeight:900,color:C.text,letterSpacing:-0.5}}>حساب</div>
+          <div style={{fontSize:12,color:C.muted,fontWeight:600}}>النظام المالي</div>
+        </div>
+        <div style={{background:C.gold,width:42,height:42,borderRadius:13,
+          display:"flex",alignItems:"center",justifyContent:"center",
+          fontSize:20,boxShadow:`0 4px 14px rgba(184,134,11,0.4)`}}>
+          📊
+        </div>
       </div>
 
-      {/* الصندوق */}
+      {/* بطاقة الرصيد */}
       <div style={{
-        background:"linear-gradient(135deg,#0f2027,#1e3a5f)",
-        borderRadius:20,padding:22,marginBottom:20,
-        color:"#fff",boxShadow:"0 6px 28px rgba(0,0,0,0.18)",
+        background:"linear-gradient(145deg,#1a1a2e,#16213e,#0f3460)",
+        borderRadius:22,padding:24,marginBottom:22,color:"#fff",
+        boxShadow:"0 8px 32px rgba(0,0,0,0.25)",
+        border:"1px solid rgba(255,255,255,0.07)",
       }}>
-        <div style={{fontSize:11,color:"rgba(255,255,255,0.5)",marginBottom:4}}>💰 صافي الرصيد</div>
-        <div style={{fontSize:36,fontWeight:900,letterSpacing:-1.5,
-          color:net>=0?"#86efac":"#fca5a5",marginBottom:16}}>
+        <div style={{fontSize:11,color:"rgba(255,255,255,0.45)",fontWeight:700,
+          letterSpacing:1,textTransform:"uppercase",marginBottom:6}}>
+          صافي الرصيد
+        </div>
+        <div style={{fontSize:38,fontWeight:900,letterSpacing:-1.5,
+          color:net>=0?"#4ade80":"#f87171",marginBottom:20}}>
           {net>=0?"+":"-"}{fmtD(net)}
         </div>
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10}}>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
           {[
-            ["↓ استلام",totR,"#86efac"],
-            ["↑ صرف",totS,"#fca5a5"],
-            ["💵 رواتب",totSal,"#c4b5fd"],
-          ].map(([l,v,col])=>(
-            <div key={l} style={{background:"rgba(255,255,255,0.07)",borderRadius:12,padding:"10px 8px",textAlign:"center"}}>
-              <div style={{fontSize:10,color:"rgba(255,255,255,0.5)",marginBottom:3}}>{l}</div>
-              <div style={{fontSize:13,fontWeight:800,color:col}}>{fmtD(v)}</div>
+            {l:"↓ استلام", v:totR,   c:"#4ade80"},
+            {l:"↑ صرف",    v:totS,   c:"#f87171"},
+            {l:"💵 رواتب", v:totSal, c:"#c084fc"},
+          ].map(({l,v,c})=>(
+            <div key={l} style={{
+              background:"rgba(255,255,255,0.06)",
+              borderRadius:14,padding:"11px 10px",textAlign:"center",
+              border:"1px solid rgba(255,255,255,0.06)",
+            }}>
+              <div style={{fontSize:9,color:"rgba(255,255,255,0.45)",
+                fontWeight:700,marginBottom:4}}>{l}</div>
+              <div style={{fontSize:13,fontWeight:800,color:c}}>{fmtD(v)}</div>
             </div>
           ))}
         </div>
       </div>
 
-      {/* الأيقونات الأربعة */}
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:24}}>
+      {/* الأيقونات الرئيسية */}
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:20}}>
         {ACTIONS.map(a=>(
           <button key={a.id} onClick={()=>onNavigate(a.id)} style={{
-            background:a.bg,border:`1.5px solid ${a.border}`,
-            borderRadius:18,padding:"24px 16px",cursor:"pointer",
-            textAlign:"center",outline:"none",
-            boxShadow:"0 2px 8px rgba(0,0,0,0.05)",
-            transition:"transform 0.1s",
-          }}>
-            <div style={{fontSize:38,marginBottom:8,color:a.color}}>{a.icon}</div>
-            <div style={{fontSize:17,fontWeight:800,color:a.color}}>{a.label}</div>
+            background:"#fff",
+            border:`1.5px solid ${C.border}`,
+            borderRadius:20,padding:"22px 16px 20px",
+            cursor:"pointer",textAlign:"center",
+            boxShadow:`0 4px 16px rgba(0,0,0,0.06)`,
+            transition:"transform 0.12s, box-shadow 0.12s",
+            outline:"none",
+            // آخر زر يمتد للعرض كله لو عدد فردي
+            gridColumn: a.id==="salary" && ACTIONS.length%2!==0 ? "1/-1" : "auto",
+          }}
+          onMouseDown={e=>e.currentTarget.style.transform="scale(0.97)"}
+          onMouseUp={e=>e.currentTarget.style.transform="scale(1)"}
+          onTouchStart={e=>e.currentTarget.style.transform="scale(0.97)"}
+          onTouchEnd={e=>e.currentTarget.style.transform="scale(1)"}
+          >
+            {/* الأيقونة */}
+            <div style={{
+              width:62,height:62,borderRadius:18,
+              background:a.bg,
+              display:"flex",alignItems:"center",justifyContent:"center",
+              fontSize:28,margin:"0 auto 14px",
+              boxShadow:`0 6px 20px ${a.shadow}`,
+            }}>
+              <span style={{color:"#fff",fontWeight:900,fontSize:28,lineHeight:1}}>
+                {a.icon}
+              </span>
+            </div>
+            {/* النص */}
+            <div style={{fontSize:16,fontWeight:800,color:C.text,marginBottom:3}}>
+              {a.label}
+            </div>
+            <div style={{fontSize:11,color:C.muted,fontWeight:600}}>
+              {a.sub}
+            </div>
           </button>
         ))}
       </div>
@@ -672,28 +716,44 @@ function HomePage({receipts, spends, salaries, onNavigate}) {
       {/* آخر المعاملات */}
       {(receipts.length>0||spends.length>0)&&(
         <>
-          <div style={{fontSize:14,fontWeight:800,color:C.text,marginBottom:10}}>آخر المعاملات</div>
-          {[...receipts.slice(0,2).map(r=>({...r,_t:"استلام"})),
-            ...spends.slice(0,2).map(s=>({...s,_t:"صرف"})),
-            ...salaries.slice(0,1).map(s=>({...s,_t:"راتب"}))]
-            .sort((a,b)=>b.date.localeCompare(a.date))
-            .slice(0,4)
-            .map((r,i)=>(
-            <div key={i} style={{...S.card,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-              <div>
-                <div style={{fontSize:13,fontWeight:700,color:C.text}}>
-                  {r._t==="استلام"?"↓":r._t==="صرف"?"↑":"💵"} {r.source||r.dest||r.name||"—"}
+          <div style={{fontSize:13,fontWeight:800,color:C.text,
+            marginBottom:10,paddingBottom:8,
+            borderBottom:`1px solid ${C.border}`}}>
+            آخر المعاملات
+          </div>
+          {[
+            ...receipts.slice(0,2).map(r=>({...r,_t:"r"})),
+            ...spends.slice(0,2).map(r=>({...r,_t:"s"})),
+          ].sort((a,b)=>(b.date||"").localeCompare(a.date||"")).slice(0,4).map((r,i)=>(
+            <div key={i} style={{
+              display:"flex",justifyContent:"space-between",
+              alignItems:"center",padding:"11px 0",
+              borderBottom:`1px solid ${C.border}`,
+            }}>
+              <div style={{display:"flex",alignItems:"center",gap:10}}>
+                <div style={{
+                  width:34,height:34,borderRadius:10,flexShrink:0,
+                  background:r._t==="r"?"rgba(22,101,52,0.1)":"rgba(153,27,27,0.1)",
+                  display:"flex",alignItems:"center",justifyContent:"center",
+                  fontSize:16,fontWeight:900,
+                  color:r._t==="r"?C.green:C.red,
+                }}>{r._t==="r"?"↓":"↑"}</div>
+                <div>
+                  <div style={{fontSize:13,fontWeight:700,color:C.text}}>
+                    {r.generalDesc||r.source||r.dest||"—"}
+                  </div>
+                  <div style={{fontSize:11,color:C.muted}}>📅 {r.date}</div>
                 </div>
-                <div style={{fontSize:11,color:C.muted}}>📅 {r.date}</div>
               </div>
-              <div style={{fontWeight:800,fontSize:15,
-                color:r._t==="استلام"?C.green:r._t==="صرف"?C.red:C.purple}}>
-                {r._t==="استلام"?"+":"-"}{fmt(r.amount,r.currency)}
+              <div style={{fontWeight:800,fontSize:14,
+                color:r._t==="r"?C.green:C.red}}>
+                {r._t==="r"?"+":"-"}{fmt(r.amount,r.currency)}
               </div>
             </div>
           ))}
         </>
       )}
+
     </div>
   );
 }
