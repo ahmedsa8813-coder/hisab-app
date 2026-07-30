@@ -1432,6 +1432,17 @@ export default function App() {
   const [salaries, setSalaries]= useState([]);
   const [projects, setProjects]= useState([]);
 
+  // تحميل Tabler Icons
+  useEffect(()=>{
+    if(!document.querySelector('#tabler-icons')){
+      const link=document.createElement('link');
+      link.id='tabler-icons';
+      link.rel='stylesheet';
+      link.href='https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css';
+      document.head.appendChild(link);
+    }
+  },[]);
+
   useEffect(()=>{
     const u = [];
     const to = setTimeout(()=>setLoading(false), 8000);
@@ -1482,39 +1493,62 @@ export default function App() {
     projects: <ProjectsPage projects={projects} receipts={receipts} spends={spends} onAdd={addProject} onDelete={delProject}/>,
   };
 
+  const NAV_ITEMS = [
+    {id:"home",     icon:"ti-layout-dashboard", label:"الرئيسية"},
+    {id:"receive",  icon:"ti-arrow-down-circle", label:"الاستلام",  col:"#166534"},
+    {id:"spend",    icon:"ti-arrow-up-circle",   label:"المصروف",   col:"#991B1B"},
+    {id:"projects", icon:"ti-building",          label:"المشاريع",  col:"#92400E"},
+    {id:"report",   icon:"ti-chart-bar",         label:"التقرير",   col:"#1E40AF"},
+    {id:"salary",   icon:"ti-wallet",            label:"الرواتب",   col:"#6B21A8"},
+  ];
+
   return (
-    <div style={{minHeight:"100vh",background:C.bg,fontFamily:"Tahoma,Arial,sans-serif",direction:"rtl",color:C.text,paddingBottom:66}}>
-      <div style={{maxWidth:560,margin:"0 auto"}}>
-        {PAGES[page]||PAGES.home}
+    <div style={{minHeight:"100vh",background:"#F4F2EE",fontFamily:"Tahoma,Arial,sans-serif",direction:"rtl",display:"flex"}}>
+
+      {/* SIDEBAR */}
+      <div style={{width:220,minHeight:"100vh",background:"#1C1410",display:"flex",flexDirection:"column",position:"sticky",top:0,height:"100vh",flexShrink:0}}>
+        <div style={{padding:"28px 20px 20px",borderBottom:"1px solid rgba(255,255,255,0.08)"}}>
+          <div style={{fontSize:22,fontWeight:700,color:"#E8C87A",letterSpacing:0.5}}>حساب</div>
+          <div style={{fontSize:11,color:"rgba(255,255,255,0.35)",marginTop:3}}>النظام المالي</div>
+        </div>
+        <nav style={{flex:1,padding:"12px 10px",overflowY:"auto"}}>
+          {NAV_ITEMS.map(n=>{
+            const active=page===n.id;
+            return (
+              <button key={n.id} onClick={()=>setPage(n.id)} style={{
+                width:"100%",display:"flex",alignItems:"center",gap:10,
+                padding:"11px 14px",marginBottom:2,borderRadius:10,border:"none",cursor:"pointer",
+                background:active?"rgba(232,200,122,0.12)":"transparent",
+                color:active?"#E8C87A":"rgba(255,255,255,0.5)",
+                textAlign:"right",fontSize:14,fontWeight:active?700:400,fontFamily:"Tahoma",
+                borderRight:active?"3px solid #E8C87A":"3px solid transparent",
+              }}>
+                <i className={`ti ${n.icon}`} style={{fontSize:18,color:active?"#E8C87A":"rgba(255,255,255,0.35)",flexShrink:0}} aria-hidden="true"/>
+                {n.label}
+              </button>
+            );
+          })}
+        </nav>
+        <div style={{padding:"16px 20px",borderTop:"1px solid rgba(255,255,255,0.08)",fontSize:11,color:"rgba(255,255,255,0.2)"}}>
+          نظام حساب v2.0
+        </div>
       </div>
 
-      {/* شريط التنقل */}
-      <div style={{position:"fixed",bottom:0,left:0,right:0,background:"#fff",
-        borderTop:`1px solid ${C.border}`,display:"flex",height:58,zIndex:100,
-        boxShadow:"0 -2px 12px rgba(0,0,0,0.06)"}}>
-        {[
-          {id:"home",     icon:"🏠", label:"الرئيسية"},
-          {id:"receive",  icon:"↓",  label:"استلام",  color:C.green},
-          {id:"spend",    icon:"↑",  label:"مصروف",   color:C.red},
-          {id:"projects", icon:"🏗️", label:"مشاريع",  color:C.gold},
-          {id:"report",   icon:"📊", label:"تقرير",   color:C.blue},
-          {id:"salary",   icon:"💵", label:"راتب",    color:C.purple},
-        ].map(n=>{
-          const active = page===n.id;
-          const col    = n.color||(active?C.gold:C.muted);
-          return (
-            <button key={n.id} onClick={()=>setPage(n.id)} style={{
-              flex:1,border:"none",background:"transparent",
-              display:"flex",flexDirection:"column",alignItems:"center",
-              justifyContent:"center",gap:2,cursor:"pointer",
-              color:active?(n.color||C.gold):C.muted,
-            }}>
-              <div style={{fontSize:20,lineHeight:1,fontWeight:active?900:400}}>{n.icon}</div>
-              <div style={{fontSize:9,fontWeight:active?800:500}}>{n.label}</div>
-              {active&&<div style={{width:20,height:2.5,background:n.color||C.gold,borderRadius:999}}/>}
-            </button>
-          );
-        })}
+      {/* MAIN */}
+      <div style={{flex:1,display:"flex",flexDirection:"column",minHeight:"100vh",overflow:"auto"}}>
+        {/* Header */}
+        <div style={{background:"#fff",borderBottom:"1px solid #E5DDD4",padding:"14px 28px",display:"flex",alignItems:"center",justifyContent:"space-between",position:"sticky",top:0,zIndex:10}}>
+          <div style={{fontSize:16,fontWeight:700,color:"#1C1410"}}>
+            {NAV_ITEMS.find(n=>n.id===page)?.label||"الرئيسية"}
+          </div>
+          <div style={{fontSize:12,color:"#8A7060"}}>
+            {new Date().toLocaleDateString("ar-IQ",{year:"numeric",month:"long",day:"numeric"})}
+          </div>
+        </div>
+        {/* Content */}
+        <div style={{flex:1,maxWidth:680,width:"100%",margin:"0 auto",padding:"4px 0 40px"}}>
+          {PAGES[page]||PAGES.home}
+        </div>
       </div>
     </div>
   );
