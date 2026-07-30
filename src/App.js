@@ -63,9 +63,9 @@ const S = {
 };
 
 // ══════════ صفحة الاستلام ══════════
-function ReceivePage({receipts, onAdd, onDelete}) {
+function ReceivePage({receipts, projects, onAdd, onDelete}) {
   const [show,   setShow]   = useState(false);
-  const [form,   setForm]   = useState({source:"",amount:"",currency:"دينار",note:"",date:today()});
+  const [form,   setForm]   = useState({projectId:"",source:"",amount:"",currency:"دينار",note:"",date:today()});
   const [saving, setSaving] = useState(false);
   const [done,   setDone]   = useState(false);
 
@@ -75,13 +75,16 @@ function ReceivePage({receipts, onAdd, onDelete}) {
   const save = async () => {
     if(!valid||saving) return;
     setSaving(true);
+    const proj = projects.find(p=>p.id===form.projectId);
     await onAdd({type:"استلام",amount:Number(form.amount),currency:form.currency,
-      source:form.source||"عام",note:form.note,date:form.date,createdAt:new Date().toISOString()});
+      projectId:form.projectId||"",projectName:proj?.name||"",
+      source:form.source||proj?.name||"عام",note:form.note,date:form.date,createdAt:new Date().toISOString()});
     setSaving(false);
     setDone(true);
-    setTimeout(()=>{setDone(false);setForm({source:"",amount:"",currency:"دينار",note:"",date:today()});setShow(false);},1500);
+    setTimeout(()=>{setDone(false);setForm({projectId:"",source:"",amount:"",currency:"دينار",note:"",date:today()});setShow(false);},1500);
   };
 
+  const projName = id => projects.find(p=>p.id===id)?.name;
   const total = receipts.filter(r=>r.currency==="دينار"||!r.currency).reduce((s,r)=>s+r.amount,0);
 
   return (
@@ -110,8 +113,13 @@ function ReceivePage({receipts, onAdd, onDelete}) {
             </div>
           ):(
             <>
-              <Lbl>المصدر (اختياري)</Lbl>
-              <input style={{...S.inp,marginBottom:12}} placeholder="مثال: مشروع بغداد، عميل..." value={form.source} onChange={e=>set("source")(e.target.value)}/>
+              <Lbl>المشروع (اختياري)</Lbl>
+              <select style={{...S.sel,marginBottom:12}} value={form.projectId} onChange={e=>set("projectId")(e.target.value)}>
+                <option value="">📦 بدون مشروع</option>
+                {projects.map(p=><option key={p.id} value={p.id}>🏗️ {p.name}</option>)}
+              </select>
+              <Lbl>المصدر / الوصف</Lbl>
+              <input style={{...S.inp,marginBottom:12}} placeholder="مثال: دفعة من العميل..." value={form.source} onChange={e=>set("source")(e.target.value)}/>
               <Lbl>المبلغ</Lbl>
               <div style={{display:"flex",gap:8,marginBottom:12}}>
                 <input style={{...S.inp,flex:2,fontSize:20,fontWeight:800,textAlign:"center"}} type="number" placeholder="٠" value={form.amount} onChange={e=>set("amount")(e.target.value)} autoFocus/>
@@ -138,7 +146,9 @@ function ReceivePage({receipts, onAdd, onDelete}) {
           <div key={r.id} style={S.card}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
               <div>
-                <div style={{fontSize:13,color:C.muted,marginBottom:2}}>{r.source||"عام"}</div>
+                <div style={{fontSize:13,color:C.muted,marginBottom:2}}>
+                  {r.projectId&&projName(r.projectId)?`🏗️ ${projName(r.projectId)}`:""} {r.source||"عام"}
+                </div>
                 <div style={{fontSize:12,color:C.muted}}>📅 {r.date}</div>
                 {r.note&&<div style={{fontSize:13,color:C.text,marginTop:3}}>{r.note}</div>}
               </div>
@@ -155,9 +165,9 @@ function ReceivePage({receipts, onAdd, onDelete}) {
 }
 
 // ══════════ صفحة المصروف ══════════
-function SpendPage({spends, onAdd, onDelete}) {
+function SpendPage({spends, projects, onAdd, onDelete}) {
   const [show,   setShow]   = useState(false);
-  const [form,   setForm]   = useState({dest:"",amount:"",currency:"دينار",note:"",date:today()});
+  const [form,   setForm]   = useState({projectId:"",dest:"",amount:"",currency:"دينار",note:"",date:today()});
   const [saving, setSaving] = useState(false);
   const [done,   setDone]   = useState(false);
 
@@ -167,13 +177,16 @@ function SpendPage({spends, onAdd, onDelete}) {
   const save = async () => {
     if(!valid||saving) return;
     setSaving(true);
+    const proj = projects.find(p=>p.id===form.projectId);
     await onAdd({type:"صرف",amount:Number(form.amount),currency:form.currency,
-      dest:form.dest||"عام",note:form.note,date:form.date,createdAt:new Date().toISOString()});
+      projectId:form.projectId||"",projectName:proj?.name||"",
+      dest:form.dest||proj?.name||"عام",note:form.note,date:form.date,createdAt:new Date().toISOString()});
     setSaving(false);
     setDone(true);
-    setTimeout(()=>{setDone(false);setForm({dest:"",amount:"",currency:"دينار",note:"",date:today()});setShow(false);},1500);
+    setTimeout(()=>{setDone(false);setForm({projectId:"",dest:"",amount:"",currency:"دينار",note:"",date:today()});setShow(false);},1500);
   };
 
+  const projName = id => projects.find(p=>p.id===id)?.name;
   const total = spends.filter(s=>s.currency==="دينار"||!s.currency).reduce((s,r)=>s+r.amount,0);
 
   return (
@@ -200,7 +213,12 @@ function SpendPage({spends, onAdd, onDelete}) {
             </div>
           ):(
             <>
-              <Lbl>الوجهة (اختياري)</Lbl>
+              <Lbl>المشروع (اختياري)</Lbl>
+              <select style={{...S.sel,marginBottom:12}} value={form.projectId} onChange={e=>set("projectId")(e.target.value)}>
+                <option value="">📦 بدون مشروع</option>
+                {projects.map(p=><option key={p.id} value={p.id}>🏗️ {p.name}</option>)}
+              </select>
+              <Lbl>الوجهة / الوصف</Lbl>
               <input style={{...S.inp,marginBottom:12}} placeholder="مثال: مواد بناء، رواتب..." value={form.dest} onChange={e=>set("dest")(e.target.value)} autoFocus/>
               <Lbl>المبلغ</Lbl>
               <div style={{display:"flex",gap:8,marginBottom:12}}>
@@ -227,7 +245,9 @@ function SpendPage({spends, onAdd, onDelete}) {
           <div key={r.id} style={S.card}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
               <div>
-                <div style={{fontSize:13,color:C.muted,marginBottom:2}}>{r.dest||"عام"}</div>
+                <div style={{fontSize:13,color:C.muted,marginBottom:2}}>
+                  {r.projectId&&projName(r.projectId)?`🏗️ ${projName(r.projectId)}`:""} {r.dest||"عام"}
+                </div>
                 <div style={{fontSize:12,color:C.muted}}>📅 {r.date}</div>
                 {r.note&&<div style={{fontSize:13,color:C.text,marginTop:3}}>{r.note}</div>}
               </div>
@@ -514,6 +534,193 @@ function HomePage({receipts, spends, salaries, onNavigate}) {
   );
 }
 
+// ══════════ صفحة المشاريع ══════════
+function ProjectsPage({projects, receipts, spends, onAdd, onDelete}) {
+  const [sel,    setSel]    = useState(null); // مشروع مفتوح
+  const [show,   setShow]   = useState(false);
+  const [name,   setName]   = useState("");
+  const [saving, setSaving] = useState(false);
+
+  // حساب رصيد مشروع
+  const projStats = id => {
+    const r = receipts.filter(x=>x.projectId===id).reduce((s,x)=>s+x.amount,0);
+    const s = spends.filter(x=>x.projectId===id).reduce((s,x)=>s+x.amount,0);
+    return {r, s, bal:r-s};
+  };
+
+  const save = async () => {
+    if(!name.trim()||saving) return;
+    setSaving(true);
+    await onAdd(name.trim());
+    setSaving(false);
+    setName("");
+    setShow(false);
+  };
+
+  // صفحة تفاصيل المشروع
+  if(sel) {
+    const p    = projects.find(x=>x.id===sel);
+    const st   = projStats(sel);
+    const recs = receipts.filter(x=>x.projectId===sel).sort((a,b)=>b.date.localeCompare(a.date));
+    const spns = spends.filter(x=>x.projectId===sel).sort((a,b)=>b.date.localeCompare(a.date));
+    const isPos = st.bal >= 0;
+
+    return (
+      <div style={{padding:20}}>
+        <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:20}}>
+          <BackBtn onClick={()=>setSel(null)}/>
+          <div style={{fontSize:18,fontWeight:800}}>🏗️ {p?.name}</div>
+        </div>
+
+        {/* رصيد المشروع */}
+        <div style={{
+          background:isPos?"linear-gradient(135deg,#14532d,#166534)":"linear-gradient(135deg,#7f1d1d,#991b1b)",
+          borderRadius:18,padding:20,marginBottom:16,color:"#fff",
+          boxShadow:`0 4px 20px ${isPos?"rgba(22,101,52,0.25)":"rgba(153,27,27,0.25)"}`,
+        }}>
+          <div style={{fontSize:11,color:"rgba(255,255,255,0.6)",marginBottom:4}}>رصيد المشروع</div>
+          <div style={{fontSize:32,fontWeight:900,letterSpacing:-1,marginBottom:14}}>
+            {isPos?"+":"-"}{fmtD(st.bal)}
+          </div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+            <div style={{background:"rgba(255,255,255,0.1)",borderRadius:12,padding:"10px 12px"}}>
+              <div style={{fontSize:10,color:"rgba(255,255,255,0.6)",marginBottom:3}}>↓ إجمالي الاستلام</div>
+              <div style={{fontSize:16,fontWeight:800,color:"#86efac"}}>{fmtD(st.r)}</div>
+            </div>
+            <div style={{background:"rgba(255,255,255,0.1)",borderRadius:12,padding:"10px 12px"}}>
+              <div style={{fontSize:10,color:"rgba(255,255,255,0.6)",marginBottom:3}}>↑ إجمالي الصرف</div>
+              <div style={{fontSize:16,fontWeight:800,color:"#fca5a5"}}>{fmtD(st.s)}</div>
+            </div>
+          </div>
+        </div>
+
+        {/* استلامات المشروع */}
+        {recs.length>0&&(
+          <>
+            <div style={{fontSize:14,fontWeight:800,color:C.green,marginBottom:10}}>
+              ↓ الاستلامات ({toAr(recs.length)})
+            </div>
+            {recs.map(r=>(
+              <div key={r.id} style={{...S.card,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                <div>
+                  <div style={{fontSize:13,fontWeight:700}}>{r.note||"استلام"}</div>
+                  <div style={{fontSize:11,color:C.muted}}>📅 {r.date}</div>
+                </div>
+                <div style={{fontWeight:800,color:C.green}}>+{fmt(r.amount,r.currency)}</div>
+              </div>
+            ))}
+          </>
+        )}
+
+        {/* مصروفات المشروع */}
+        {spns.length>0&&(
+          <>
+            <div style={{fontSize:14,fontWeight:800,color:C.red,margin:"16px 0 10px"}}>
+              ↑ المصروفات ({toAr(spns.length)})
+            </div>
+            {spns.map(r=>(
+              <div key={r.id} style={{...S.card,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                <div>
+                  <div style={{fontSize:13,fontWeight:700}}>{r.note||r.dest||"صرف"}</div>
+                  <div style={{fontSize:11,color:C.muted}}>📅 {r.date}</div>
+                </div>
+                <div style={{fontWeight:800,color:C.red}}>-{fmt(r.amount,r.currency)}</div>
+              </div>
+            ))}
+          </>
+        )}
+
+        {recs.length===0&&spns.length===0&&(
+          <Empty icon="📄" text="ما في معاملات مرتبطة بهذا المشروع"/>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div style={{padding:20}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
+        <div style={{fontSize:20,fontWeight:800}}>🏗️ المشاريع</div>
+        <button onClick={()=>setShow(v=>!v)} style={{
+          ...S.btn,width:"auto",padding:"10px 20px",
+          background:C.gold,color:"#fff",fontSize:14,
+        }}>{show?"✕ إغلاق":"+ مشروع"}</button>
+      </div>
+
+      {/* نموذج إضافة */}
+      {show&&(
+        <div style={{...S.card,marginBottom:16,border:`1.5px solid ${C.gold}40`}}>
+          <Lbl>اسم المشروع</Lbl>
+          <input style={{...S.inp,marginBottom:12}}
+            placeholder="مثال: مشروع بغداد، فيلا الكرادة..."
+            value={name} onChange={e=>setName(e.target.value)}
+            autoFocus onKeyDown={e=>e.key==="Enter"&&save()}
+          />
+          <button onClick={save} disabled={!name.trim()||saving} style={{
+            ...S.btn,
+            background:name.trim()?C.gold:C.border,
+            color:name.trim()?"#fff":C.muted,
+          }}>{saving?"جاري الحفظ...":"✅ حفظ"}</button>
+        </div>
+      )}
+
+      {projects.length===0
+        ? <Empty icon="🏗️" text="ما في مشاريع — أضف مشروع جديد"/>
+        : projects.map(p=>{
+            const st    = projStats(p.id);
+            const isPos = st.bal >= 0;
+            const hasTx = st.r>0||st.s>0;
+            return (
+              <div key={p.id} style={{
+                ...S.card,cursor:"pointer",
+                border:`1px solid ${isPos&&hasTx?"rgba(22,101,52,0.2)":!isPos&&hasTx?"rgba(153,27,27,0.2)":C.border}`,
+              }} onClick={()=>setSel(p.id)}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:hasTx?12:0}}>
+                  <div>
+                    <div style={{fontWeight:800,fontSize:16,marginBottom:3}}>🏗️ {p.name}</div>
+                    <div style={{fontSize:12,color:C.muted}}>
+                      {toAr(receipts.filter(r=>r.projectId===p.id).length)} استلام ·{" "}
+                      {toAr(spends.filter(r=>r.projectId===p.id).length)} صرف
+                    </div>
+                  </div>
+                  <div style={{display:"flex",gap:8,alignItems:"center"}}>
+                    {/* حالة الرصيد */}
+                    {hasTx&&(
+                      <div style={{
+                        fontWeight:900,fontSize:16,
+                        color:isPos?C.green:C.red,
+                        background:isPos?"rgba(22,101,52,0.08)":"rgba(153,27,27,0.08)",
+                        padding:"6px 14px",borderRadius:14,
+                      }}>
+                        {isPos?"+":"-"}{fmtD(st.bal)}
+                      </div>
+                    )}
+                    <button onClick={e=>{e.stopPropagation();if(window.confirm(`تحذف مشروع "${p.name}"؟`))onDelete(p.id);}} style={{
+                      background:"transparent",border:"none",
+                      color:C.red,fontSize:16,cursor:"pointer",padding:4,
+                    }}>🗑️</button>
+                  </div>
+                </div>
+
+                {/* شريط التقدم */}
+                {hasTx&&(
+                  <div style={{background:`${C.border}`,borderRadius:999,height:5,overflow:"hidden"}}>
+                    <div style={{
+                      height:"100%",borderRadius:999,
+                      background:isPos?"linear-gradient(90deg,#14532d,#22c55e)":"linear-gradient(90deg,#991b1b,#ef4444)",
+                      width:`${st.r>0?Math.min(100,Math.round(st.s/st.r*100)):0}%`,
+                      transition:"width 0.4s",
+                    }}/>
+                  </div>
+                )}
+              </div>
+            );
+          })
+      }
+    </div>
+  );
+}
+
 // ══════════ App ══════════
 export default function App() {
   const [page,     setPage]    = useState("home");
@@ -521,6 +728,7 @@ export default function App() {
   const [receipts, setReceipts]= useState([]);
   const [spends,   setSpends]  = useState([]);
   const [salaries, setSalaries]= useState([]);
+  const [projects, setProjects]= useState([]);
 
   useEffect(()=>{
     const u = [];
@@ -536,11 +744,19 @@ export default function App() {
     u.push(onSnapshot(query(collection(db,"salaries_v1"),orderBy("date","desc"),limit(200)),
       s=>setSalaries(s.docs.map(d=>({id:d.id,...d.data()})))));
 
+    u.push(onSnapshot(collection(db,"projects_v2"),
+      s=>setProjects(s.docs.map(d=>({id:d.id,...d.data()})))));
+
     return ()=>{u.forEach(fn=>fn()); clearTimeout(to);};
   },[]);
 
   const addDoc2 = (col,data) => addDoc(collection(db,col),data);
   const del     = (col,id)   => deleteDoc(doc(db,col,id));
+
+  const addProject = async name => {
+    await addDoc(collection(db,"projects_v2"),{name, createdAt:new Date().toISOString()});
+  };
+  const delProject = async id => deleteDoc(doc(db,"projects_v2",id));
 
   if(loading) return (
     <div style={{minHeight:"100vh",background:C.bg,display:"flex",flexDirection:"column",
@@ -553,11 +769,12 @@ export default function App() {
   );
 
   const PAGES = {
-    home:    <HomePage receipts={receipts} spends={spends} salaries={salaries} onNavigate={setPage}/>,
-    receive: <ReceivePage receipts={receipts} onAdd={d=>addDoc2("receipts_v1",d)} onDelete={id=>del("receipts_v1",id)}/>,
-    spend:   <SpendPage spends={spends} onAdd={d=>addDoc2("spends_v1",d)} onDelete={id=>del("spends_v1",id)}/>,
-    report:  <ReportPage receipts={receipts} spends={spends}/>,
-    salary:  <SalaryPage salaries={salaries} onAdd={d=>addDoc2("salaries_v1",d)} onDelete={id=>del("salaries_v1",id)}/>,
+    home:     <HomePage receipts={receipts} spends={spends} salaries={salaries} onNavigate={setPage}/>,
+    receive:  <ReceivePage receipts={receipts} projects={projects} onAdd={d=>addDoc2("receipts_v1",d)} onDelete={id=>del("receipts_v1",id)}/>,
+    spend:    <SpendPage spends={spends} projects={projects} onAdd={d=>addDoc2("spends_v1",d)} onDelete={id=>del("spends_v1",id)}/>,
+    report:   <ReportPage receipts={receipts} spends={spends}/>,
+    salary:   <SalaryPage salaries={salaries} onAdd={d=>addDoc2("salaries_v1",d)} onDelete={id=>del("salaries_v1",id)}/>,
+    projects: <ProjectsPage projects={projects} receipts={receipts} spends={spends} onAdd={addProject} onDelete={delProject}/>,
   };
 
   return (
@@ -571,11 +788,12 @@ export default function App() {
         borderTop:`1px solid ${C.border}`,display:"flex",height:58,zIndex:100,
         boxShadow:"0 -2px 12px rgba(0,0,0,0.06)"}}>
         {[
-          {id:"home",   icon:"🏠", label:"الرئيسية"},
-          {id:"receive",icon:"↓",  label:"استلام",  color:C.green},
-          {id:"spend",  icon:"↑",  label:"مصروف",   color:C.red},
-          {id:"report", icon:"📊", label:"تقرير",   color:C.blue},
-          {id:"salary", icon:"💵", label:"راتب",    color:C.purple},
+          {id:"home",     icon:"🏠", label:"الرئيسية"},
+          {id:"receive",  icon:"↓",  label:"استلام",  color:C.green},
+          {id:"spend",    icon:"↑",  label:"مصروف",   color:C.red},
+          {id:"projects", icon:"🏗️", label:"مشاريع",  color:C.gold},
+          {id:"report",   icon:"📊", label:"تقرير",   color:C.blue},
+          {id:"salary",   icon:"💵", label:"راتب",    color:C.purple},
         ].map(n=>{
           const active = page===n.id;
           const col    = n.color||(active?C.gold:C.muted);
