@@ -62,44 +62,113 @@ const S = {
         padding:16,marginBottom:12,boxShadow:"0 1px 6px rgba(0,0,0,0.05)"},
 };
 
+// ══════════ مساعد: تحويل رقم لكلمات ══════════
+function numToWords(n) {
+  if(!n||isNaN(n)) return "";
+  const num = Math.floor(Math.abs(Number(n)));
+  if(num===0) return "صفر";
+  const ones = ["","واحد","اثنان","ثلاثة","أربعة","خمسة","ستة","سبعة","ثمانية","تسعة",
+    "عشرة","أحد عشر","اثنا عشر","ثلاثة عشر","أربعة عشر","خمسة عشر",
+    "ستة عشر","سبعة عشر","ثمانية عشر","تسعة عشر"];
+  const tens = ["","","عشرون","ثلاثون","أربعون","خمسون","ستون","سبعون","ثمانون","تسعون"];
+  const hundreds = ["","مئة","مئتان","ثلاثمئة","أربعمئة","خمسمئة","ستمئة","سبعمئة","ثمانمئة","تسعمئة"];
+  const readGroup = g => {
+    if(g===0) return "";
+    if(g<20) return ones[g];
+    if(g<100) return tens[Math.floor(g/10)]+(g%10?" و"+ones[g%10]:"");
+    return hundreds[Math.floor(g/100)]+(g%100?" و"+readGroup(g%100):"");
+  };
+  const parts = [];
+  if(num>=1000000000) parts.push(readGroup(Math.floor(num/1000000000))+" مليار");
+  if(num%1000000000>=1000000) parts.push(readGroup(Math.floor((num%1000000000)/1000000))+" مليون");
+  if(num%1000000>=1000) parts.push(readGroup(Math.floor((num%1000000)/1000))+" ألف");
+  if(num%1000>0) parts.push(readGroup(num%1000));
+  return parts.join(" و");
+}
+
+// رقم المعاملة: YYYYMMDD-XXX
+function genTxId() {
+  const d = new Date();
+  const ymd = d.getFullYear().toString() +
+    String(d.getMonth()+1).padStart(2,"0") +
+    String(d.getDate()).padStart(2,"0");
+  const rand = String(Math.floor(Math.random()*900)+100);
+  return `${ymd}-${rand}`;
+}
+
 // ══════════ صفحة الاستلام ══════════
 function ReceivePage({receipts, projects, onAdd, onDelete}) {
   const [show,   setShow]   = useState(false);
-  const [form,   setForm]   = useState({projectId:"",source:"",amount:"",currency:"دينار",note:"",date:today()});
+  const [form,   setForm]   = useState({
+    sourceType: "project",   // project | general
+    projectId:  "",
+    generalDesc:"",
+    amount:     "",
+    currency:   "دينار",
+    exchRate:   "",
+    note:       "",
+    date:       today(),
+  });
   const [saving, setSaving] = useState(false);
   const [done,   setDone]   = useState(false);
 
-  const set = k => v => setForm(f=>({...f,[k]:v}));
-  const valid = form.amount && Number(form.amount) > 0;
+  const set  = k => v => setForm(f=>({...f,[k]:v}));
+  const proj = projects.find(p=>p.id===form.projectId);
+  const amtNum = Number(form.amount)||0;
+  const valid  = amtNum>0 && form.date &&
+    (form.sourceType==="general"||form.projectId);
+
+  const amtInDinar = form.currency==="دولار"
+    ? amtNum * (Number(form.exchRate)||0)
+    : amtNum;
 
   const save = async () => {
     if(!valid||saving) return;
     setSaving(true);
-    const proj = projects.find(p=>p.id===form.projectId);
-    await onAdd({type:"استلام",amount:Number(form.amount),currency:form.currency,
-      projectId:form.projectId||"",projectName:proj?.name||"",
-      source:form.source||proj?.name||"عام",note:form.note,date:form.date,createdAt:new Date().toISOString()});
+    await onAdd({
+      txId:        genTxId(),
+      type:        "استلام",
+      sourceType:  form.sourceType,
+      projectId:   form.sourceType==="project"?form.projectId:"",
+      projectName: form.sourceType==="project"?(proj?.name||""):"",
+      generalDesc: form.sourceType==="general"?form.generalDesc:"",
+      amount:      amtNum,
+      currency:    form.currency,
+      exchRate:    form.currency==="دولار"?Number(form.exchRate)||0:0,
+      amtInDinar:  amtInDinar,
+      amtWords:    numToWords(amtNum)+" "+(form.currency==="دولار"?"دولار":"دينار"),
+      note:        form.note,
+      date:        form.date,
+      createdAt:   new Date().toISOString(),
+    });
     setSaving(false);
     setDone(true);
-    setTimeout(()=>{setDone(false);setForm({projectId:"",source:"",amount:"",currency:"دينار",note:"",date:today()});setShow(false);},1500);
+    setTimeout(()=>{
+      setDone(false);
+      setForm({sourceType:"project",projectId:"",generalDesc:"",amount:"",currency:"دينار",exchRate:"",note:"",date:today()});
+      setShow(false);
+    },1800);
   };
 
-  const projName = id => projects.find(p=>p.id===id)?.name;
-  const total = receipts.filter(r=>r.currency==="دينار"||!r.currency).reduce((s,r)=>s+r.amount,0);
+  const projName = id => projects.find(p=>p.id===id)?.name||"";
+  const totalDin = receipts.filter(r=>r.currency==="دينار"||!r.currency).reduce((s,r)=>s+r.amount,0);
+  const totalDol = receipts.filter(r=>r.currency==="دولار").reduce((s,r)=>s+r.amount,0);
 
   return (
     <div style={{padding:20}}>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
         <div style={{fontSize:20,fontWeight:800,color:C.green}}>↓ الاستلامات</div>
-        <button onClick={()=>setShow(v=>!v)} style={{...S.btn,width:"auto",padding:"10px 20px",background:C.green,color:"#fff",fontSize:14}}>
-          {show?"✕ إغلاق":"+ إضافة"}
-        </button>
+        <button onClick={()=>setShow(v=>!v)} style={{
+          ...S.btn,width:"auto",padding:"10px 20px",
+          background:C.green,color:"#fff",fontSize:14,
+        }}>{show?"✕ إغلاق":"+ إضافة"}</button>
       </div>
 
       {/* إجمالي */}
       <div style={{background:"linear-gradient(135deg,#14532d,#166534)",borderRadius:18,padding:20,marginBottom:16,color:"#fff",boxShadow:"0 4px 20px rgba(22,101,52,0.25)"}}>
         <div style={{fontSize:11,color:"rgba(255,255,255,0.6)",marginBottom:4}}>إجمالي الاستلام</div>
-        <div style={{fontSize:30,fontWeight:900,letterSpacing:-1}}>{fmtD(total)}</div>
+        <div style={{fontSize:30,fontWeight:900,letterSpacing:-1}}>{fmtD(totalDin)}</div>
+        {totalDol>0&&<div style={{fontSize:15,color:"#86efac",fontWeight:700,marginTop:4}}>+ {toAr(totalDol)} $</div>}
         <div style={{fontSize:12,color:"rgba(255,255,255,0.5)",marginTop:6}}>{toAr(receipts.length)} معاملة</div>
       </div>
 
@@ -107,56 +176,151 @@ function ReceivePage({receipts, projects, onAdd, onDelete}) {
       {show&&(
         <div style={{...S.card,marginBottom:16,border:`1.5px solid ${C.green}40`}}>
           {done?(
-            <div style={{textAlign:"center",padding:"20px 0"}}>
-              <div style={{fontSize:36,marginBottom:6}}>✅</div>
-              <div style={{fontWeight:700,color:C.green}}>تم التسجيل</div>
+            <div style={{textAlign:"center",padding:"28px 0"}}>
+              <div style={{fontSize:48,marginBottom:8}}>✅</div>
+              <div style={{fontWeight:800,fontSize:17,color:C.green}}>تم التسجيل بنجاح</div>
             </div>
           ):(
             <>
-              <Lbl>المشروع (اختياري)</Lbl>
-              <select style={{...S.sel,marginBottom:12}} value={form.projectId} onChange={e=>set("projectId")(e.target.value)}>
-                <option value="">📦 بدون مشروع</option>
-                {projects.map(p=><option key={p.id} value={p.id}>🏗️ {p.name}</option>)}
-              </select>
-              <Lbl>المصدر / الوصف</Lbl>
-              <input style={{...S.inp,marginBottom:12}} placeholder="مثال: دفعة من العميل..." value={form.source} onChange={e=>set("source")(e.target.value)}/>
-              <Lbl>المبلغ</Lbl>
-              <div style={{display:"flex",gap:8,marginBottom:12}}>
-                <input style={{...S.inp,flex:2,fontSize:20,fontWeight:800,textAlign:"center"}} type="number" placeholder="٠" value={form.amount} onChange={e=>set("amount")(e.target.value)} autoFocus/>
-                <select style={{...S.sel,flex:1}} value={form.currency} onChange={e=>set("currency")(e.target.value)}>
+              {/* نوع المصدر */}
+              <Lbl>مصدر الاستلام</Lbl>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:14}}>
+                {[["project","🏗️ من مشروع"],["general","📦 عام / متنوع"]].map(([v,l])=>(
+                  <button key={v} onClick={()=>set("sourceType")(v)} style={{
+                    ...S.btn,padding:"12px 8px",fontSize:13,
+                    background:form.sourceType===v?C.green+"18":"transparent",
+                    color:form.sourceType===v?C.green:C.muted,
+                    border:`1.5px solid ${form.sourceType===v?C.green:C.border}`,
+                  }}>{l}</button>
+                ))}
+              </div>
+
+              {/* من مشروع */}
+              {form.sourceType==="project"&&(
+                <>
+                  <Lbl>اختر المشروع</Lbl>
+                  <select style={{...S.sel,marginBottom:14}}
+                    value={form.projectId} onChange={e=>set("projectId")(e.target.value)}>
+                    <option value="">— اختر مشروع —</option>
+                    {projects.map(p=><option key={p.id} value={p.id}>🏗️ {p.name}</option>)}
+                  </select>
+                </>
+              )}
+
+              {/* مصدر عام */}
+              {form.sourceType==="general"&&(
+                <>
+                  <Lbl>وصف المصدر</Lbl>
+                  <input style={{...S.inp,marginBottom:14}}
+                    placeholder="مثال: تحصيل دين، بيع مواد..."
+                    value={form.generalDesc} onChange={e=>set("generalDesc")(e.target.value)} autoFocus/>
+                </>
+              )}
+
+              {/* المبلغ والعملة */}
+              <Lbl>المبلغ والعملة</Lbl>
+              <div style={{display:"flex",gap:8,marginBottom:6}}>
+                <input style={{...S.inp,flex:2,fontSize:22,fontWeight:800,textAlign:"center"}}
+                  type="number" placeholder="٠"
+                  value={form.amount} onChange={e=>set("amount")(e.target.value)}/>
+                <select style={{...S.sel,flex:1}}
+                  value={form.currency} onChange={e=>set("currency")(e.target.value)}>
                   <option value="دينار">🇮🇶 دينار</option>
                   <option value="دولار">🇺🇸 دولار</option>
                 </select>
               </div>
-              <Lbl>ملاحظة</Lbl>
-              <input style={{...S.inp,marginBottom:12}} placeholder="..." value={form.note} onChange={e=>set("note")(e.target.value)}/>
+
+              {/* المبلغ كتابةً */}
+              {amtNum>0&&(
+                <div style={{fontSize:12,color:C.green,fontWeight:600,
+                  marginBottom:14,padding:"8px 12px",background:"rgba(22,101,52,0.06)",
+                  borderRadius:8,border:`1px solid rgba(22,101,52,0.15)`}}>
+                  ✍️ {numToWords(amtNum)} {form.currency==="دولار"?"دولار":"دينار"}
+                </div>
+              )}
+
+              {/* سعر الصرف — فقط للدولار */}
+              {form.currency==="دولار"&&(
+                <>
+                  <Lbl>سعر الصرف (دينار للدولار)</Lbl>
+                  <input style={{...S.inp,marginBottom:6}}
+                    type="number" placeholder="مثال: 1500"
+                    value={form.exchRate} onChange={e=>set("exchRate")(e.target.value)}/>
+                  {amtNum>0&&Number(form.exchRate)>0&&(
+                    <div style={{fontSize:12,color:C.blue,fontWeight:600,
+                      marginBottom:14,padding:"8px 12px",background:"rgba(30,64,175,0.06)",
+                      borderRadius:8,border:`1px solid rgba(30,64,175,0.15)`}}>
+                      💱 يعادل: {fmtD(amtInDinar)}
+                    </div>
+                  )}
+                </>
+              )}
+
+              {/* التاريخ */}
               <Lbl>التاريخ</Lbl>
-              <input style={{...S.inp,marginBottom:16}} type="date" value={form.date} onChange={e=>set("date")(e.target.value)}/>
-              <button onClick={save} disabled={!valid||saving} style={{...S.btn,background:valid?C.green:C.border,color:valid?"#fff":C.muted}}>
-                {saving?"جاري الحفظ...":"✅ تأكيد وحفظ"}
-              </button>
+              <input style={{...S.inp,marginBottom:14}}
+                type="date" value={form.date}
+                onChange={e=>set("date")(e.target.value)}/>
+
+              {/* ملاحظة */}
+              <Lbl>ملاحظة (اختياري)</Lbl>
+              <input style={{...S.inp,marginBottom:18}}
+                placeholder="..." value={form.note}
+                onChange={e=>set("note")(e.target.value)}/>
+
+              <button onClick={save} disabled={!valid||saving} style={{
+                ...S.btn,
+                background:valid?C.green:C.border,
+                color:valid?"#fff":C.muted,
+                fontSize:16,
+              }}>{saving?"جاري الحفظ...":"✅ تأكيد وحفظ"}</button>
             </>
           )}
         </div>
       )}
 
       {/* القائمة */}
-      {receipts.length===0?<Empty icon="📥" text="ما في استلامات بعد"/>:
-        receipts.map(r=>(
+      {receipts.length===0
+        ?<Empty icon="📥" text="ما في استلامات بعد"/>
+        :receipts.map(r=>(
           <div key={r.id} style={S.card}>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
-              <div>
-                <div style={{fontSize:13,color:C.muted,marginBottom:2}}>
-                  {r.projectId&&projName(r.projectId)?`🏗️ ${projName(r.projectId)}`:""} {r.source||"عام"}
+            {/* رقم المعاملة */}
+            {r.txId&&(
+              <div style={{fontSize:10,color:C.muted,fontWeight:600,marginBottom:6,
+                fontFamily:"monospace",letterSpacing:1}}>#{r.txId}</div>
+            )}
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:6}}>
+              <div style={{flex:1,marginLeft:10}}>
+                {/* المصدر */}
+                <div style={{fontSize:13,fontWeight:700,color:C.text,marginBottom:2}}>
+                  {r.sourceType==="project"&&r.projectId
+                    ? `🏗️ ${projName(r.projectId)||r.projectName||"مشروع"}`
+                    : `📦 ${r.generalDesc||r.source||"عام"}`}
                 </div>
-                <div style={{fontSize:12,color:C.muted}}>📅 {r.date}</div>
-                {r.note&&<div style={{fontSize:13,color:C.text,marginTop:3}}>{r.note}</div>}
+                {/* المبلغ كتابةً */}
+                {r.amtWords&&(
+                  <div style={{fontSize:11,color:C.muted,marginBottom:2}}>{r.amtWords}</div>
+                )}
+                <div style={{fontSize:11,color:C.muted}}>📅 {r.date}</div>
+                {r.note&&<div style={{fontSize:12,color:C.text,marginTop:3}}>{r.note}</div>}
+                {/* معادل الدينار */}
+                {r.currency==="دولار"&&r.amtInDinar>0&&(
+                  <div style={{fontSize:11,color:C.blue,marginTop:3}}>
+                    💱 {fmtD(r.amtInDinar)} (بسعر {toAr(r.exchRate||0)})
+                  </div>
+                )}
               </div>
-              <div style={{fontWeight:900,fontSize:17,color:C.green,background:"rgba(22,101,52,0.08)",padding:"4px 12px",borderRadius:16}}>
+              <div style={{fontWeight:900,fontSize:17,color:C.green,
+                background:"rgba(22,101,52,0.08)",padding:"5px 12px",
+                borderRadius:14,flexShrink:0}}>
                 +{fmt(r.amount,r.currency)}
               </div>
             </div>
-            <button onClick={()=>{if(window.confirm("تحذف؟"))onDelete(r.id);}} style={{background:"transparent",border:"none",color:C.red,fontSize:12,cursor:"pointer",padding:"6px 0",fontWeight:600}}>🗑️ حذف</button>
+            <button onClick={()=>{if(window.confirm("تحذف هذا الاستلام؟"))onDelete(r.id);}}
+              style={{background:"transparent",border:"none",color:C.red,
+                fontSize:12,cursor:"pointer",padding:"4px 0",fontWeight:600}}>
+              🗑️ حذف
+            </button>
           </div>
         ))
       }
