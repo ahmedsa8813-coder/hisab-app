@@ -428,7 +428,275 @@ function SpendPage({spends, projects, onAdd, onDelete}) {
 }
 
 // ══════════ صفحة التقرير ══════════
-function ReportPage({receipts, spends}) {
+function ReportPage({receipts, spends, projects}) {
+  const [tab, setTab] = useState("summary"); // summary | branches
+
+  const totR = receipts.filter(r=>r.currency==="دينار"||!r.currency).reduce((s,r)=>s+r.amount,0);
+  const totS = spends.filter(s=>s.currency==="دينار"||!s.currency).reduce((s,r)=>s+r.amount,0);
+  const net  = totR - totS;
+
+  // إحصائيات كل مشروع
+  const projStats = id => {
+    const r = receipts.filter(x=>x.projectId===id&&(x.currency==="دينار"||!x.currency)).reduce((s,x)=>s+x.amount,0);
+    const s = spends.filter(x=>x.projectId===id&&(x.currency==="دينار"||!x.currency)).reduce((s,x)=>s+x.amount,0);
+    return {r, s, bal:r-s};
+  };
+
+  // الأفرع الأربعة
+  const BRANCHES = [
+    {type:"مقاولات", col:"#0f766e", bg:"rgba(15,118,110,0.08)", border:"rgba(15,118,110,0.2)", icon:"🏗"},
+    {type:"واجهات",  col:C.blue,    bg:"rgba(30,64,175,0.08)",  border:"rgba(30,64,175,0.2)",  icon:"🏢"},
+    {type:"ديكور",   col:C.purple,  bg:"rgba(107,33,168,0.08)", border:"rgba(107,33,168,0.2)", icon:"🎨"},
+    {type:"عام",     col:C.gold,    bg:"rgba(184,134,11,0.08)", border:"rgba(184,134,11,0.2)", icon:"📦"},
+  ].map(b=>{
+    const projs = projects.filter(p=>p.type===b.type);
+    const totContract = projs.reduce((s,p)=>s+(p.contract||0),0);
+    const totRec = projs.reduce((s,p)=>s+projStats(p.id).r,0);
+    const totSpe = projs.reduce((s,p)=>s+projStats(p.id).s,0);
+    return {...b, projs, totContract, totRec, totSpe, bal:totRec-totSpe};
+  });
+
+  const ar = n => String(Math.round(n||0)).replace(/\B(?=(\d{3})+(?!\d))/g,",");
+
+  const print = () => {
+    const branchRows = BRANCHES.map(b=>`
+      <tr style="background:#f9f6f0;font-weight:800">
+        <td colspan="4" style="padding:10px 12px;font-size:15px;color:#1C1410">
+          ${b.icon} ${b.type} (${b.projs.length} مشاريع)
+        </td>
+      </tr>
+      ${b.projs.map(p=>{const st=projStats(p.id);return`
+        <tr>
+          <td style="padding:8px 12px;padding-right:24px">${p.name}</td>
+          <td style="padding:8px 12px;color:#166534;font-weight:700">${ar(st.r)} د.ع</td>
+          <td style="padding:8px 12px;color:#991B1B;font-weight:700">${ar(st.s)} د.ع</td>
+          <td style="padding:8px 12px;font-weight:800;color:${st.bal>=0?"#166534":"#991B1B"}">${ar(Math.abs(st.bal))} د.ع</td>
+        </tr>`}).join("")}
+      <tr style="background:#E5DDD4">
+        <td style="padding:8px 12px;font-weight:700">إجمالي ${b.type}</td>
+        <td style="padding:8px 12px;color:#166534;font-weight:800">${ar(b.totRec)} د.ع</td>
+        <td style="padding:8px 12px;color:#991B1B;font-weight:800">${ar(b.totSpe)} د.ع</td>
+        <td style="padding:8px 12px;font-weight:900;color:${b.bal>=0?"#166534":"#991B1B"}">${ar(Math.abs(b.bal))} د.ع</td>
+      </tr>`).join("");
+
+    const html=`<!DOCTYPE html><html dir="rtl" lang="ar"><head><meta charset="UTF-8"/>
+<title>تقرير الأفرع</title>
+<style>body{font-family:Tahoma;padding:24px;direction:rtl;color:#1C1410}
+h1{color:#B8860B;font-size:20px;border-bottom:3px solid #B8860B;padding-bottom:8px;margin-bottom:16px}
+table{width:100%;border-collapse:collapse;font-size:13px;margin-bottom:24px}
+th{background:#1C1410;color:#fff;padding:10px 12px;text-align:right}
+tr:nth-child(even){background:#faf7f2}
+.g{color:#166534;font-weight:800}.r{color:#991B1B;font-weight:800}</style></head>
+<body>
+<h1>📊 تقرير الأفرع المالي</h1>
+<div style="font-size:12px;color:#8A7060;margin-bottom:20px">تاريخ: ${new Date().toLocaleDateString("ar-IQ")}</div>
+<div style="display:flex;gap:16px;margin-bottom:24px">
+  <div style="flex:1;border:1px solid #E5DDD4;border-radius:10px;padding:14px;text-align:center">
+    <div style="font-size:11px;color:#8A7060">إجمالي الاستلام</div>
+    <div style="font-size:20px;font-weight:900;color:#166534">${ar(totR)} د.ع</div>
+  </div>
+  <div style="flex:1;border:1px solid #E5DDD4;border-radius:10px;padding:14px;text-align:center">
+    <div style="font-size:11px;color:#8A7060">إجمالي الصرف</div>
+    <div style="font-size:20px;font-weight:900;color:#991B1B">${ar(totS)} د.ع</div>
+  </div>
+  <div style="flex:1;border:2px solid ${net>=0?"#166534":"#991B1B"};border-radius:10px;padding:14px;text-align:center">
+    <div style="font-size:11px;color:#8A7060">الصافي</div>
+    <div style="font-size:20px;font-weight:900;color:${net>=0?"#166534":"#991B1B"}">${ar(Math.abs(net))} د.ع</div>
+  </div>
+</div>
+<h1>🏗️ تقرير الأفرع</h1>
+<table>
+  <thead><tr><th>المشروع</th><th>الاستلام</th><th>المصروف</th><th>الرصيد</th></tr></thead>
+  <tbody>${branchRows}</tbody>
+</table>
+</body></html>`;
+    const w=window.open("","_blank");w.document.write(html);w.document.close();setTimeout(()=>w.print(),500);
+  };
+
+  return (
+    <div style={{padding:20}}>
+      {/* Header */}
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
+        <div style={{fontSize:20,fontWeight:800}}>📊 التقرير</div>
+        <button onClick={print} style={{...S.btn,width:"auto",padding:"10px 18px",background:C.blue,color:"#fff",fontSize:14}}>🖨️ طباعة</button>
+      </div>
+
+      {/* تبويبتان */}
+      <div style={{display:"flex",background:"#fff",borderRadius:12,padding:4,gap:4,marginBottom:16,border:`1px solid ${C.border}`}}>
+        {[["summary","📊 الملخص العام"],["branches","🏗️ الأفرع"]].map(([v,l])=>(
+          <button key={v} onClick={()=>setTab(v)} style={{
+            flex:1,border:"none",borderRadius:9,padding:"10px",
+            fontWeight:700,fontSize:13,cursor:"pointer",
+            background:tab===v?C.text:"transparent",
+            color:tab===v?"#fff":C.muted,
+          }}>{l}</button>
+        ))}
+      </div>
+
+      {/* ── الملخص العام ── */}
+      {tab==="summary"&&(
+        <>
+          <div style={{
+            background:"linear-gradient(145deg,#1a1a2e,#16213e)",
+            borderRadius:18,padding:22,marginBottom:14,color:"#fff",
+            boxShadow:"0 6px 24px rgba(0,0,0,0.2)",
+          }}>
+            <div style={{fontSize:10,color:"rgba(255,255,255,0.45)",letterSpacing:1,marginBottom:6}}>
+              صافي الرصيد الكلي
+            </div>
+            <div style={{fontSize:34,fontWeight:900,letterSpacing:-1,
+              color:net>=0?"#4ade80":"#f87171",marginBottom:16}}>
+              {net>=0?"+":"-"}{fmtD(net)}
+            </div>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+              <div style={{background:"rgba(255,255,255,0.07)",borderRadius:12,padding:"12px"}}>
+                <div style={{fontSize:9,color:"rgba(255,255,255,0.4)",marginBottom:3}}>↓ إجمالي الاستلام</div>
+                <div style={{fontSize:16,fontWeight:800,color:"#4ade80"}}>{fmtD(totR)}</div>
+              </div>
+              <div style={{background:"rgba(255,255,255,0.07)",borderRadius:12,padding:"12px"}}>
+                <div style={{fontSize:9,color:"rgba(255,255,255,0.4)",marginBottom:3}}>↑ إجمالي الصرف</div>
+                <div style={{fontSize:16,fontWeight:800,color:"#f87171"}}>{fmtD(totS)}</div>
+              </div>
+            </div>
+          </div>
+
+          {receipts.length>0&&(<>
+            <div style={{fontSize:13,fontWeight:800,color:C.green,marginBottom:8}}>↓ آخر الاستلامات</div>
+            {receipts.slice(0,4).map(r=>(
+              <div key={r.id} style={{...S.card,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                <div><div style={{fontSize:13,fontWeight:700}}>{r.generalDesc||r.source||"استلام"}</div>
+                <div style={{fontSize:11,color:C.muted}}>📅 {r.date}</div></div>
+                <div style={{fontWeight:800,color:C.green}}>+{fmt(r.amount,r.currency)}</div>
+              </div>
+            ))}
+          </>)}
+
+          {spends.length>0&&(<>
+            <div style={{fontSize:13,fontWeight:800,color:C.red,margin:"14px 0 8px"}}>↑ آخر المصروفات</div>
+            {spends.slice(0,4).map(r=>(
+              <div key={r.id} style={{...S.card,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                <div><div style={{fontSize:13,fontWeight:700}}>{r.dest||"صرف"}</div>
+                <div style={{fontSize:11,color:C.muted}}>📅 {r.date}</div></div>
+                <div style={{fontWeight:800,color:C.red}}>-{fmt(r.amount,r.currency)}</div>
+              </div>
+            ))}
+          </>)}
+        </>
+      )}
+
+      {/* ── الأفرع ── */}
+      {tab==="branches"&&(
+        <>
+          {/* ملخص الأفرع */}
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:16}}>
+            {BRANCHES.map(b=>(
+              <div key={b.type} style={{
+                background:b.bg,border:`1px solid ${b.border}`,
+                borderRadius:16,padding:"14px 12px",
+              }}>
+                <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:8}}>
+                  <span style={{fontSize:18}}>{b.icon}</span>
+                  <span style={{fontWeight:800,fontSize:14,color:b.col}}>{b.type}</span>
+                  <span style={{fontSize:11,color:C.muted,marginRight:"auto"}}>
+                    {toAr(b.projs.length)} مشاريع
+                  </span>
+                </div>
+                <div style={{fontSize:15,fontWeight:900,
+                  color:b.bal>=0?C.green:C.red}}>
+                  {b.bal>=0?"+":"-"}{fmtD(b.bal)}
+                </div>
+                <div style={{fontSize:10,color:C.muted,marginTop:3}}>
+                  ↓{fmtD(b.totRec)} · ↑{fmtD(b.totSpe)}
+                </div>
+                {b.totContract>0&&(
+                  <div style={{fontSize:10,color:b.col,marginTop:3,fontWeight:600}}>
+                    📋 عقود: {fmtD(b.totContract)}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+
+          {/* تفاصيل كل فرع */}
+          {BRANCHES.map(b=>(
+            <div key={b.type} style={{marginBottom:16}}>
+              {/* عنوان الفرع */}
+              <div style={{
+                background:b.bg, border:`1.5px solid ${b.border}`,
+                borderRadius:14,padding:"12px 16px",marginBottom:8,
+                display:"flex",justifyContent:"space-between",alignItems:"center",
+              }}>
+                <div style={{display:"flex",alignItems:"center",gap:8}}>
+                  <span style={{fontSize:22}}>{b.icon}</span>
+                  <div>
+                    <div style={{fontWeight:800,fontSize:15,color:b.col}}>{b.type}</div>
+                    <div style={{fontSize:11,color:C.muted}}>{toAr(b.projs.length)} مشروع</div>
+                  </div>
+                </div>
+                <div style={{textAlign:"left"}}>
+                  <div style={{fontSize:16,fontWeight:900,color:b.bal>=0?C.green:C.red}}>
+                    {b.bal>=0?"+":"-"}{fmtD(b.bal)}
+                  </div>
+                  <div style={{fontSize:10,color:C.muted}}>صافي الفرع</div>
+                </div>
+              </div>
+
+              {/* مشاريع الفرع */}
+              {b.projs.length===0
+                ?<div style={{...S.card,color:C.muted,textAlign:"center",fontSize:13,padding:12}}>
+                  ما في مشاريع في هذا الفرع
+                </div>
+                :b.projs.map(p=>{
+                  const st = projStats(p.id);
+                  const pct = p.contract>0?Math.min(100,Math.round(st.r/p.contract*100)):0;
+                  return (
+                    <div key={p.id} style={{...S.card,marginBottom:8}}>
+                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:8}}>
+                        <div>
+                          <div style={{fontWeight:700,fontSize:14,color:C.text}}>{p.name}</div>
+                          {p.contract>0&&(
+                            <div style={{fontSize:11,color:C.muted,marginTop:2}}>
+                              📋 عقد: {fmtD(p.contract)}
+                            </div>
+                          )}
+                        </div>
+                        <div style={{fontWeight:900,fontSize:15,
+                          color:st.bal>=0?C.green:C.red}}>
+                          {st.bal>=0?"+":"-"}{fmtD(st.bal)}
+                        </div>
+                      </div>
+
+                      {/* شريط التحصيل */}
+                      {p.contract>0&&(
+                        <>
+                          <div style={{background:C.border,borderRadius:999,height:4,overflow:"hidden",marginBottom:4}}>
+                            <div style={{height:"100%",borderRadius:999,
+                              background:b.col,width:`${pct}%`}}/>
+                          </div>
+                          <div style={{display:"flex",justifyContent:"space-between",fontSize:10,color:C.muted}}>
+                            <span>تحصّل {toAr(pct)}%</span>
+                            <span>↓{fmtD(st.r)} · ↑{fmtD(st.s)}</span>
+                          </div>
+                        </>
+                      )}
+                      {!p.contract&&(
+                        <div style={{fontSize:11,color:C.muted}}>
+                          ↓{fmtD(st.r)} · ↑{fmtD(st.s)}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })
+              }
+            </div>
+          ))}
+        </>
+      )}
+    </div>
+  );
+}
+
+
   const totR = receipts.filter(r=>r.currency==="دينار"||!r.currency).reduce((s,r)=>s+r.amount,0);
   const totS = spends.filter(s=>s.currency==="دينار"||!s.currency).reduce((s,r)=>s+r.amount,0);
   const net  = totR - totS;
@@ -493,29 +761,6 @@ h1{color:#B8860B;font-size:20px;border-bottom:2px solid #B8860B;padding-bottom:8
         <>
           <div style={{fontSize:14,fontWeight:800,color:C.green,marginBottom:10}}>↓ آخر الاستلامات</div>
           {receipts.slice(0,5).map(r=>(
-            <div key={r.id} style={{...S.card,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-              <div><div style={{fontSize:13,fontWeight:700}}>{r.source||"عام"}</div><div style={{fontSize:11,color:C.muted}}>📅 {r.date} {r.note&&"· "+r.note}</div></div>
-              <div style={{fontWeight:800,color:C.green}}>+{fmt(r.amount,r.currency)}</div>
-            </div>
-          ))}
-        </>
-      )}
-
-      {/* آخر المصروفات */}
-      {spends.length>0&&(
-        <>
-          <div style={{fontSize:14,fontWeight:800,color:C.red,margin:"16px 0 10px"}}>↑ آخر المصروفات</div>
-          {spends.slice(0,5).map(r=>(
-            <div key={r.id} style={{...S.card,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-              <div><div style={{fontSize:13,fontWeight:700}}>{r.dest||"عام"}</div><div style={{fontSize:11,color:C.muted}}>📅 {r.date} {r.note&&"· "+r.note}</div></div>
-              <div style={{fontWeight:800,color:C.red}}>-{fmt(r.amount,r.currency)}</div>
-            </div>
-          ))}
-        </>
-      )}
-    </div>
-  );
-}
 
 // ══════════ صفحة الرواتب ══════════
 function SalaryPage({salaries, onAdd, onDelete}) {
@@ -1150,7 +1395,7 @@ export default function App() {
     home:     <HomePage receipts={receipts} spends={spends} salaries={salaries} onNavigate={setPage}/>,
     receive:  <ReceivePage receipts={receipts} projects={projects} onAdd={d=>addDoc2("receipts_v1",d)} onDelete={id=>del("receipts_v1",id)}/>,
     spend:    <SpendPage spends={spends} projects={projects} onAdd={d=>addDoc2("spends_v1",d)} onDelete={id=>del("spends_v1",id)}/>,
-    report:   <ReportPage receipts={receipts} spends={spends}/>,
+    report:   <ReportPage receipts={receipts} spends={spends} projects={projects}/>,
     salary:   <SalaryPage salaries={salaries} onAdd={d=>addDoc2("salaries_v1",d)} onDelete={id=>del("salaries_v1",id)}/>,
     projects: <ProjectsPage projects={projects} receipts={receipts} spends={spends} onAdd={addProject} onDelete={delProject}/>,
   };
