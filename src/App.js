@@ -785,12 +785,12 @@ function ProjectsPage({projects, receipts, spends, onAdd, onDelete}) {
   };
 
   const save = async () => {
-    if(!form.name.trim()||saving) return;
+    if(!form.name.trim()||!form.contract||Number(form.contract)<=0||saving) return;
     setSaving(true);
     await onAdd({
       name:     form.name.trim(),
       type:     form.type,
-      contract: Number(form.contract)||0,
+      contract: Number(form.contract),
       currency: form.currency,
       createdAt:new Date().toISOString(),
     });
@@ -799,134 +799,163 @@ function ProjectsPage({projects, receipts, spends, onAdd, onDelete}) {
     setShow(false);
   };
 
+  const valid = form.name.trim() && Number(form.contract)>0;
+
   // ── تفاصيل مشروع ──
   if(sel) {
-    const p   = projects.find(x=>x.id===sel);
-    const st  = projStats(sel);
+    const p        = projects.find(x=>x.id===sel);
+    const st       = projStats(sel);
     const contract = p?.contract||0;
-    const collected = st.totR;
-    const pct = contract>0?Math.min(100,Math.round(collected/contract*100)):0;
-    const remaining = contract - collected;
-    const isPos = st.bal>=0;
+    const pct      = contract>0?Math.min(100,Math.round(st.totR/contract*100)):0;
+    const uncollected = Math.max(0, contract - st.totR);
+    const netBal   = st.totR - st.totS;
     const recs = receipts.filter(r=>r.projectId===sel).sort((a,b)=>b.date.localeCompare(a.date));
     const spns = spends.filter(s=>s.projectId===sel).sort((a,b)=>b.date.localeCompare(a.date));
+    const typeCol = p?.type==="واجهات"?C.blue:p?.type==="ديكور"?C.purple:p?.type==="مقاولات"?"#0f766e":C.gold;
 
     return (
-      <div style={{padding:20}}>
+      <div style={{padding:20,paddingBottom:30}}>
+
+        {/* Header */}
         <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:20}}>
           <BackBtn onClick={()=>setSel(null)}/>
           <div>
-            <div style={{fontSize:18,fontWeight:800}}>{p?.name}</div>
-            <div style={{fontSize:12,color:C.muted}}>{p?.type}</div>
+            <div style={{fontSize:20,fontWeight:900,color:C.text}}>{p?.name}</div>
+            <span style={{fontSize:12,fontWeight:700,color:typeCol,
+              background:typeCol+"18",padding:"2px 10px",borderRadius:20}}>
+              {p?.type}
+            </span>
           </div>
         </div>
 
-        {/* قيمة العقد */}
-        {contract>0&&(
-          <div style={{...S.card,marginBottom:12,border:`1px solid rgba(184,134,11,0.25)`,background:"rgba(184,134,11,0.04)"}}>
-            <div style={{fontSize:11,color:C.gold,fontWeight:700,marginBottom:4}}>📋 قيمة العقد الكلية</div>
-            <div style={{fontSize:22,fontWeight:900,color:C.gold}}>{fmtD(contract)}</div>
-            <div style={{fontSize:11,color:C.muted,marginTop:6,marginBottom:10}}>
-              {numToWords(contract)} دينار
-            </div>
-            {/* شريط التحصيل */}
-            <div style={{marginBottom:6}}>
-              <div style={{display:"flex",justifyContent:"space-between",fontSize:11,color:C.muted,marginBottom:4}}>
-                <span>نسبة التحصيل</span>
-                <span style={{fontWeight:700,color:C.green}}>{toAr(pct)}%</span>
-              </div>
-              <div style={{background:C.border,borderRadius:999,height:8,overflow:"hidden"}}>
-                <div style={{height:"100%",borderRadius:999,
-                  background:`linear-gradient(90deg,#14532d,#22c55e)`,
-                  width:`${pct}%`,transition:"width 0.4s"}}/>
-              </div>
-            </div>
-            <div style={{display:"flex",justifyContent:"space-between",fontSize:12,marginTop:6}}>
-              <span style={{color:C.green,fontWeight:700}}>✅ تم التحصيل: {fmtD(collected)}</span>
-              <span style={{color:remaining>=0?C.muted:C.red,fontWeight:700}}>
-                {remaining>=0?"⏳ المتبقي:":"⚠️ تجاوز:"} {fmtD(Math.abs(remaining))}
-              </span>
-            </div>
-          </div>
-        )}
-
-        {/* رصيد المشروع */}
+        {/* ١. قيمة العقد */}
         <div style={{
-          background:isPos?"linear-gradient(135deg,#14532d,#166534)":"linear-gradient(135deg,#7f1d1d,#991b1b)",
-          borderRadius:18,padding:20,marginBottom:14,color:"#fff",
-          boxShadow:`0 4px 20px ${isPos?"rgba(22,101,52,0.2)":"rgba(153,27,27,0.2)"}`,
+          background:"linear-gradient(145deg,#1C1410,#2d1f15)",
+          borderRadius:20,padding:22,marginBottom:12,color:"#fff",
+          boxShadow:"0 6px 24px rgba(28,20,16,0.3)",
         }}>
-          <div style={{fontSize:11,color:"rgba(255,255,255,0.6)",marginBottom:4}}>
-            {isPos?"✅ رصيد موجب":"⚠️ رصيد سالب"}
+          <div style={{fontSize:10,color:"rgba(255,255,255,0.45)",
+            fontWeight:700,letterSpacing:1,marginBottom:6}}>قيمة العقد الكلية</div>
+          <div style={{fontSize:30,fontWeight:900,color:C.gold,
+            letterSpacing:-1,marginBottom:4}}>
+            {fmtD(contract)}
           </div>
-          <div style={{fontSize:30,fontWeight:900,letterSpacing:-1,marginBottom:14}}>
-            {isPos?"+":"-"}{fmtD(st.bal)}
+          <div style={{fontSize:11,color:"rgba(255,255,255,0.4)",marginBottom:16}}>
+            {numToWords(contract)} دينار
+          </div>
+          {/* شريط التحصيل */}
+          <div style={{marginBottom:6}}>
+            <div style={{display:"flex",justifyContent:"space-between",
+              fontSize:11,marginBottom:6}}>
+              <span style={{color:"rgba(255,255,255,0.5)"}}>نسبة التحصيل</span>
+              <span style={{fontWeight:800,fontSize:14,color:C.gold}}>{toAr(pct)}%</span>
+            </div>
+            <div style={{background:"rgba(255,255,255,0.1)",borderRadius:999,height:8,overflow:"hidden"}}>
+              <div style={{height:"100%",borderRadius:999,
+                background:`linear-gradient(90deg,${C.gold},#fbbf24)`,
+                width:`${pct}%`,transition:"width 0.5s"}}/>
+            </div>
+          </div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginTop:14}}>
+            <div style={{background:"rgba(255,255,255,0.07)",borderRadius:12,padding:"12px"}}>
+              <div style={{fontSize:9,color:"rgba(255,255,255,0.4)",marginBottom:3}}>✅ تم التحصيل</div>
+              <div style={{fontSize:15,fontWeight:800,color:"#4ade80"}}>{fmtD(st.totR)}</div>
+            </div>
+            <div style={{background:"rgba(255,255,255,0.07)",borderRadius:12,padding:"12px"}}>
+              <div style={{fontSize:9,color:"rgba(255,255,255,0.4)",marginBottom:3}}>⏳ المتبقي للتحصيل</div>
+              <div style={{fontSize:15,fontWeight:800,color:uncollected>0?"#fbbf24":"#4ade80"}}>
+                {fmtD(uncollected)}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* ٢. رصيد المشروع (استلام - مصروف) */}
+        <div style={{
+          background:netBal>=0?"linear-gradient(135deg,#14532d,#166534)":"linear-gradient(135deg,#7f1d1d,#991b1b)",
+          borderRadius:18,padding:18,marginBottom:12,color:"#fff",
+          boxShadow:`0 4px 20px ${netBal>=0?"rgba(22,101,52,0.25)":"rgba(153,27,27,0.25)"}`,
+        }}>
+          <div style={{fontSize:10,color:"rgba(255,255,255,0.5)",marginBottom:4,letterSpacing:1}}>
+            صافي المشروع (استلام − مصروف)
+          </div>
+          <div style={{fontSize:28,fontWeight:900,letterSpacing:-1,marginBottom:14}}>
+            {netBal>=0?"+":"-"}{fmtD(netBal)}
           </div>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
             <div style={{background:"rgba(255,255,255,0.1)",borderRadius:12,padding:"12px"}}>
-              <div style={{fontSize:10,color:"rgba(255,255,255,0.6)",marginBottom:3}}>↓ الاستلامات ({toAr(st.recCount)})</div>
-              <div style={{fontSize:16,fontWeight:800,color:"#86efac"}}>{fmtD(st.totR)}</div>
-              {st.totRDol>0&&<div style={{fontSize:11,color:"#86efac",marginTop:2}}>+ {toAr(st.totRDol)} $</div>}
+              <div style={{fontSize:9,color:"rgba(255,255,255,0.55)",marginBottom:4}}>
+                ↓ استلام ({toAr(st.recCount)})
+              </div>
+              <div style={{fontSize:16,fontWeight:800,color:"#4ade80"}}>{fmtD(st.totR)}</div>
+              {st.totRDol>0&&<div style={{fontSize:10,color:"#4ade80",marginTop:2}}>+ {toAr(st.totRDol)} $</div>}
             </div>
             <div style={{background:"rgba(255,255,255,0.1)",borderRadius:12,padding:"12px"}}>
-              <div style={{fontSize:10,color:"rgba(255,255,255,0.6)",marginBottom:3}}>↑ المصروفات ({toAr(st.speCount)})</div>
-              <div style={{fontSize:16,fontWeight:800,color:"#fca5a5"}}>{fmtD(st.totS)}</div>
-              {st.totSDol>0&&<div style={{fontSize:11,color:"#fca5a5",marginTop:2}}>+ {toAr(st.totSDol)} $</div>}
+              <div style={{fontSize:9,color:"rgba(255,255,255,0.55)",marginBottom:4}}>
+                ↑ مصروف ({toAr(st.speCount)})
+              </div>
+              <div style={{fontSize:16,fontWeight:800,color:"#f87171"}}>{fmtD(st.totS)}</div>
+              {st.totSDol>0&&<div style={{fontSize:10,color:"#f87171",marginTop:2}}>+ {toAr(st.totSDol)} $</div>}
             </div>
           </div>
         </div>
 
-        {/* استلامات المشروع */}
-        {recs.length>0&&(
-          <>
-            <div style={{fontSize:14,fontWeight:800,color:C.green,marginBottom:10}}>
-              ↓ الاستلامات ({toAr(recs.length)})
-            </div>
-            {recs.map(r=>(
-              <div key={r.id} style={{...S.card}}>
-                <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
-                  <div>
-                    {r.txId&&<div style={{fontSize:10,color:C.muted,fontFamily:"monospace",marginBottom:3}}>#{r.txId}</div>}
-                    <div style={{fontSize:13,fontWeight:700}}>{r.generalDesc||r.source||"استلام"}</div>
-                    {r.amtWords&&<div style={{fontSize:11,color:C.muted}}>{r.amtWords}</div>}
-                    <div style={{fontSize:11,color:C.muted}}>📅 {r.date}</div>
-                    {r.note&&<div style={{fontSize:12,color:C.text,marginTop:2}}>{r.note}</div>}
+        {/* ٣. سجل الاستلامات */}
+        <div style={{fontWeight:800,fontSize:14,color:C.green,
+          marginBottom:10,marginTop:8,display:"flex",alignItems:"center",gap:6}}>
+          <div style={{width:4,height:16,background:C.green,borderRadius:2}}/>
+          الاستلامات ({toAr(recs.length)})
+        </div>
+        {recs.length===0
+          ?<div style={{...S.card,color:C.muted,textAlign:"center",padding:16,fontSize:13}}>لا يوجد استلامات</div>
+          :recs.map(r=>(
+            <div key={r.id} style={{...S.card}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
+                <div style={{flex:1,marginLeft:10}}>
+                  {r.txId&&<div style={{fontSize:9,color:C.muted,fontFamily:"monospace",
+                    marginBottom:2,letterSpacing:0.5}}>#{r.txId}</div>}
+                  <div style={{fontSize:13,fontWeight:700,color:C.text}}>
+                    {r.generalDesc||r.source||"استلام"}
                   </div>
-                  <div style={{fontWeight:800,color:C.green,background:"rgba(22,101,52,0.08)",padding:"4px 12px",borderRadius:12,flexShrink:0}}>
-                    +{fmt(r.amount,r.currency)}
-                  </div>
+                  {r.amtWords&&<div style={{fontSize:10,color:C.muted,marginTop:1}}>{r.amtWords}</div>}
+                  <div style={{fontSize:11,color:C.muted,marginTop:2}}>📅 {r.date}</div>
+                  {r.note&&<div style={{fontSize:11,color:C.text,marginTop:2}}>{r.note}</div>}
+                </div>
+                <div style={{fontWeight:900,fontSize:16,color:C.green,
+                  background:"rgba(22,101,52,0.08)",padding:"5px 14px",
+                  borderRadius:12,flexShrink:0}}>
+                  +{fmt(r.amount,r.currency)}
                 </div>
               </div>
-            ))}
-          </>
-        )}
-
-        {/* مصروفات المشروع */}
-        {spns.length>0&&(
-          <>
-            <div style={{fontSize:14,fontWeight:800,color:C.red,margin:"16px 0 10px"}}>
-              ↑ المصروفات ({toAr(spns.length)})
             </div>
-            {spns.map(r=>(
-              <div key={r.id} style={{...S.card}}>
-                <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
-                  <div>
-                    {r.txId&&<div style={{fontSize:10,color:C.muted,fontFamily:"monospace",marginBottom:3}}>#{r.txId}</div>}
-                    <div style={{fontSize:13,fontWeight:700}}>{r.note||r.dest||"صرف"}</div>
-                    <div style={{fontSize:11,color:C.muted}}>📅 {r.date}</div>
-                  </div>
-                  <div style={{fontWeight:800,color:C.red,background:"rgba(153,27,27,0.08)",padding:"4px 12px",borderRadius:12,flexShrink:0}}>
-                    -{fmt(r.amount,r.currency)}
-                  </div>
+          ))
+        }
+
+        {/* ٤. سجل المصروفات */}
+        <div style={{fontWeight:800,fontSize:14,color:C.red,
+          marginBottom:10,marginTop:16,display:"flex",alignItems:"center",gap:6}}>
+          <div style={{width:4,height:16,background:C.red,borderRadius:2}}/>
+          المصروفات ({toAr(spns.length)})
+        </div>
+        {spns.length===0
+          ?<div style={{...S.card,color:C.muted,textAlign:"center",padding:16,fontSize:13}}>لا يوجد مصروفات</div>
+          :spns.map(r=>(
+            <div key={r.id} style={{...S.card}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
+                <div>
+                  {r.txId&&<div style={{fontSize:9,color:C.muted,fontFamily:"monospace",marginBottom:2}}>#{r.txId}</div>}
+                  <div style={{fontSize:13,fontWeight:700,color:C.text}}>{r.note||r.dest||"صرف"}</div>
+                  <div style={{fontSize:11,color:C.muted,marginTop:2}}>📅 {r.date}</div>
+                </div>
+                <div style={{fontWeight:900,fontSize:16,color:C.red,
+                  background:"rgba(153,27,27,0.08)",padding:"5px 14px",
+                  borderRadius:12,flexShrink:0}}>
+                  -{fmt(r.amount,r.currency)}
                 </div>
               </div>
-            ))}
-          </>
-        )}
-
-        {recs.length===0&&spns.length===0&&(
-          <Empty icon="📄" text="ما في معاملات مرتبطة بهذا المشروع"/>
-        )}
+            </div>
+          ))
+        }
       </div>
     );
   }
@@ -963,7 +992,7 @@ function ProjectsPage({projects, receipts, spends, onAdd, onDelete}) {
             ))}
           </div>
 
-          <Lbl>قيمة العقد الكلية (اختياري)</Lbl>
+          <Lbl>قيمة العقد الكلية <span style={{color:C.red}}>*</span></Lbl>
           <div style={{display:"flex",gap:8,marginBottom:6}}>
             <input style={{...S.inp,flex:2,fontSize:18,fontWeight:700,textAlign:"center"}}
               type="number" placeholder="٠"
@@ -980,10 +1009,10 @@ function ProjectsPage({projects, receipts, spends, onAdd, onDelete}) {
             </div>
           )}
 
-          <button onClick={save} disabled={!form.name.trim()||saving} style={{
+          <button onClick={save} disabled={!valid||saving} style={{
             ...S.btn,
-            background:form.name.trim()?C.gold:C.border,
-            color:form.name.trim()?"#fff":C.muted,
+            background:valid?C.gold:C.border,
+            color:valid?"#fff":C.muted,
           }}>{saving?"جاري الحفظ...":"✅ حفظ المشروع"}</button>
         </div>
       )}
