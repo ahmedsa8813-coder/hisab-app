@@ -585,104 +585,6 @@ function SpendPage({spends, projects, onAdd, onDelete}) {
   );
 }
 
-
-  const [show,   setShow]   = useState(false);
-  const [form,   setForm]   = useState({projectId:"",dest:"",amount:"",currency:"دينار",note:"",date:today()});
-  const [saving, setSaving] = useState(false);
-  const [done,   setDone]   = useState(false);
-
-  const set = k => v => setForm(f=>({...f,[k]:v}));
-  const valid = form.amount && Number(form.amount) > 0;
-
-  const save = async () => {
-    if(!valid||saving) return;
-    setSaving(true);
-    const proj = projects.find(p=>p.id===form.projectId);
-    await onAdd({type:"صرف",amount:Number(form.amount),currency:form.currency,
-      projectId:form.projectId||"",projectName:proj?.name||"",
-      dest:form.dest||proj?.name||"عام",note:form.note,date:form.date,createdAt:new Date().toISOString()});
-    setSaving(false);
-    setDone(true);
-    setTimeout(()=>{setDone(false);setForm({projectId:"",dest:"",amount:"",currency:"دينار",note:"",date:today()});setShow(false);},1500);
-  };
-
-  const projName = id => projects.find(p=>p.id===id)?.name;
-  const total = spends.filter(s=>s.currency==="دينار"||!s.currency).reduce((s,r)=>s+r.amount,0);
-
-  return (
-    <div style={{padding:20}}>
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
-        <div style={{fontSize:20,fontWeight:800,color:C.red}}>↑ المصروفات</div>
-        <button onClick={()=>setShow(v=>!v)} style={{...S.btn,width:"auto",padding:"10px 20px",background:C.red,color:"#fff",fontSize:14}}>
-          {show?"✕ إغلاق":"+ إضافة"}
-        </button>
-      </div>
-
-      <div style={{background:"linear-gradient(135deg,#7f1d1d,#991b1b)",borderRadius:18,padding:20,marginBottom:16,color:"#fff",boxShadow:"0 4px 20px rgba(153,27,27,0.25)"}}>
-        <div style={{fontSize:11,color:"rgba(255,255,255,0.6)",marginBottom:4}}>إجمالي الصرف</div>
-        <div style={{fontSize:30,fontWeight:900,letterSpacing:-1}}>{fmtD(total)}</div>
-        <div style={{fontSize:12,color:"rgba(255,255,255,0.5)",marginTop:6}}>{toAr(spends.length)} معاملة</div>
-      </div>
-
-      {show&&(
-        <div style={{...S.card,marginBottom:16,border:`1.5px solid ${C.red}40`}}>
-          {done?(
-            <div style={{textAlign:"center",padding:"20px 0"}}>
-              <div style={{fontSize:36,marginBottom:6}}>✅</div>
-              <div style={{fontWeight:700,color:C.red}}>تم التسجيل</div>
-            </div>
-          ):(
-            <>
-              <Lbl>المشروع (اختياري)</Lbl>
-              <select style={{...S.sel,marginBottom:12}} value={form.projectId} onChange={e=>set("projectId")(e.target.value)}>
-                <option value="">📦 بدون مشروع</option>
-                {projects.map(p=><option key={p.id} value={p.id}>🏗️ {p.name}</option>)}
-              </select>
-              <Lbl>الوجهة / الوصف</Lbl>
-              <input style={{...S.inp,marginBottom:12}} placeholder="مثال: مواد بناء، رواتب..." value={form.dest} onChange={e=>set("dest")(e.target.value)} autoFocus/>
-              <Lbl>المبلغ</Lbl>
-              <div style={{display:"flex",gap:8,marginBottom:12}}>
-                <input style={{...S.inp,flex:2,fontSize:20,fontWeight:800,textAlign:"center"}} type="number" placeholder="٠" value={form.amount} onChange={e=>set("amount")(e.target.value)}/>
-                <select style={{...S.sel,flex:1}} value={form.currency} onChange={e=>set("currency")(e.target.value)}>
-                  <option value="دينار">🇮🇶 دينار</option>
-                  <option value="دولار">🇺🇸 دولار</option>
-                </select>
-              </div>
-              <Lbl>ملاحظة</Lbl>
-              <input style={{...S.inp,marginBottom:12}} placeholder="..." value={form.note} onChange={e=>set("note")(e.target.value)}/>
-              <Lbl>التاريخ</Lbl>
-              <input style={{...S.inp,marginBottom:16}} type="date" value={form.date} onChange={e=>set("date")(e.target.value)}/>
-              <button onClick={save} disabled={!valid||saving} style={{...S.btn,background:valid?C.red:C.border,color:valid?"#fff":C.muted}}>
-                {saving?"جاري الحفظ...":"✅ تأكيد وحفظ"}
-              </button>
-            </>
-          )}
-        </div>
-      )}
-
-      {spends.length===0?<Empty icon="📤" text="ما في مصروفات بعد"/>:
-        spends.map(r=>(
-          <div key={r.id} style={S.card}>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
-              <div>
-                <div style={{fontSize:13,color:C.muted,marginBottom:2}}>
-                  {r.projectId&&projName(r.projectId)?`🏗️ ${projName(r.projectId)}`:""} {r.dest||"عام"}
-                </div>
-                <div style={{fontSize:12,color:C.muted}}>📅 {r.date}</div>
-                {r.note&&<div style={{fontSize:13,color:C.text,marginTop:3}}>{r.note}</div>}
-              </div>
-              <div style={{fontWeight:900,fontSize:17,color:C.red,background:"rgba(153,27,27,0.08)",padding:"4px 12px",borderRadius:16}}>
-                -{fmt(r.amount,r.currency)}
-              </div>
-            </div>
-            <button onClick={()=>{if(window.confirm("تحذف؟"))onDelete(r.id);}} style={{background:"transparent",border:"none",color:C.red,fontSize:12,cursor:"pointer",padding:"6px 0",fontWeight:600}}>🗑️ حذف</button>
-          </div>
-        ))
-      }
-    </div>
-  );
-}
-
 // ══════════ صفحة التقرير ══════════
 function ReportPage({receipts, spends, projects}) {
   const [tab, setTab] = useState("summary"); // summary | branches
@@ -1683,6 +1585,4 @@ export default function App() {
       </div>
     </div>
   );
-}
-
 }
