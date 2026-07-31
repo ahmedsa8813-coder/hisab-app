@@ -727,14 +727,16 @@ function ProjPage({proj,txs,onBack,onAddTx,onDelTx,onClose,onDel,onReset}){
   };
 
   const doClose=async()=>{
-    if((bDin>0&&tDin!==100)||(bDol>0&&tDol!==100)){
+    const hasDin=(p.recDin||0)>0||(p.spdDin||0)>0;
+    const hasDol=(p.recDol||0)>0||(p.spdDol||0)>0;
+    if((hasDin&&tDin!==100)||(hasDol&&tDol!==100)){
       alert("مجموع النسب يجب أن يكون 100%");return;}
     setClosing(true);
     const mkDists=pct=>[
       {fundId:"contracting",pct:pct.contract},
       {fundId:"partners",pct:pct.partners},
     ];
-    await onClose(p,bDin>0?mkDists(pctDin):[],bDol>0?mkDists(pctDol):[]);
+    await onClose(p,bDin>0?mkDists(pctDin):[],bDol>0?mkDists(pctDol):[]);  // distribute only if profit exists
     setClosing(false);setShowClose(false);
   };
 
@@ -1071,7 +1073,7 @@ function ProjPage({proj,txs,onBack,onAddTx,onDelTx,onClose,onDel,onReset}){
                 </div>
 
                 {/* توزيع الدينار */}
-                {bDin>0&&(
+                {((p.recDin||0)>0||(p.spdDin||0)>0)&&(
                   <div style={{marginBottom:16}}>
                     <div style={{fontSize:12,fontWeight:700,color:"#16A34A",marginBottom:12}}>
                       🇮🇶 توزيع ربح الدينار — {fD(bDin)}
@@ -1080,12 +1082,13 @@ function ProjPage({proj,txs,onBack,onAddTx,onDelTx,onClose,onDel,onReset}){
                       <div style={{background:"#FFFBEB",borderRadius:12,padding:14,border:"1px solid #D9770620"}}>
                         <div style={{fontSize:11,fontWeight:700,color:"#D97706",marginBottom:8}}>🏗️ المقاولات</div>
                         <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:6}}>
-                          <input type="number" min="0" max="100" value={pctDin.contract}
-                            onChange={e=>{const v=Math.min(100,Number(e.target.value));
+                          <input type="number" inputMode="numeric" pattern="[0-9]*"
+                            min="0" max="100" value={pctDin.contract}
+                            onChange={e=>{const v=Math.min(100,Math.max(0,Number(e.target.value)||0));
                               setPctDin({contract:v,partners:100-v});}}
-                            style={{width:"100%",border:"1px solid #E2E8F0",borderRadius:8,
-                              padding:"8px",fontSize:18,fontWeight:700,textAlign:"center",
-                              outline:"none",fontFamily:"Tahoma"}}/>
+                            style={{width:"100%",border:"2px solid #D97706",borderRadius:10,
+                              padding:"12px",fontSize:22,fontWeight:700,textAlign:"center",
+                              outline:"none",fontFamily:"Tahoma",color:"#D97706"}}/>
                           <span style={{fontSize:16,color:"#64748B",flexShrink:0}}>%</span>
                         </div>
                         <div style={{fontSize:12,fontWeight:700,color:"#D97706",textAlign:"center"}}>
@@ -1095,12 +1098,13 @@ function ProjPage({proj,txs,onBack,onAddTx,onDelTx,onClose,onDel,onReset}){
                       <div style={{background:"#FAF5FF",borderRadius:12,padding:14,border:"1px solid #9333EA20"}}>
                         <div style={{fontSize:11,fontWeight:700,color:"#9333EA",marginBottom:8}}>👥 الشركاء</div>
                         <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:6}}>
-                          <input type="number" min="0" max="100" value={pctDin.partners}
-                            onChange={e=>{const v=Math.min(100,Number(e.target.value));
+                          <input type="number" inputMode="numeric" pattern="[0-9]*"
+                            min="0" max="100" value={pctDin.partners}
+                            onChange={e=>{const v=Math.min(100,Math.max(0,Number(e.target.value)||0));
                               setPctDin({partners:v,contract:100-v});}}
-                            style={{width:"100%",border:"1px solid #E2E8F0",borderRadius:8,
-                              padding:"8px",fontSize:18,fontWeight:700,textAlign:"center",
-                              outline:"none",fontFamily:"Tahoma"}}/>
+                            style={{width:"100%",border:"2px solid #9333EA",borderRadius:10,
+                              padding:"12px",fontSize:22,fontWeight:700,textAlign:"center",
+                              outline:"none",fontFamily:"Tahoma",color:"#9333EA"}}/>
                           <span style={{fontSize:16,color:"#64748B",flexShrink:0}}>%</span>
                         </div>
                         <div style={{fontSize:12,fontWeight:700,color:"#9333EA",textAlign:"center"}}>
@@ -1132,7 +1136,7 @@ function ProjPage({proj,txs,onBack,onAddTx,onDelTx,onClose,onDel,onReset}){
                 )}
 
                 {/* توزيع الدولار */}
-                {bDol>0&&(
+                {((p.recDol||0)>0||(p.spdDol||0)>0)&&(
                   <div style={{marginBottom:16}}>
                     <div style={{fontSize:12,fontWeight:700,color:"#2563EB",marginBottom:12}}>
                       🇺🇸 توزيع ربح الدولار — {f$(bDol)}
@@ -1141,12 +1145,13 @@ function ProjPage({proj,txs,onBack,onAddTx,onDelTx,onClose,onDel,onReset}){
                       <div style={{background:"#FFFBEB",borderRadius:12,padding:14,border:"1px solid #D9770620"}}>
                         <div style={{fontSize:11,fontWeight:700,color:"#D97706",marginBottom:8}}>🏗️ المقاولات</div>
                         <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:6}}>
-                          <input type="number" min="0" max="100" value={pctDol.contract}
-                            onChange={e=>{const v=Math.min(100,Number(e.target.value));
+                          <input type="number" inputMode="numeric" pattern="[0-9]*"
+                            min="0" max="100" value={pctDol.contract}
+                            onChange={e=>{const v=Math.min(100,Math.max(0,Number(e.target.value)||0));
                               setPctDol({contract:v,partners:100-v});}}
-                            style={{width:"100%",border:"1px solid #E2E8F0",borderRadius:8,
-                              padding:"8px",fontSize:18,fontWeight:700,textAlign:"center",
-                              outline:"none",fontFamily:"Tahoma"}}/>
+                            style={{width:"100%",border:"2px solid #D97706",borderRadius:10,
+                              padding:"12px",fontSize:22,fontWeight:700,textAlign:"center",
+                              outline:"none",fontFamily:"Tahoma",color:"#D97706"}}/>
                           <span style={{fontSize:16,color:"#64748B",flexShrink:0}}>%</span>
                         </div>
                         <div style={{fontSize:12,fontWeight:700,color:"#D97706",textAlign:"center"}}>
@@ -1156,12 +1161,13 @@ function ProjPage({proj,txs,onBack,onAddTx,onDelTx,onClose,onDel,onReset}){
                       <div style={{background:"#FAF5FF",borderRadius:12,padding:14,border:"1px solid #9333EA20"}}>
                         <div style={{fontSize:11,fontWeight:700,color:"#9333EA",marginBottom:8}}>👥 الشركاء</div>
                         <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:6}}>
-                          <input type="number" min="0" max="100" value={pctDol.partners}
-                            onChange={e=>{const v=Math.min(100,Number(e.target.value));
+                          <input type="number" inputMode="numeric" pattern="[0-9]*"
+                            min="0" max="100" value={pctDol.partners}
+                            onChange={e=>{const v=Math.min(100,Math.max(0,Number(e.target.value)||0));
                               setPctDol({partners:v,contract:100-v});}}
-                            style={{width:"100%",border:"1px solid #E2E8F0",borderRadius:8,
-                              padding:"8px",fontSize:18,fontWeight:700,textAlign:"center",
-                              outline:"none",fontFamily:"Tahoma"}}/>
+                            style={{width:"100%",border:"2px solid #9333EA",borderRadius:10,
+                              padding:"12px",fontSize:22,fontWeight:700,textAlign:"center",
+                              outline:"none",fontFamily:"Tahoma",color:"#9333EA"}}/>
                           <span style={{fontSize:16,color:"#64748B",flexShrink:0}}>%</span>
                         </div>
                         <div style={{fontSize:12,fontWeight:700,color:"#9333EA",textAlign:"center"}}>
@@ -1192,11 +1198,11 @@ function ProjPage({proj,txs,onBack,onAddTx,onDelTx,onClose,onDel,onReset}){
                 )}
 
                 <button onClick={doClose}
-                  disabled={closing||(bDin>0&&tDin!==100)||(bDol>0&&tDol!==100)}
+                  disabled={closing||(((p.recDin||0)>0||(p.spdDin||0)>0)&&tDin!==100)||(((p.recDol||0)>0||(p.spdDol||0)>0)&&tDol!==100)}
                   style={{width:"100%",border:"none",borderRadius:12,padding:"14px",fontSize:15,
                     fontWeight:700,cursor:"pointer",fontFamily:"Tahoma",
-                    background:(bDin<=0||tDin===100)&&(bDol<=0||tDol===100)?"#7C3AED":"#E2E8F0",
-                    color:(bDin<=0||tDin===100)&&(bDol<=0||tDol===100)?"#fff":"#94A3B8"}}>
+                    background:(tDin===100)&&(tDol===100)?"#7C3AED":"#E2E8F0",
+                    color:(tDin===100)&&(tDol===100)?"#fff":"#94A3B8"}}>
                   {closing?"جاري التوزيع...":"🏁 تأكيد الإغلاق وتوزيع الأرباح"}
                 </button>
               </div>
