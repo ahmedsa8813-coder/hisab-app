@@ -378,12 +378,57 @@ function SpendPage({spends, projects, onAdd, onDelete}) {
     setImgPreview("");
   };
 
+  const printSpend = data => {
+    const ar = n => String(Math.round(n||0)).replace(/\B(?=(\d{3})+(?!\d))/g,",");
+    const typeLabel =
+      data.spendType==="project"  ? "صرف على مشروع: "+data.projectName :
+      data.spendType==="asset"    ? "شراء عدة: "+data.toolName+" ("+data.toolBranch+")" :
+      data.spendType==="workshop" ? "تطوير ورشة: "+data.branch :
+      "سلفة شخصية: "+data.personName;
+    const html = "<!DOCTYPE html><html dir='rtl' lang='ar'><head><meta charset='UTF-8'/><title>مستند صرف #"+data.txId+"</title>"
+      +"<style>body{font-family:Tahoma,Arial;padding:32px;direction:rtl;color:#1C1410;margin:0}"
+      +".hdr{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:3px solid #1C1410;padding-bottom:16px;margin-bottom:20px}"
+      +".logo{font-size:26px;font-weight:700}.sub{font-size:13px;color:#8A7060;margin-top:3px}"
+      +".txid{font-size:12px;font-family:monospace;border:1px solid #ddd;padding:4px 10px;border-radius:4px;color:#8A7060}"
+      +".amt{text-align:center;background:#F4F2EE;border-radius:8px;padding:18px;margin-bottom:20px}"
+      +".amt-n{font-size:30px;font-weight:700;color:#991B1B}"
+      +".amt-w{font-size:13px;color:#8A7060;margin-top:5px}"
+      +".tbl{width:100%;border-collapse:collapse;margin-bottom:20px;font-size:13px}"
+      +".tbl td{padding:9px 12px;border-bottom:1px solid #E5DDD4}"
+      +".tbl .lb{background:#F4F2EE;color:#8A7060;font-weight:600;width:35%}"
+      +".img-sec img{width:100%;max-height:260px;object-fit:cover;border-radius:8px;border:1px solid #ddd}"
+      +".sigs{display:grid;grid-template-columns:1fr 1fr 1fr;gap:20px;margin-top:36px;text-align:center}"
+      +".sig-line{border-top:1px solid #1C1410;margin-top:48px;margin-bottom:8px}"
+      +".sig-lbl{font-size:11px;color:#8A7060}"
+      +".ftr{display:flex;justify-content:space-between;font-size:11px;color:#B4B2A9;margin-top:20px;padding-top:12px;border-top:1px solid #E5DDD4}"
+      +"@media print{body{padding:16px}}</style></head><body>"
+      +"<div class='hdr'><div><div class='logo'>حساب</div><div class='sub'>مستند صرف رسمي</div></div><div class='txid'>#"+data.txId+"</div></div>"
+      +"<div class='amt'><div style='font-size:11px;color:#8A7060;margin-bottom:6px'>المبلغ المصروف</div>"
+      +"<div class='amt-n'>"+ar(data.amount)+" "+(data.currency==="دولار"?"$":"د.ع")+"</div>"
+      +"<div class='amt-w'>"+(data.amtWords||"")+"</div>"
+      +(data.currency==="دولار"&&data.amtInDinar?"<div style='font-size:12px;color:#1E40AF;margin-top:4px'>يعادل "+ar(data.amtInDinar)+" د.ع</div>":"")
+      +"</div>"
+      +"<table class='tbl'><tr><td class='lb'>نوع الصرف</td><td>"+typeLabel+"</td></tr>"
+      +"<tr><td class='lb'>التاريخ</td><td>"+data.date+"</td></tr>"
+      +(data.note?"<tr><td class='lb'>ملاحظة</td><td>"+data.note+"</td></tr>":"")
+      +"</table>"
+      +(data.imageBase64?"<div class='img-sec'><div style='font-size:12px;color:#8A7060;margin-bottom:8px;font-weight:600'>صورة الوثيقة</div><img src='"+data.imageBase64+"' alt='وثيقة'/></div>":"")
+      +"<div class='sigs'><div><div class='sig-line'></div><div class='sig-lbl'>توقيع المسؤول</div></div>"
+      +"<div><div class='sig-line'></div><div class='sig-lbl'>توقيع المحاسب</div></div>"
+      +"<div><div class='sig-line'></div><div class='sig-lbl'>توقيع المدير</div></div></div>"
+      +"<div class='ftr'><span>نظام حساب</span><span>"+new Date().toLocaleDateString("ar-IQ")+"</span></div>"
+      +"</body></html>";
+    const w=window.open("","_blank");w.document.write(html);w.document.close();
+    setTimeout(()=>w.print(),600);
+  };
+
   const save = async () => {
     if(!valid||saving) return;
     setSaving(true);
     const proj = projects.find(p=>p.id===form.projectId);
     const amtInDinar = form.currency==="دولار"?amtN*(Number(form.exchRate)||0):amtN;
-    await onAdd({
+    const txId = genTxId();
+    const data = {
       type:"صرف",
       spendType: form.spendType,
       amount:    amtN,
@@ -401,10 +446,13 @@ function SpendPage({spends, projects, onAdd, onDelete}) {
       note:        form.note,
       date:        form.date,
       imageBase64: form.imageBase64,
-      txId:        genTxId(),
+      txId,
       createdAt:   new Date().toISOString(),
-    });
+    };
+    await onAdd(data);
     setSaving(false);
+    // طباعة تلقائية إجبارية
+    printSpend(data);
     setDone(true);
     setTimeout(()=>{ setDone(false); resetForm(); setShow(false); },1600);
   };
@@ -619,12 +667,17 @@ function SpendPage({spends, projects, onAdd, onDelete}) {
                   />
                 </div>
               )}
-              <button onClick={()=>{if(window.confirm("تحذف؟"))onDelete(r.id);}}
-                style={{background:"transparent",border:"none",color:C.red,
-                  fontSize:12,cursor:"pointer",padding:"4px 0",fontWeight:600}}>
-                🗑️ حذف
-              </button>
-            </div>
+              <div style={{display:"flex",gap:8,marginTop:6}}>
+                <button onClick={()=>printSpend(r)} style={{
+                  flex:1,background:"transparent",border:`1px solid ${C.border}`,
+                  color:C.muted,fontSize:12,cursor:"pointer",padding:"6px",
+                  borderRadius:8,fontFamily:"Tahoma",
+                }}>🖨️ طباعة</button>
+                <button onClick={()=>{if(window.confirm("تحذف؟"))onDelete(r.id);}} style={{
+                  flex:1,background:"transparent",border:"none",color:C.red,
+                  fontSize:12,cursor:"pointer",padding:"6px 0",fontWeight:600,
+                }}>🗑️ حذف</button>
+              </div>
           );
         })
       }
