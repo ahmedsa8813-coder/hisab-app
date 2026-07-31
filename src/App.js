@@ -122,7 +122,7 @@ export default function App() {
   const [page,     setPage]    = useState("home");
   const [selFund,  setSelFund] = useState(null);
   const [loading,  setLoading] = useState(true);
-  const [balances, setBalances]= useState({});
+  const [balances, setBalances]= useState({});  // { fundId: { din: 0, dol: 0 } }
   const [txs,      setTxs]    = useState([]);
 
   // تحميل Tabler Icons
@@ -143,7 +143,14 @@ export default function App() {
 
     unsubs.push(onSnapshot(collection(db, "fund_balances"), snap => {
       const b = {};
-      snap.docs.forEach(d => { b[d.id] = d.data().balance || 0; });
+      snap.docs.forEach(d => {
+        const data = d.data();
+        // دعم النسخة القديمة (balance رقم) والجديدة (din/dol)
+        b[d.id] = {
+          din: data.din ?? data.balance ?? 0,
+          dol: data.dol ?? 0,
+        };
+      });
       setBalances(b);
       setLoading(false);
     }, () => setLoading(false)));
@@ -156,77 +163,159 @@ export default function App() {
     return () => { unsubs.forEach(u => u()); clearTimeout(timer); };
   }, []);
 
+  // مساعد: رصيد صندوق
+  const getBal = (fundId) => balances[fundId] || { din: 0, dol: 0 };
+
   // ── إضافة معاملة لصندوق ──────────────────────────────────
   const addTx = async (fundId, type, amount, note, date, currency = "دينار", exchRate = 0) => {
-    const amt        = Math.round(Number(amount));
+    const amt    = Math.round(Number(amount));
     if (!amt || amt <= 0) return;
-    const amtInDinar = currency === "دولار" ? amt * (Number(exchRate) || 0) : amt;
-    const cur        = balances[fundId] || 0;
-    const newBal     = type === "إيداع" ? cur + (amtInDinar || amt) : cur - (amtInDinar || amt);
-    await setDoc(doc(db, "fund_balances", fundId), { balance: newBal }, { merge: true });
+    const cur    = getBal(fundId);
+    const isDol  = currency === "دولار";
+    const amtInDinar = isDol ? amt * (Number(exchRate) || 0) : amt;
+    const newDin = type === "إيداع"
+      ? cur.din + (isDol ? amtInDinar : amt)
+      : cur.din - (isDol ? amtInDinar : amt);
+    const newDol = isDol
+      ? (type === "إيداع" ? cur.dol + amt : cur.dol - amt)
+      : cur.dol;
+
+    await setDoc(doc(db, "fund_balances", fundId),
+      { din: newDin, dol: newDol }, { merge: true });
+
     await addDoc(collection(db, "fund_transactions"), {
       fundId,
       fundName:    FUNDS.find(f => f.id === fundId)?.name || "",
       type, amount: amt, currency,
       exchRate:    Number(exchRate) || 0,
-      amtInDinar:  amtInDinar || amt,
+      amtInDinar,
       note:        note || "",
       date:        date || today(),
-      balanceAfter: newBal,
+      balAfterDin: newDin,
+      balAfterDol: newDol,
       createdAt:   new Date().toISOString(),
     });
   };
 
-  // ── إيداع لصندوق الشركاء → توزيع تلقائي ─────────────────
-  const depositToPartners = async (totalAmt, note, date) => {
-    const amt = Math.round(Number(totalAmt));
+  // ── تحويل أرباح من صندوق → صندوق الشركاء ─────────────────
+  const transferProfit = async (fromFundId, amount, currency, exchRate, note, date) => {
+    const amt      = Math.round(Number(amount));
     if (!amt || amt <= 0) return;
-    const mainNew = (balances["partners"] || 0) + amt;
-    await setDoc(doc(db, "fund_balances", "partners"), { balance: mainNew }, { merge: true });
+    const isDol    = currency === "دولار";
+    const amtInDin = isDol ? amt * (Number(exchRate) || 0) : amt;
+    const fromFund = FUNDS.find(f => f.id === fromFundId);
+
+    // ١. اسحب من الصندوق المصدر
+    const fromBal  = getBal(fromFundId);
+    const fromDin  = isDol ? fromBal.din - amtInDin : fromBal.din - amt;
+    const fromDol  = isDol ? fromBal.dol - amt : fromBal.dol;
+    await setDoc(doc(db, "fund_balances", fromFundId),
+      { din: fromDin, dol: fromDol }, { merge: true });
+    await addDoc(collection(db, "fund_transactions"), {
+      fundId: fromFundId,
+      fundName: fromFund?.name || "",
+      type: "تحويل أرباح",
+      amount: amt, currency, exchRate: Number(exchRate) || 0, amtInDinar: amtInDin,
+      note: "تحويل أرباح → صندوق الشركاء" + (note ? " — " + note : ""),
+      date: date || today(),
+      balAfterDin: fromDin, balAfterDol: fromDol,
+      isTransfer: true,
+      createdAt: new Date().toISOString(),
+    });
+
+    // ٢. أضف لصندوق الشركاء الرئيسي
+    const mainBal  = getBal("partners");
+    const mainDin  = mainBal.din + amtInDin;
+    const mainDol  = isDol ? mainBal.dol + amt : mainBal.dol;
+    await setDoc(doc(db, "fund_balances", "partners"),
+      { din: mainDin, dol: mainDol }, { merge: true });
     await addDoc(collection(db, "fund_transactions"), {
       fundId: "partners", fundName: "صندوق أرباح الشركاء",
-      type: "إيداع", amount: amt, currency: "دينار", exchRate: 0, amtInDinar: amt,
-      note: note || "", date: date || today(),
-      balanceAfter: mainNew, createdAt: new Date().toISOString(),
+      type: "إيداع أرباح",
+      amount: amt, currency, exchRate: Number(exchRate) || 0, amtInDinar: amtInDin,
+      note: "أرباح من " + (fromFund?.name || fromFundId) + (note ? " — " + note : ""),
+      date: date || today(),
+      balAfterDin: mainDin, balAfterDol: mainDol,
+      isTransfer: true,
+      createdAt: new Date().toISOString(),
     });
+
+    // ٣. وزّع على الشركاء الأربعة
     for (const p of PARTNERS) {
-      const share  = Math.round(amt * p.share / 100);
+      const share  = Math.round(amtInDin * p.share / 100);
       const pId    = "partner_" + p.id;
-      const pNew   = (balances[pId] || 0) + share;
-      await setDoc(doc(db, "fund_balances", pId), { balance: pNew }, { merge: true });
+      const pBal   = getBal(pId);
+      const pNew   = pBal.din + share;
+      await setDoc(doc(db, "fund_balances", pId),
+        { din: pNew, dol: pBal.dol }, { merge: true });
       await addDoc(collection(db, "fund_transactions"), {
         fundId: pId, fundName: p.name,
         type: "إيداع", amount: share, currency: "دينار", exchRate: 0, amtInDinar: share,
-        note: "توزيع " + p.share + "% — " + (note || ""),
+        note: "حصة " + p.share + "% من أرباح " + (fromFund?.name || "") + (note ? " — " + note : ""),
         date: date || today(),
-        balanceAfter: pNew,
+        balAfterDin: pNew, balAfterDol: pBal.dol,
         isDistribution: true,
         createdAt: new Date().toISOString(),
       });
     }
   };
 
+  // ── إيداع لصندوق الشركاء مباشرة ─────────────────────────
+  const depositToPartners = async (totalAmt, note, date) => {
+    const amt    = Math.round(Number(totalAmt));
+    if (!amt || amt <= 0) return;
+    const mainBal = getBal("partners");
+    const mainNew = mainBal.din + amt;
+    await setDoc(doc(db, "fund_balances", "partners"),
+      { din: mainNew, dol: mainBal.dol }, { merge: true });
+    await addDoc(collection(db, "fund_transactions"), {
+      fundId: "partners", fundName: "صندوق أرباح الشركاء",
+      type: "إيداع", amount: amt, currency: "دينار", exchRate: 0, amtInDinar: amt,
+      note: note || "", date: date || today(),
+      balAfterDin: mainNew, balAfterDol: mainBal.dol,
+      createdAt: new Date().toISOString(),
+    });
+    for (const p of PARTNERS) {
+      const share  = Math.round(amt * p.share / 100);
+      const pId    = "partner_" + p.id;
+      const pBal   = getBal(pId);
+      const pNew   = pBal.din + share;
+      await setDoc(doc(db, "fund_balances", pId),
+        { din: pNew, dol: pBal.dol }, { merge: true });
+      await addDoc(collection(db, "fund_transactions"), {
+        fundId: pId, fundName: p.name,
+        type: "إيداع", amount: share, currency: "دينار", exchRate: 0, amtInDinar: share,
+        note: "توزيع " + p.share + "% — " + (note || ""),
+        date: date || today(),
+        balAfterDin: pNew, balAfterDol: pBal.dol,
+        isDistribution: true,
+        createdAt: new Date().toISOString(),
+      });
+    }
+  };
+
+
   // ── سحب شريك ────────────────────────────────────────────
   const withdrawPartner = async (partnerId, amount, note, date) => {
     const amt   = Math.round(Number(amount));
     const pId   = "partner_" + partnerId;
-    const avail = balances[pId] || 0;
+    const pBal  = getBal(pId);
+    const avail = pBal.din;
     if (amt > avail) {
       alert("لا يمكن السحب — الرصيد غير كافٍ\nالمتاح: " + fmtD(avail));
       return false;
     }
-    const pNew    = avail - amt;
-    const mainNew = (balances["partners"] || 0) - amt;
-    await setDoc(doc(db, "fund_balances", pId),        { balance: pNew    }, { merge: true });
-    await setDoc(doc(db, "fund_balances", "partners"), { balance: mainNew }, { merge: true });
-    await addDoc(collection(db, "fund_transactions"), {
-      fundId: pId,
-      fundName: PARTNERS.find(p => p.id === partnerId)?.name || "",
-      type: "سحب", amount: amt, currency: "دينار", exchRate: 0, amtInDinar: amt,
-      note: note || "",
-      date: date || today(),
-      balanceAfter: pNew,
-      createdAt: new Date().toISOString(),
+    const pNew    = pBal.din - amt;
+    const mainBal = getBal("partners");
+    const mainNew = mainBal.din - amt;
+    await setDoc(doc(db,"fund_balances",pId),        { din:pNew,    dol:pBal.din   }, { merge:true });
+    await setDoc(doc(db,"fund_balances","partners"), { din:mainNew, dol:mainBal.dol }, { merge:true });
+    await addDoc(collection(db,"fund_transactions"), {
+      fundId:pId, fundName:PARTNERS.find(p=>p.id===partnerId)?.name||"",
+      type:"سحب", amount:amt, currency:"دينار", exchRate:0, amtInDinar:amt,
+      note:note||"", date:date||today(),
+      balAfterDin:pNew, balAfterDol:pBal.dol,
+      createdAt:new Date().toISOString(),
     });
     return true;
   };
@@ -234,22 +323,22 @@ export default function App() {
   // ── حذف معاملة ──────────────────────────────────────────
   const deleteTx = async tx => {
     if (!window.confirm("تحذف هذه المعاملة؟")) return;
-    const cur    = balances[tx.fundId] || 0;
-    const newBal = tx.type === "إيداع" ? cur - (tx.amtInDinar || tx.amount) : cur + (tx.amtInDinar || tx.amount);
-    await setDoc(doc(db, "fund_balances", tx.fundId), { balance: newBal }, { merge: true });
-    await deleteDoc(doc(db, "fund_transactions", tx.id));
+    const cur   = getBal(tx.fundId);
+    const isDol = tx.currency === "دولار";
+    const amtD  = tx.amtInDinar || tx.amount;
+    const isIn  = tx.type === "إيداع" || tx.type === "إيداع أرباح";
+    const newDin = isIn ? cur.din - amtD : cur.din + amtD;
+    const newDol = isDol ? (isIn ? cur.dol - tx.amount : cur.dol + tx.amount) : cur.dol;
+    await setDoc(doc(db,"fund_balances",tx.fundId), { din:newDin, dol:newDol }, { merge:true });
+    await deleteDoc(doc(db,"fund_transactions",tx.id));
   };
 
   // ── شاشة التحميل ────────────────────────────────────────
   if (loading) return (
-    <div style={{
-      minHeight:"100vh", background:"#F1F5F9",
-      display:"flex", flexDirection:"column",
-      alignItems:"center", justifyContent:"center",
-      gap:12, fontFamily:"Tahoma", direction:"rtl",
-    }}>
+    <div style={{minHeight:"100vh",background:"#F1F5F9",display:"flex",flexDirection:"column",
+      alignItems:"center",justifyContent:"center",gap:12,fontFamily:"Tahoma",direction:"rtl"}}>
       <div style={{fontSize:22,fontWeight:700,color:"#1E293B"}}>{COMPANY.name}</div>
-      <div style={{ fontSize:13, color:"#64748B" }}>جاري التحميل...</div>
+      <div style={{fontSize:13,color:"#64748B"}}>جاري التحميل...</div>
     </div>
   );
 
@@ -257,34 +346,38 @@ export default function App() {
   if (page === "partners")
     return <PartnersPage
       partners={PARTNERS} balances={balances} txs={txs}
-      onBack={() => setPage("home")}
+      onBack={()=>setPage("home")}
       onDeposit={depositToPartners}
       onWithdraw={withdrawPartner}
       onDelete={deleteTx}
     />;
 
-  if (page === "fund" && selFund)
+  if (page === "fund" && selFund) {
+    const bal = getBal(selFund);
     return <FundDetail
-      fund={FUNDS.find(f => f.id === selFund)}
-      balance={balances[selFund] || 0}
-      txs={txs.filter(t => t.fundId === selFund)}
-      onBack={() => { setPage("home"); setSelFund(null); }}
-      onAdd={(type, amt, note, date, cur, exch) => addTx(selFund, type, amt, note, date, cur, exch)}
+      fund={FUNDS.find(f=>f.id===selFund)}
+      balDin={bal.din} balDol={bal.dol}
+      txs={txs.filter(t=>t.fundId===selFund)}
+      onBack={()=>{ setPage("home"); setSelFund(null); }}
+      onAdd={(type,amt,note,date,cur,exch)=>addTx(selFund,type,amt,note,date,cur,exch)}
+      onTransfer={(amt,cur,exch,note,date)=>transferProfit(selFund,amt,cur,exch,note,date)}
       onDelete={deleteTx}
     />;
+  }
 
   return <FundsList
     funds={FUNDS} balances={balances}
-    onSelect={id => {
-      if (id === "partners") { setPage("partners"); }
+    onSelect={id=>{
+      if (id==="partners") setPage("partners");
       else { setSelFund(id); setPage("fund"); }
     }}
   />;
 }
 
+
 // ─── قائمة الصناديق ─────────────────────────────────────────
 function FundsList({ funds, balances, onSelect }) {
-  const total = funds.reduce((s, f) => s + (balances[f.id] || 0), 0);
+  const total = funds.reduce((s, f) => s + ((balances[f.id]||{}).din||0), 0);
 
   return (
     <div style={{
@@ -316,8 +409,8 @@ function FundsList({ funds, balances, onSelect }) {
         {/* شبكة الصناديق */}
         <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(240px,1fr))", gap:14 }}>
           {funds.map(f => {
-            const bal   = balances[f.id] || 0;
-            const isPos = bal >= 0;
+          const bal = balances[f.id] || {din:0, dol:0};
+          const isPos = bal.din >= 0;
             return (
               <button key={f.id} onClick={() => onSelect(f.id)} style={{
                 background:"#fff", border:"1px solid #E2E8F0",
@@ -380,30 +473,41 @@ function FundsList({ funds, balances, onSelect }) {
 }
 
 // ─── تفاصيل صندوق ───────────────────────────────────────────
-function FundDetail({ fund, balance, txs, onBack, onAdd, onDelete }) {
-  const [form,   setForm]   = useState({ type:"إيداع", amount:"", currency:"دينار", exchRate:"", note:"", date:today() });
-  const [saving, setSaving] = useState(false);
-  const [done,   setDone]   = useState(false);
+function FundDetail({ fund, balDin=0, balDol=0, txs, onBack, onAdd, onTransfer, onDelete }) {
+  const [form,     setForm]    = useState({ type:"إيداع", amount:"", currency:"دينار", exchRate:"", note:"", date:today() });
+  const [trForm,   setTrForm]  = useState({ amount:"", currency:"دينار", exchRate:"", note:"", date:today() });
+  const [tab,      setTab]     = useState("tx");    // tx | transfer
+  const [saving,   setSaving]  = useState(false);
+  const [done,     setDone]    = useState(false);
+  const [trDone,   setTrDone]  = useState(false);
 
-  const set        = k => v => setForm(f => ({ ...f, [k]: v }));
+  const set   = k => v => setForm(f => ({ ...f, [k]: v }));
+  const setTr = k => v => setTrForm(f => ({ ...f, [k]: v }));
   const amtN       = Number(form.amount) || 0;
   const amtInDinar = form.currency === "دولار" ? amtN * (Number(form.exchRate) || 0) : amtN;
   const valid      = amtN > 0 && form.date;
+  const trAmtN     = Number(trForm.amount) || 0;
+  const trAmtDin   = trForm.currency === "دولار" ? trAmtN * (Number(trForm.exchRate) || 0) : trAmtN;
+  const trValid    = trAmtN > 0 && trForm.date;
 
   const save = async () => {
     if (!valid || saving) return;
     setSaving(true);
     await onAdd(form.type, form.amount, form.note, form.date, form.currency, form.exchRate);
-    setSaving(false);
-    setDone(true);
-    setTimeout(() => {
-      setDone(false);
-      setForm({ type:"إيداع", amount:"", currency:"دينار", exchRate:"", note:"", date:today() });
-    }, 1400);
+    setSaving(false); setDone(true);
+    setTimeout(() => { setDone(false); setForm({ type:"إيداع", amount:"", currency:"دينار", exchRate:"", note:"", date:today() }); }, 1400);
   };
 
-  const totIn  = txs.filter(t => t.type === "إيداع").reduce((s, t) => s + (t.amtInDinar || t.amount), 0);
-  const totOut = txs.filter(t => t.type === "سحب").reduce((s, t) => s + (t.amtInDinar || t.amount), 0);
+  const saveTransfer = async () => {
+    if (!trValid || saving) return;
+    setSaving(true);
+    await onTransfer(trForm.amount, trForm.currency, trForm.exchRate, trForm.note, trForm.date);
+    setSaving(false); setTrDone(true);
+    setTimeout(() => { setTrDone(false); setTrForm({ amount:"", currency:"دينار", exchRate:"", note:"", date:today() }); }, 1600);
+  };
+
+  const totIn  = txs.filter(t => t.type === "إيداع" || t.type === "إيداع أرباح").reduce((s, t) => s + (t.amtInDinar || t.amount), 0);
+  const totOut = txs.filter(t => t.type === "سحب" || t.type === "تحويل أرباح").reduce((s, t) => s + (t.amtInDinar || t.amount), 0);
 
   return (
     <div style={{ minHeight:"100vh", background:"#F1F5F9", fontFamily:"Tahoma", direction:"rtl" }}>
@@ -418,11 +522,8 @@ function FundDetail({ fund, balance, txs, onBack, onAdd, onDelete }) {
           boxShadow:"0 1px 4px rgba(0,0,0,0.04)",
         }}>
           <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:18 }}>
-            <div style={{
-              width:50, height:50, borderRadius:14,
-              background:fund.light,
-              display:"flex", alignItems:"center", justifyContent:"center",
-            }}>
+            <div style={{ width:50, height:50, borderRadius:14, background:fund.light,
+              display:"flex", alignItems:"center", justifyContent:"center" }}>
               <i className={`ti ${fund.icon}`} style={{ fontSize:26, color:fund.color }} aria-hidden="true"/>
             </div>
             <div>
@@ -431,41 +532,176 @@ function FundDetail({ fund, balance, txs, onBack, onAdd, onDelete }) {
             </div>
           </div>
 
-          {/* الرصيد */}
-          <div style={{
-            background: balance >= 0 ? "#F0FDF4" : "#FFF1F2",
-            borderRadius:12, padding:"16px 18px", marginBottom:14,
-          }}>
-            <div style={{ fontSize:11, color:"#64748B", marginBottom:4 }}>الرصيد الحالي</div>
-            <div style={{ fontSize:34, fontWeight:700, letterSpacing:-1, color: balance >= 0 ? "#16A34A" : "#DC2626" }}>
-              {balance >= 0 ? "" : "-"}{fmtD(balance)}
+          {/* الرصيدان */}
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:14 }}>
+            <div style={{ background: balDin >= 0 ? "#F0FDF4" : "#FFF1F2", borderRadius:12, padding:"14px" }}>
+              <div style={{ fontSize:10, color:"#64748B", marginBottom:4 }}>🇮🇶 رصيد الدينار</div>
+              <div style={{ fontSize:22, fontWeight:700, color: balDin >= 0 ? "#16A34A" : "#DC2626" }}>
+                {balDin >= 0 ? "" : "-"}{fmtD(balDin)}
+              </div>
+            </div>
+            <div style={{ background: balDol >= 0 ? "#EFF6FF" : "#FFF1F2", borderRadius:12, padding:"14px" }}>
+              <div style={{ fontSize:10, color:"#64748B", marginBottom:4 }}>🇺🇸 رصيد الدولار</div>
+              <div style={{ fontSize:22, fontWeight:700, color: balDol >= 0 ? "#2563EB" : "#DC2626" }}>
+                {balDol >= 0 ? "" : "-"}{toAr(Math.abs(Math.round(balDol)))} $
+              </div>
             </div>
           </div>
 
           <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
             <div style={{ background:"#F0FDF4", borderRadius:12, padding:"12px 14px" }}>
               <div style={{ fontSize:10, color:"#64748B", marginBottom:4 }}>↓ إجمالي الإيداع</div>
-              <div style={{ fontSize:16, fontWeight:700, color:"#16A34A" }}>{fmtD(totIn)}</div>
+              <div style={{ fontSize:14, fontWeight:700, color:"#16A34A" }}>{fmtD(totIn)}</div>
             </div>
             <div style={{ background:"#FFF1F2", borderRadius:12, padding:"12px 14px" }}>
-              <div style={{ fontSize:10, color:"#64748B", marginBottom:4 }}>↑ إجمالي السحب</div>
-              <div style={{ fontSize:16, fontWeight:700, color:"#DC2626" }}>{fmtD(totOut)}</div>
+              <div style={{ fontSize:10, color:"#64748B", marginBottom:4 }}>↑ إجمالي الصرف</div>
+              <div style={{ fontSize:14, fontWeight:700, color:"#DC2626" }}>{fmtD(totOut)}</div>
             </div>
           </div>
         </div>
 
-        {/* نموذج المعاملة */}
-        <div style={{
-          background:"#fff", border:"1px solid #E2E8F0", borderRadius:16,
-          padding:18, marginBottom:16,
-        }}>
-          <div style={{ fontSize:14, fontWeight:700, color:"#1E293B", marginBottom:14 }}>معاملة جديدة</div>
+        {/* تبويبات */}
+        <div style={{ display:"flex", background:"#fff", borderRadius:12, padding:4, gap:4,
+          marginBottom:14, border:"1px solid #E2E8F0" }}>
+          {[["tx","💰 معاملة جديدة"],["transfer","🔄 تحويل أرباح للشركاء"]].map(([v,l]) => (
+            <button key={v} onClick={() => setTab(v)} style={{
+              flex:1, border:"none", borderRadius:9, padding:"10px 8px",
+              cursor:"pointer", fontWeight:700, fontSize:13, fontFamily:"Tahoma",
+              background: tab === v ? "#1E293B" : "transparent",
+              color: tab === v ? "#fff" : "#64748B",
+            }}>{l}</button>
+          ))}
+        </div>
 
+        {/* نموذج المعاملة */}
+        {tab === "tx" && (
+        <div style={{ background:"#fff", border:"1px solid #E2E8F0", borderRadius:16, padding:18, marginBottom:16 }}>
           {done ? (
             <div style={{ textAlign:"center", padding:"20px 0" }}>
               <div style={{ fontSize:40, marginBottom:6 }}>✅</div>
               <div style={{ fontWeight:700, color:"#16A34A" }}>تم التسجيل</div>
             </div>
+          ) : (
+            <>
+              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, marginBottom:14 }}>
+                {["إيداع", "سحب"].map(t => (
+                  <button key={t} onClick={() => set("type")(t)} style={{
+                    padding:"12px", borderRadius:10, cursor:"pointer",
+                    fontFamily:"Tahoma", fontSize:14, fontWeight:700,
+                    border:"1.5px solid " + (form.type === t ? (t === "إيداع" ? "#16A34A" : "#DC2626") : "#E2E8F0"),
+                    background: form.type === t ? (t === "إيداع" ? "#F0FDF4" : "#FFF1F2") : "transparent",
+                    color: form.type === t ? (t === "إيداع" ? "#16A34A" : "#DC2626") : "#64748B",
+                  }}>{t === "إيداع" ? "↓ إيداع" : "↑ سحب"}</button>
+                ))}
+              </div>
+              <Lbl>المبلغ والعملة</Lbl>
+              <div style={{ display:"flex", gap:8, marginBottom:8 }}>
+                <Inp style={{ flex:2, fontSize:20, fontWeight:700, textAlign:"center" }}
+                  type="number" placeholder="٠"
+                  value={form.amount} onChange={e => set("amount")(e.target.value)} autoFocus/>
+                <CurrencySelect value={form.currency} onChange={e => set("currency")(e.target.value)}/>
+              </div>
+              {form.currency === "دولار" && (
+                <>
+                  <Lbl>سعر الصرف (دينار للدولار)</Lbl>
+                  <Inp style={{ marginBottom:6 }} type="number" placeholder="مثال: 1480"
+                    value={form.exchRate} onChange={e => set("exchRate")(e.target.value)}/>
+                  {amtN > 0 && Number(form.exchRate) > 0 && (
+                    <div style={{ fontSize:12, color:"#2563EB", fontWeight:600, marginBottom:8,
+                      padding:"7px 12px", background:"#EFF6FF", borderRadius:8 }}>
+                      💱 يعادل: {fmtD(amtInDinar)}
+                    </div>
+                  )}
+                </>
+              )}
+              <Lbl>التاريخ</Lbl>
+              <Inp style={{ marginBottom:12 }} type="date" value={form.date} onChange={e => set("date")(e.target.value)}/>
+              <Lbl>ملاحظة</Lbl>
+              <Inp style={{ marginBottom:16 }} placeholder="..." value={form.note} onChange={e => set("note")(e.target.value)}/>
+              <button onClick={save} disabled={!valid || saving} style={{
+                width:"100%", border:"none", borderRadius:12, padding:"14px",
+                fontSize:15, fontWeight:700, cursor: valid ? "pointer" : "not-allowed", fontFamily:"Tahoma",
+                background: valid ? (form.type === "إيداع" ? "#16A34A" : "#DC2626") : "#E2E8F0",
+                color: valid ? "#fff" : "#94A3B8",
+              }}>{saving ? "جاري الحفظ..." : (form.type === "إيداع" ? "↓ تأكيد الإيداع" : "↑ تأكيد السحب")}</button>
+            </>
+          )}
+        </div>
+        )}
+
+        {/* نموذج تحويل الأرباح */}
+        {tab === "transfer" && (
+        <div style={{ background:"#fff", border:"1.5px solid #9333EA30", borderRadius:16, padding:18, marginBottom:16 }}>
+          <div style={{ fontSize:13, color:"#64748B", marginBottom:14, background:"#FAF5FF",
+            borderRadius:8, padding:"10px 14px", border:"1px solid #9333EA20" }}>
+            🔄 يتم تحويل المبلغ من هذا الصندوق مباشرةً إلى صندوق الشركاء ويتوزع تلقائياً
+          </div>
+          {trDone ? (
+            <div style={{ textAlign:"center", padding:"20px 0" }}>
+              <div style={{ fontSize:40, marginBottom:6 }}>✅</div>
+              <div style={{ fontWeight:700, color:"#9333EA" }}>تم التحويل والتوزيع</div>
+            </div>
+          ) : (
+            <>
+              <Lbl>مبلغ التحويل (الأرباح)</Lbl>
+              <div style={{ display:"flex", gap:8, marginBottom:8 }}>
+                <Inp style={{ flex:2, fontSize:20, fontWeight:700, textAlign:"center" }}
+                  type="number" placeholder="٠"
+                  value={trForm.amount} onChange={e => setTr("amount")(e.target.value)} autoFocus/>
+                <CurrencySelect value={trForm.currency} onChange={e => setTr("currency")(e.target.value)}/>
+              </div>
+              {trForm.currency === "دولار" && (
+                <>
+                  <Lbl>سعر الصرف</Lbl>
+                  <Inp style={{ marginBottom:6 }} type="number" placeholder="مثال: 1480"
+                    value={trForm.exchRate} onChange={e => setTr("exchRate")(e.target.value)}/>
+                  {trAmtN > 0 && Number(trForm.exchRate) > 0 && (
+                    <div style={{ fontSize:12, color:"#2563EB", fontWeight:600, marginBottom:8,
+                      padding:"7px 12px", background:"#EFF6FF", borderRadius:8 }}>
+                      💱 يعادل: {fmtD(trAmtDin)}
+                    </div>
+                  )}
+                </>
+              )}
+              {/* معاينة التوزيع */}
+              {trAmtDin > 0 && (
+                <div style={{ background:"#FAF5FF", borderRadius:10, padding:"10px 14px", marginBottom:12,
+                  border:"1px solid #9333EA20" }}>
+                  <div style={{ fontSize:11, color:"#9333EA", fontWeight:600, marginBottom:8 }}>
+                    📊 توزيع الأرباح على الشركاء
+                  </div>
+                  {[
+                    {name:"إيهاب زيتوني", share:30, color:"#2563EB"},
+                    {name:"نور إدوارد",   share:30, color:"#059669"},
+                    {name:"محمد سالم",    share:30, color:"#7C3AED"},
+                    {name:"أحمد سالم",    share:10, color:"#D97706"},
+                  ].map(p => (
+                    <div key={p.name} style={{ display:"flex", justifyContent:"space-between",
+                      padding:"5px 0", borderBottom:"1px solid #E2E8F0" }}>
+                      <span style={{ fontSize:13, color:"#1E293B", fontWeight:600 }}>{p.name}</span>
+                      <span style={{ fontSize:13, color:p.color, fontWeight:700 }}>
+                        {fmtD(Math.round(trAmtDin * p.share / 100))}
+                        <span style={{ fontSize:10, color:"#64748B", marginRight:4 }}>({toAr(p.share)}%)</span>
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <Lbl>التاريخ</Lbl>
+              <Inp style={{ marginBottom:12 }} type="date" value={trForm.date} onChange={e => setTr("date")(e.target.value)}/>
+              <Lbl>ملاحظة</Lbl>
+              <Inp style={{ marginBottom:16 }} placeholder="مثال: أرباح مشروع بغداد..." value={trForm.note} onChange={e => setTr("note")(e.target.value)}/>
+              <button onClick={saveTransfer} disabled={!trValid || saving} style={{
+                width:"100%", border:"none", borderRadius:12, padding:"14px",
+                fontSize:15, fontWeight:700, cursor: trValid ? "pointer" : "not-allowed", fontFamily:"Tahoma",
+                background: trValid ? "#9333EA" : "#E2E8F0",
+                color: trValid ? "#fff" : "#94A3B8",
+              }}>{saving ? "جاري التحويل..." : "🔄 تأكيد التحويل والتوزيع"}</button>
+            </>
+          )}
+        </div>
+        )}
+
           ) : (
             <>
               {/* إيداع / سحب */}
