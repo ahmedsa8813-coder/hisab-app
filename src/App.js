@@ -97,7 +97,7 @@ export default function App(){
 
   // أرصدة
   useEffect(()=>{
-    const t=setTimeout(()=>setLoading(false),800);
+    const t=setTimeout(()=>setLoading(false),4000);
     const u=onSnapshot(collection(db,"fund_balances"),snap=>{
       const b={};snap.docs.forEach(d=>{const x=d.data();b[d.id]={din:x.din??0,dol:x.dol??0};});
       setBals(b);setLoading(false);
@@ -141,37 +141,20 @@ export default function App(){
     return()=>u();
   },[page]);
 
-  // تحديث تلقائي للمشروع المفتوح من Firebase
-  useEffect(()=>{
-    if(!selProj)return;
-    const updated=projs.find(p=>p.id===selProj.id);
-    if(updated)setSelProj(updated);
-  },[projs]);
-
   const getBal=id=>bals[id]||{din:0,dol:0};
 
   // ── منطق المشاريع ──
-  const addProject=async d=>{
-    const ref=await addDoc(collection(db,"fund_projects"),{
-      name:d.name.trim(),province:d.province||"",client:d.client||"",
-      totalDin:Number(d.totalDin)||0,totalDol:Number(d.totalDol)||0,
-      note:d.note||"",status:"نشط",recDin:0,recDol:0,spdDin:0,spdDol:0,
-      createdAt:new Date().toISOString()});
-    // صندوق مستقل لكل مشروع
-    await setDoc(doc(db,"fund_balances","proj_"+ref.id),{din:0,dol:0});
-  };
+  const addProject=async d=>addDoc(collection(db,"fund_projects"),{
+    name:d.name.trim(),province:d.province||"",client:d.client||"",
+    totalDin:Number(d.totalDin)||0,totalDol:Number(d.totalDol)||0,
+    note:d.note||"",status:"نشط",recDin:0,recDol:0,spdDin:0,spdDol:0,
+    createdAt:new Date().toISOString()});
 
   const addProjTx=async(proj,type,currency,amount,note,date)=>{
     const amt=Math.round(Number(amount));if(!amt)return;
     const isDol=currency==="دولار";const isRec=type==="إيداع";
     const key=isDol?(isRec?"recDol":"spdDol"):(isRec?"recDin":"spdDin");
     await setDoc(doc(db,"fund_projects",proj.id),{[key]:(proj[key]||0)+amt},{merge:true});
-    // تحديث صندوق المشروع المستقل
-    const pBal=getBal("proj_"+proj.id);
-    await setDoc(doc(db,"fund_balances","proj_"+proj.id),{
-      din:isDol?pBal.din:(isRec?pBal.din+amt:pBal.din-amt),
-      dol:isDol?(isRec?pBal.dol+amt:pBal.dol-amt):pBal.dol
-    },{merge:true});
     await addDoc(collection(db,"fund_projects_txs"),{projectId:proj.id,projectName:proj.name,
       type,currency,amount:amt,note:note||"",date:date||today(),createdAt:new Date().toISOString()});
   };
@@ -181,19 +164,12 @@ export default function App(){
     const isDol=t.currency==="دولار";const isRec=t.type==="إيداع";
     const key=isDol?(isRec?"recDol":"spdDol"):(isRec?"recDin":"spdDin");
     await setDoc(doc(db,"fund_projects",proj.id),{[key]:Math.max(0,(proj[key]||0)-t.amount)},{merge:true});
-    // عكس صندوق المشروع المستقل
-    const pBal=getBal("proj_"+proj.id);
-    await setDoc(doc(db,"fund_balances","proj_"+proj.id),{
-      din:isDol?pBal.din:(isRec?pBal.din-t.amount:pBal.din+t.amount),
-      dol:isDol?(isRec?pBal.dol-t.amount:pBal.dol+t.amount):pBal.dol
-    },{merge:true});
     await deleteDoc(doc(db,"fund_projects_txs",t.id));
   };
 
   const delProject=async id=>{
     if(!ask("حذف المشروع"))return;
     await deleteDoc(doc(db,"fund_projects",id));
-    await deleteDoc(doc(db,"fund_balances","proj_"+id));
   };
 
   const closeProject=async(proj,dDin,dDol)=>{
@@ -235,7 +211,6 @@ export default function App(){
     if(!ask("تصفية المشروع"))return;
     await setDoc(doc(db,"fund_projects",proj.id),
       {recDin:0,recDol:0,spdDin:0,spdDol:0,status:"نشط"},{merge:true});
-    await setDoc(doc(db,"fund_balances","proj_"+proj.id),{din:0,dol:0},{merge:true});
     const snap=await getDocs(query(collection(db,"fund_projects_txs"),
       where("projectId","==",proj.id)));
     for(const d of snap.docs)await deleteDoc(doc(db,"fund_projects_txs",d.id));
@@ -289,11 +264,11 @@ export default function App(){
 
   // ── تصفية شاملة ──
   const resetAll=async()=>{
-    const pw=window.prompt("⚠️ تصفية شاملة\nالباسورد:");
+    const pw=window.prompt("⚠️ تصفية شاملة كاملة\nالباسورد:");
     if(!pw||pw!==PASS){if(pw!==null)alert("❌ باسورد غلط");return;}
-    const balSnap=await getDocs(collection(db,"fund_balances"));
-    for(const d of balSnap.docs)
-      await setDoc(doc(db,"fund_balances",d.id),{din:0,dol:0});
+    if(window.prompt("اكتب \"تصفية\" للتأكيد:")!=="تصفية"){alert("إلغاء");return;}
+    const ids=["partners",...PARTNERS.map(p=>"partner_"+p.id)];
+    for(const id of ids)await setDoc(doc(db,"fund_balances",id),{din:0,dol:0},{merge:true});
     for(const col of["fund_transactions","fund_projects","fund_projects_txs","employees"]){
       const snap=await getDocs(collection(db,col));
       for(const d of snap.docs)await deleteDoc(doc(db,col,d.id));
@@ -331,7 +306,6 @@ export default function App(){
     onSelProj={p=>{setSelProj(p);setPage("project");}}
     onAddProject={addProject} onDelProject={delProject}
     onAddEmployee={addEmployee} onDelEmployee={delEmployee}
-    onDelProjTx={delProjTx}
     onReset={resetAll}/>;
 
   return(
@@ -386,11 +360,8 @@ export default function App(){
 }
 
 // ── صفحة المقاولات ──
-function ContractingPage({projs,emps,bals,onBack,onSelProj,onAddProject,onDelProject,onAddEmployee,onDelEmployee,onDelProjTx,onReset}){
+function ContractingPage({projs,emps,bals,onBack,onSelProj,onAddProject,onDelProject,onAddEmployee,onDelEmployee,onReset}){
   const[tab,setTab]=useState("projects");
-  const[ledgerProj,setLedgerProj]=useState(null);
-  const[ledgerTxs,setLedgerTxs]=useState([]);
-  const[ledgerLoading,setLedgerLoading]=useState(false);
   const[showP,setShowP]=useState(false);
   const[showE,setShowE]=useState(false);
   const[pf,setPf]=useState({name:"",province:"",client:"",totalDin:"",totalDol:"",note:""});
@@ -430,43 +401,34 @@ function ContractingPage({projs,emps,bals,onBack,onSelProj,onAddProject,onDelPro
               display:"flex",alignItems:"center",justifyContent:"center"}}>
               <i className="ti ti-building" style={{fontSize:24,color:"#D97706"}} aria-hidden="true"/>
             </div>
-            <div>
-              <div style={{fontSize:18,fontWeight:700,color:"#1E293B"}}>صندوق المقاولات</div>
-              <div style={{fontSize:11,color:"#64748B",marginTop:2}}>الرصيد من أرباح المشاريع المغلقة فقط</div>
+            <div style={{fontSize:18,fontWeight:700,color:"#1E293B"}}>صندوق المقاولات</div>
+          </div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
+            <div style={{background:"#F0FDF4",borderRadius:10,padding:"10px",textAlign:"center"}}>
+              <div style={{fontSize:9,color:"#64748B",marginBottom:2}}>↓ مستلم</div>
+              <div style={{fontSize:13,fontWeight:700,color:"#16A34A"}}>{fD(tRD)}</div>
+              {tRL>0&&<div style={{fontSize:10,color:"#2563EB"}}>{f$(tRL)}</div>}
+            </div>
+            <div style={{background:"#FFF1F2",borderRadius:10,padding:"10px",textAlign:"center"}}>
+              <div style={{fontSize:9,color:"#64748B",marginBottom:2}}>↑ مصروف</div>
+              <div style={{fontSize:13,fontWeight:700,color:"#DC2626"}}>{fD(tSD)}</div>
+              {tSL>0&&<div style={{fontSize:10,color:"#DC2626"}}>{f$(tSL)}</div>}
+            </div>
+            <div style={{background:tRD-tSD>=0?"#FFFBEB":"#FFF1F2",borderRadius:10,padding:"10px",
+              textAlign:"center",border:"1.5px solid "+(tRD-tSD>=0?"#D9770640":"#DC262640")}}>
+              <div style={{fontSize:9,color:"#64748B",marginBottom:2}}>💰 الربح</div>
+              <div style={{fontSize:13,fontWeight:700,color:tRD-tSD>=0?"#D97706":"#DC2626"}}>
+                {tRD-tSD>=0?"":"-"}{fD(Math.abs(tRD-tSD))}</div>
+              {tRL-tSL!==0&&<div style={{fontSize:10,fontWeight:700,color:tRL-tSL>=0?"#2563EB":"#DC2626"}}>
+                {tRL-tSL>=0?"":"-"}{f$(Math.abs(tRL-tSL))}</div>}
             </div>
           </div>
-          {(bals["contracting"]||{din:0,dol:0}).din===0&&(bals["contracting"]||{din:0,dol:0}).dol===0?(
-            <div style={{background:"#F8FAFC",borderRadius:10,padding:"12px 14px",
-              textAlign:"center",border:"1px solid #E2E8F0"}}>
-              <div style={{fontSize:12,color:"#94A3B8"}}>لا يوجد رصيد — يظهر عند إغلاق المشاريع وتوزيع الأرباح</div>
-            </div>
-          ):(
-            <div style={{background:"#FFFBEB",borderRadius:10,padding:"12px 14px",
-              border:"1.5px solid #D9770640"}}>
-              <div style={{fontSize:10,color:"#D97706",fontWeight:600,marginBottom:8}}>💎 رصيد الصندوق</div>
-              <div style={{display:"flex",gap:20,alignItems:"center"}}>
-                {(bals["contracting"]||{din:0}).din!==0&&(
-                  <div>
-                    <div style={{fontSize:9,color:"#64748B",marginBottom:2}}>🇮🇶 دينار</div>
-                    <div style={{fontSize:20,fontWeight:700,color:"#D97706"}}>{fD((bals["contracting"]||{din:0}).din)}</div>
-                  </div>
-                )}
-                {(bals["contracting"]||{dol:0}).dol!==0&&(
-                  <div>
-                    <div style={{fontSize:9,color:"#64748B",marginBottom:2}}>🇺🇸 دولار</div>
-                    <div style={{fontSize:18,fontWeight:700,color:"#2563EB"}}>{f$((bals["contracting"]||{dol:0}).dol)}</div>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
         </div>
 
         {/* تبويبات */}
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:6,marginBottom:14}}>
-          {[["projects","🏗️ المشاريع"],["employees","👷 الموظفون"],["ledger","📋 السجل"]].map(([v,l])=>(
-            <button key={v} onClick={()=>{setTab(v);if(v!=="ledger"){setLedgerProj(null);setLedgerTxs([]);}}}
-              style={{border:tab===v?"none":"1px solid #E2E8F0",
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6,marginBottom:14}}>
+          {[["projects","🏗️ المشاريع"],["employees","👷 الموظفون"]].map(([v,l])=>(
+            <button key={v} onClick={()=>setTab(v)} style={{border:tab===v?"none":"1px solid #E2E8F0",
               borderRadius:10,padding:"12px",cursor:"pointer",fontWeight:700,fontSize:13,
               fontFamily:"Tahoma",background:tab===v?"#D97706":"#fff",
               color:tab===v?"#fff":"#64748B"}}>{l}</button>
@@ -543,55 +505,16 @@ function ContractingPage({projs,emps,bals,onBack,onSelProj,onAddProject,onDelPro
                       <div style={{fontSize:12,fontWeight:700,color:"#2563EB"}}>
                         {f$(Math.abs((p.recDol||0)-(p.spdDol||0)))}</div>
                     )}
-                    <DelBtn onClick={e=>{e.stopPropagation();onDelProject(p.id);}}/>
                   </div>
                 </div>
-                {/* صندوق الدينار */}
-                <div style={{background:"#FFFBEB",borderRadius:8,padding:"8px 10px",
-                  marginBottom:6,border:"1px solid #D9770620"}}>
-                  <div style={{fontSize:9,color:"#D97706",fontWeight:600,marginBottom:5}}>
-                    🇮🇶 الدينار العراقي
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6}}>
+                  <div style={{background:"#F0FDF4",borderRadius:8,padding:"6px 10px"}}>
+                    <div style={{fontSize:9,color:"#64748B"}}>↓ مستلم</div>
+                    <div style={{fontSize:12,fontWeight:700,color:"#16A34A"}}>{fD(p.recDin||0)}</div>
                   </div>
-                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:6}}>
-                    <div style={{background:"#F0FDF4",borderRadius:7,padding:"5px 8px",textAlign:"center"}}>
-                      <div style={{fontSize:9,color:"#64748B"}}>↓ مستلم</div>
-                      <div style={{fontSize:12,fontWeight:700,color:"#16A34A"}}>{fD(p.recDin||0)}</div>
-                    </div>
-                    <div style={{background:"#FFF1F2",borderRadius:7,padding:"5px 8px",textAlign:"center"}}>
-                      <div style={{fontSize:9,color:"#64748B"}}>↑ مصروف</div>
-                      <div style={{fontSize:12,fontWeight:700,color:"#DC2626"}}>{fD(p.spdDin||0)}</div>
-                    </div>
-                    <div style={{background:(p.recDin||0)-(p.spdDin||0)>=0?"#F0FDF4":"#FFF1F2",
-                      borderRadius:7,padding:"5px 8px",textAlign:"center"}}>
-                      <div style={{fontSize:9,color:"#64748B"}}>💰 الربح</div>
-                      <div style={{fontSize:12,fontWeight:700,
-                        color:(p.recDin||0)-(p.spdDin||0)>=0?"#D97706":"#DC2626"}}>
-                        {fD(Math.abs((p.recDin||0)-(p.spdDin||0)))}</div>
-                    </div>
-                  </div>
-                </div>
-                {/* صندوق الدولار */}
-                <div style={{background:"#EFF6FF",borderRadius:8,padding:"8px 10px",
-                  border:"1px solid #2563EB20"}}>
-                  <div style={{fontSize:9,color:"#2563EB",fontWeight:600,marginBottom:5}}>
-                    🇺🇸 الدولار الأمريكي
-                  </div>
-                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:6}}>
-                    <div style={{background:"#F0FDF4",borderRadius:7,padding:"5px 8px",textAlign:"center"}}>
-                      <div style={{fontSize:9,color:"#64748B"}}>↓ مستلم</div>
-                      <div style={{fontSize:12,fontWeight:700,color:"#2563EB"}}>{f$(p.recDol||0)}</div>
-                    </div>
-                    <div style={{background:"#FEF2F2",borderRadius:7,padding:"5px 8px",textAlign:"center"}}>
-                      <div style={{fontSize:9,color:"#64748B"}}>↑ مصروف</div>
-                      <div style={{fontSize:12,fontWeight:700,color:"#DC2626"}}>{f$(p.spdDol||0)}</div>
-                    </div>
-                    <div style={{background:(p.recDol||0)-(p.spdDol||0)>=0?"#EFF6FF":"#FFF1F2",
-                      borderRadius:7,padding:"5px 8px",textAlign:"center"}}>
-                      <div style={{fontSize:9,color:"#64748B"}}>💰 الربح</div>
-                      <div style={{fontSize:12,fontWeight:700,
-                        color:(p.recDol||0)-(p.spdDol||0)>=0?"#2563EB":"#DC2626"}}>
-                        {f$(Math.abs((p.recDol||0)-(p.spdDol||0)))}</div>
-                    </div>
+                  <div style={{background:"#FFF1F2",borderRadius:8,padding:"6px 10px"}}>
+                    <div style={{fontSize:9,color:"#64748B"}}>↑ مصروف</div>
+                    <div style={{fontSize:12,fontWeight:700,color:"#DC2626"}}>{fD(p.spdDin||0)}</div>
                   </div>
                 </div>
               </div>
@@ -606,16 +529,13 @@ function ContractingPage({projs,emps,bals,onBack,onSelProj,onAddProject,onDelPro
                   <div key={p.id} style={{background:"#FAFAFA",border:"1px solid #E2E8F0",
                     borderRight:"4px solid #94A3B8",borderRadius:14,padding:"12px 16px",
                     marginBottom:8,cursor:"pointer",opacity:0.8}} onClick={()=>onSelProj(p)}>
-                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                    <div style={{display:"flex",justifyContent:"space-between"}}>
                       <div>
                         <div style={{fontSize:13,fontWeight:700,color:"#64748B"}}>{p.name}</div>
                         {p.client&&<div style={{fontSize:11,color:"#94A3B8"}}>👤 {p.client}</div>}
                       </div>
-                      <div style={{display:"flex",alignItems:"center",gap:8}}>
-                        <span style={{fontSize:10,fontWeight:600,padding:"2px 8px",borderRadius:20,
-                          background:"#F1F5F9",color:"#64748B"}}>✓ منتهي</span>
-                        <DelBtn onClick={e=>{e.stopPropagation();onDelProject(p.id);}}/>
-                      </div>
+                      <span style={{fontSize:10,fontWeight:600,padding:"2px 8px",borderRadius:20,
+                        background:"#F1F5F9",color:"#64748B",alignSelf:"flex-start"}}>✓ منتهي</span>
                     </div>
                   </div>
                 ))}
@@ -629,11 +549,6 @@ function ContractingPage({projs,emps,bals,onBack,onSelProj,onAddProject,onDelPro
         )}
 
         {/* الموظفون */}
-        {/* السجل */}
-        {tab==="ledger"&&(
-          <LedgerTab projs={projs} onDelTx={onDelProjTx}/>
-        )}
-
         {tab==="employees"&&(
           <div>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
@@ -707,8 +622,16 @@ function ProjPage({proj,txs,onBack,onAddTx,onDelTx,onClose,onDel,onReset}){
   const[done,setDone]=useState(false);
   const[showClose,setShowClose]=useState(false);
   const[closing,setClosing]=useState(false);
-  const[pctDin,setPctDin]=useState({contract:0,partners:100});
-  const[pctDol,setPctDol]=useState({contract:0,partners:100});
+  const initD=()=>[
+    {fundId:"contracting",pct:0,  name:"صندوق المقاولات"},
+    {fundId:"partners",   pct:100,name:"أرباح الشركاء"},
+  ];
+  const[dDin,setDDin]=useState(initD);
+  const[dDol,setDDol]=useState(initD);
+  const ALL_FUNDS=[
+    {id:"contracting",name:"صندوق المقاولات"},
+    {id:"partners",   name:"أرباح الشركاء"},
+  ];
   const s=k=>v=>setF(x=>({...x,[k]:v}));
   const amtN=Number(f.amount)||0;
   const isDol=cur==="دولار";
@@ -716,8 +639,8 @@ function ProjPage({proj,txs,onBack,onAddTx,onDelTx,onClose,onDel,onReset}){
   const bDol=(p.recDol||0)-(p.spdDol||0);
   const avail=isDol?bDol:bDin;
   const isAct=p.status==="نشط";
-  const tDin=pctDin.contract+pctDin.partners;
-  const tDol=pctDol.contract+pctDol.partners;
+  const tDin=dDin.reduce((s,d)=>s+Number(d.pct),0);
+  const tDol=dDol.reduce((s,d)=>s+Number(d.pct),0);
   const dinTxs=txs.filter(t=>t.currency==="دينار");
   const dolTxs=txs.filter(t=>t.currency==="دولار");
   useEffect(()=>setP(proj),[proj]);
@@ -732,16 +655,11 @@ function ProjPage({proj,txs,onBack,onAddTx,onDelTx,onClose,onDel,onReset}){
   };
 
   const doClose=async()=>{
-    const hasDin=(p.recDin||0)>0||(p.spdDin||0)>0;
-    const hasDol=(p.recDol||0)>0||(p.spdDol||0)>0;
-    if((hasDin&&tDin!==100)||(hasDol&&tDol!==100)){
+    if(Math.round(tDin)!==100||Math.round(tDol)!==100){
       alert("مجموع النسب يجب أن يكون 100%");return;}
     setClosing(true);
-    const mkDists=pct=>[
-      {fundId:"contracting",pct:pct.contract},
-      {fundId:"partners",pct:pct.partners},
-    ];
-    await onClose(p,bDin>0?mkDists(pctDin):[],bDol>0?mkDists(pctDol):[]);  // distribute only if profit exists
+    await onClose(p,bDin>0?dDin.map(d=>({fundId:d.fundId,pct:Number(d.pct)})):[],
+      bDol>0?dDol.map(d=>({fundId:d.fundId,pct:Number(d.pct)})):[]);
     setClosing(false);setShowClose(false);
   };
 
@@ -881,163 +799,56 @@ function ProjPage({proj,txs,onBack,onAddTx,onDelTx,onClose,onDel,onReset}){
         {/* السجل */}
         {(!isAct||tab==="hist")&&(
           <div>
-            {/* هيدر السجل مع زر الطباعة */}
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
-              <div style={{fontSize:14,fontWeight:700,color:"#1E293B"}}>
-                سجل الحركات ({txs.length})
-              </div>
-              {txs.length>0&&(
-                <button onClick={()=>{
-                  const rows=[...txs].sort((a,b)=>a.date?.localeCompare(b.date)).map(t=>{
-                    const isIn=t.type==="إيداع";const isDolT=t.currency==="دولار";
-                    return "<tr>"
-                      +"<td style='padding:8px;border-bottom:1px solid #eee;text-align:center'>"+t.date+"</td>"
-                      +"<td style='padding:8px;border-bottom:1px solid #eee;text-align:center'>"
-                        +"<span style='color:"+(isDolT?"#2563EB":"#16A34A")+"'>"+(isDolT?"🇺🇸 دولار":"🇮🇶 دينار")+"</span></td>"
-                      +"<td style='padding:8px;border-bottom:1px solid #eee;text-align:center;color:"+(isIn?"#16A34A":"#DC2626")+"'>"+(isIn?"↓ استلام":"↑ صرف")+"</td>"
-                      +"<td style='padding:8px;border-bottom:1px solid #eee;text-align:right'>"+(t.note||"—")+"</td>"
-                      +"<td style='padding:8px;border-bottom:1px solid #eee;text-align:center;font-weight:700;color:"+(isIn?"#16A34A":"#DC2626")+"'>"
-                        +(isIn?"+":"-")+(isDolT?f$(t.amount):fD(t.amount))+"</td>"
-                      +"</tr>";
-                  }).join("");
-                  const html="<!DOCTYPE html><html dir='rtl'><head><meta charset='utf-8'/>"
-                    +"<style>body{font-family:Tahoma;margin:28px;direction:rtl}"
-                    +"table{width:100%;border-collapse:collapse}th{background:#F1F5F9;padding:10px;text-align:center}"
-                    +"h2{color:#1E293B;margin-bottom:4px}p{color:#64748B;font-size:12px}"
-                    +"@media print{button{display:none}}</style></head><body>"
-                    +"<h2>"+COMPANY.name+"</h2>"
-                    +"<p>"+COMPANY.address+"</p><hr style='margin:12px 0'/>"
-                    +"<h3 style='color:#D97706;margin-bottom:4px'>"+p.name+"</h3>"
-                    +(p.province?"<p>📍 "+p.province+"</p>":"")
-                    +(p.client?"<p>👤 "+p.client+"</p>":"")
-                    +"<p>قيمة المشروع: "+(p.totalDin?fD(p.totalDin):"—")+(p.totalDol?" | "+f$(p.totalDol):"")+"</p>"
-                    +"<hr style='margin:12px 0'/>"
-                    +"<h4>ملخص</h4>"
-                    +"<table style='width:auto;margin-bottom:16px'><tr>"
-                    +"<td style='padding:6px 12px;background:#F0FDF4;border-radius:6px;margin-left:8px'>↓ استلام دينار: <b style='color:#16A34A'>"+fD(p.recDin||0)+"</b></td>"
-                    +"<td style='padding:6px 12px;background:#FFF1F2'>↑ صرف دينار: <b style='color:#DC2626'>"+fD(p.spdDin||0)+"</b></td>"
-                    +"<td style='padding:6px 12px;background:#FFFBEB'>💰 ربح دينار: <b style='color:#D97706'>"+fD((p.recDin||0)-(p.spdDin||0))+"</b></td>"
-                    +"</tr></table>"
-                    +((p.recDol||0)>0||( p.spdDol||0)>0?"<table style='width:auto;margin-bottom:16px'><tr>"
-                    +"<td style='padding:6px 12px;background:#EFF6FF'>↓ استلام دولار: <b style='color:#2563EB'>"+f$(p.recDol||0)+"</b></td>"
-                    +"<td style='padding:6px 12px;background:#FEF2F2'>↑ صرف دولار: <b style='color:#DC2626'>"+f$(p.spdDol||0)+"</b></td>"
-                    +"<td style='padding:6px 12px;background:#EFF6FF'>💰 ربح دولار: <b style='color:#2563EB'>"+f$((p.recDol||0)-(p.spdDol||0))+"</b></td>"
-                    +"</tr></table>":"")
-                    +"<h4>تفاصيل الحركات</h4>"
-                    +"<table><thead><tr><th>التاريخ</th><th>العملة</th><th>النوع</th><th>ملاحظة</th><th>المبلغ</th></tr></thead>"
-                    +"<tbody>"+rows+"</tbody></table>"
-                    +"<p style='margin-top:20px;color:#94A3B8'>طُبع: "+today()+"</p>"
-                    +"</body></html>";
-                  const fr=document.createElement("iframe");
-                  fr.style.cssText="position:fixed;top:-9999px;left:-9999px;width:1px;height:1px;border:none;";
-                  document.body.appendChild(fr);
-                  fr.contentDocument.open();fr.contentDocument.write(html);fr.contentDocument.close();
-                  setTimeout(()=>{fr.contentWindow.focus();fr.contentWindow.print();
-                    setTimeout(()=>fr.remove(),2000);},400);
-                }} style={{background:"#D97706",border:"none",borderRadius:9,padding:"8px 16px",
-                  color:"#fff",cursor:"pointer",fontSize:13,fontFamily:"Tahoma",fontWeight:600}}>
-                  🖨️ طباعة السجل
-                </button>
-              )}
-            </div>
-
-            {/* الحركات مرتبة بالتاريخ */}
-            {txs.length===0&&(
-              <div style={{textAlign:"center",padding:24,color:"#94A3B8",
-                background:"#fff",borderRadius:12,border:"1px solid #E2E8F0"}}>
-                ما في حركات مسجلة
-              </div>
-            )}
-            {[...txs].sort((a,b)=>b.date?.localeCompare(a.date)).map(t=>{
-              const isIn=t.type==="إيداع";
-              const isDolT=t.currency==="دولار";
-              return(
-                <div key={t.id} style={{background:"#fff",borderRadius:11,padding:"12px 14px",
-                  marginBottom:8,border:"1px solid #E2E8F0",
+            {dinTxs.length>0&&<>
+              <div style={{fontSize:13,fontWeight:700,color:"#16A34A",marginBottom:8,
+                display:"flex",alignItems:"center",gap:6}}>
+                <div style={{width:3,height:14,background:"#16A34A",borderRadius:2}}/>
+                الدينار ({dinTxs.length})</div>
+              {dinTxs.map(t=>{const isIn=t.type==="إيداع";return(
+                <div key={t.id} style={{background:"#fff",borderRadius:11,padding:"11px 14px",
+                  marginBottom:7,border:"1px solid "+(isIn?"#DCFCE7":"#FEE2E2"),
                   borderRight:"4px solid "+(isIn?"#16A34A":"#DC2626")}}>
                   <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
                     <div>
-                      <div style={{display:"flex",gap:8,alignItems:"center",marginBottom:3}}>
-                        <span style={{fontSize:12,fontWeight:700,
-                          color:isIn?"#16A34A":"#DC2626"}}>
-                          {isIn?"↓ استلام":"↑ صرف"}
-                        </span>
-                        <span style={{fontSize:10,fontWeight:600,padding:"2px 7px",
-                          borderRadius:20,
-                          background:isDolT?"#EFF6FF":"#F0FDF4",
-                          color:isDolT?"#2563EB":"#16A34A"}}>
-                          {isDolT?"🇺🇸 دولار":"🇮🇶 دينار"}
-                        </span>
-                      </div>
+                      <div style={{fontSize:12,fontWeight:700,color:isIn?"#16A34A":"#DC2626",marginBottom:2}}>
+                        {isIn?"↓ استلام":"↑ صرف"}</div>
                       <div style={{fontSize:11,color:"#64748B"}}>📅 {t.date}</div>
                       {t.note&&<div style={{fontSize:11,color:"#1E293B",marginTop:2}}>{t.note}</div>}
                     </div>
                     <div style={{textAlign:"left"}}>
-                      <div style={{fontSize:16,fontWeight:700,
-                        color:isIn?"#16A34A":"#DC2626"}}>
-                        {isIn?"+":"-"}{isDolT?f$(t.amount):fD(t.amount)}
-                      </div>
+                      <div style={{fontSize:15,fontWeight:700,color:isIn?"#16A34A":"#DC2626"}}>
+                        {isIn?"+":"-"}{fD(t.amount)}</div>
                       <DelBtn onClick={()=>onDelTx(t)}/>
                     </div>
                   </div>
-                </div>
-              );
-            })}
-
-            {/* ملخص الأرصدة */}
-            {txs.length>0&&(
-              <div style={{background:"#F8FAFC",borderRadius:12,padding:14,
-                marginTop:12,border:"1px solid #E2E8F0"}}>
-                <div style={{fontSize:11,color:"#64748B",fontWeight:600,marginBottom:10}}>
-                  ملخص
-                </div>
-                <div style={{display:"grid",
-                  gridTemplateColumns:(p.recDol||0)>0||(p.spdDol||0)>0?"1fr 1fr":"1fr",gap:12}}>
-                  <div>
-                    <div style={{fontSize:10,color:"#16A34A",fontWeight:600,marginBottom:6}}>
-                      🇮🇶 الدينار
+                </div>);})}
+            </>}
+            {dolTxs.length>0&&<>
+              <div style={{fontSize:13,fontWeight:700,color:"#2563EB",marginBottom:8,marginTop:14,
+                display:"flex",alignItems:"center",gap:6}}>
+                <div style={{width:3,height:14,background:"#2563EB",borderRadius:2}}/>
+                الدولار ({dolTxs.length})</div>
+              {dolTxs.map(t=>{const isIn=t.type==="إيداع";return(
+                <div key={t.id} style={{background:"#fff",borderRadius:11,padding:"11px 14px",
+                  marginBottom:7,border:"1px solid "+(isIn?"#DCFCE7":"#FEE2E2"),
+                  borderRight:"4px solid "+(isIn?"#16A34A":"#DC2626")}}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                    <div>
+                      <div style={{fontSize:12,fontWeight:700,color:isIn?"#16A34A":"#DC2626",marginBottom:2}}>
+                        {isIn?"↓ استلام":"↑ صرف"}</div>
+                      <div style={{fontSize:11,color:"#64748B"}}>📅 {t.date}</div>
+                      {t.note&&<div style={{fontSize:11,color:"#1E293B",marginTop:2}}>{t.note}</div>}
                     </div>
-                    <div style={{display:"flex",justifyContent:"space-between",fontSize:12,marginBottom:3}}>
-                      <span style={{color:"#64748B"}}>↓ الاستلام</span>
-                      <span style={{fontWeight:700,color:"#16A34A"}}>{fD(p.recDin||0)}</span>
-                    </div>
-                    <div style={{display:"flex",justifyContent:"space-between",fontSize:12,marginBottom:3}}>
-                      <span style={{color:"#64748B"}}>↑ الصرف</span>
-                      <span style={{fontWeight:700,color:"#DC2626"}}>{fD(p.spdDin||0)}</span>
-                    </div>
-                    <div style={{display:"flex",justifyContent:"space-between",fontSize:13,
-                      borderTop:"1px solid #E2E8F0",paddingTop:4,marginTop:4}}>
-                      <span style={{color:"#64748B",fontWeight:600}}>💰 الربح</span>
-                      <span style={{fontWeight:700,
-                        color:(p.recDin||0)-(p.spdDin||0)>=0?"#D97706":"#DC2626"}}>
-                        {fD(Math.abs((p.recDin||0)-(p.spdDin||0)))}</span>
+                    <div style={{textAlign:"left"}}>
+                      <div style={{fontSize:15,fontWeight:700,color:isIn?"#16A34A":"#DC2626"}}>
+                        {isIn?"+":"-"}{f$(t.amount)}</div>
+                      <DelBtn onClick={()=>onDelTx(t)}/>
                     </div>
                   </div>
-                  {((p.recDol||0)>0||(p.spdDol||0)>0)&&(
-                    <div>
-                      <div style={{fontSize:10,color:"#2563EB",fontWeight:600,marginBottom:6}}>
-                        🇺🇸 الدولار
-                      </div>
-                      <div style={{display:"flex",justifyContent:"space-between",fontSize:12,marginBottom:3}}>
-                        <span style={{color:"#64748B"}}>↓ الاستلام</span>
-                        <span style={{fontWeight:700,color:"#2563EB"}}>{f$(p.recDol||0)}</span>
-                      </div>
-                      <div style={{display:"flex",justifyContent:"space-between",fontSize:12,marginBottom:3}}>
-                        <span style={{color:"#64748B"}}>↑ الصرف</span>
-                        <span style={{fontWeight:700,color:"#DC2626"}}>{f$(p.spdDol||0)}</span>
-                      </div>
-                      <div style={{display:"flex",justifyContent:"space-between",fontSize:13,
-                        borderTop:"1px solid #E2E8F0",paddingTop:4,marginTop:4}}>
-                        <span style={{color:"#64748B",fontWeight:600}}>💰 الربح</span>
-                        <span style={{fontWeight:700,
-                          color:(p.recDol||0)-(p.spdDol||0)>=0?"#2563EB":"#DC2626"}}>
-                          {f$(Math.abs((p.recDol||0)-(p.spdDol||0)))}</span>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
+                </div>);})}
+            </>}
+            {txs.length===0&&<div style={{textAlign:"center",padding:24,color:"#94A3B8",
+              background:"#fff",borderRadius:12,border:"1px solid #E2E8F0"}}>ما في معاملات</div>}
           </div>
         )}
 
@@ -1045,7 +856,7 @@ function ProjPage({proj,txs,onBack,onAddTx,onDelTx,onClose,onDel,onReset}){
         {showClose&&(
           <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.55)",zIndex:999,
             display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
-            <div style={{background:"#fff",borderRadius:20,width:"100%",maxWidth:480,
+            <div style={{background:"#fff",borderRadius:20,width:"100%",maxWidth:500,
               maxHeight:"92vh",overflow:"auto",boxShadow:"0 20px 60px rgba(0,0,0,0.3)"}}>
               <div style={{padding:"16px 20px",borderBottom:"1px solid #E2E8F0",
                 display:"flex",justifyContent:"space-between",alignItems:"center"}}>
@@ -1054,162 +865,54 @@ function ProjPage({proj,txs,onBack,onAddTx,onDelTx,onClose,onDel,onReset}){
                   fontSize:18,cursor:"pointer",color:"#64748B"}}>✕</button>
               </div>
               <div style={{padding:"16px 20px"}}>
-
-                {/* ملخص الربح */}
-                <div style={{background:"#F8FAFC",borderRadius:12,padding:14,marginBottom:16,
-                  display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
-                  <div style={{textAlign:"center"}}>
-                    <div style={{fontSize:10,color:"#64748B",marginBottom:2}}>الاستلام</div>
-                    <div style={{fontSize:13,fontWeight:700,color:"#16A34A"}}>{fD(p.recDin||0)}</div>
-                    {(p.recDol||0)>0&&<div style={{fontSize:11,color:"#2563EB"}}>{f$(p.recDol)}</div>}
-                  </div>
-                  <div style={{textAlign:"center"}}>
-                    <div style={{fontSize:10,color:"#64748B",marginBottom:2}}>الصرف</div>
-                    <div style={{fontSize:13,fontWeight:700,color:"#DC2626"}}>{fD(p.spdDin||0)}</div>
-                    {(p.spdDol||0)>0&&<div style={{fontSize:11,color:"#DC2626"}}>{f$(p.spdDol)}</div>}
-                  </div>
-                  <div style={{textAlign:"center"}}>
-                    <div style={{fontSize:10,color:"#64748B",marginBottom:2}}>💰 الربح</div>
-                    <div style={{fontSize:14,fontWeight:700,color:bDin>=0?"#16A34A":"#DC2626"}}>
-                      {bDin>=0?"+":"-"}{fD(Math.abs(bDin))}</div>
-                    {bDol!==0&&<div style={{fontSize:12,fontWeight:700,color:bDol>=0?"#2563EB":"#DC2626"}}>
-                      {bDol>=0?"+":"-"}{f$(Math.abs(bDol))}</div>}
+                <div style={{background:"#F8FAFC",borderRadius:12,padding:14,marginBottom:16}}>
+                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
+                    <div style={{textAlign:"center"}}>
+                      <div style={{fontSize:10,color:"#64748B",marginBottom:2}}>الاستلام</div>
+                      <div style={{fontSize:13,fontWeight:700,color:"#16A34A"}}>{fD(p.recDin||0)}</div>
+                      {(p.recDol||0)>0&&<div style={{fontSize:11,color:"#2563EB"}}>{f$(p.recDol)}</div>}
+                    </div>
+                    <div style={{textAlign:"center"}}>
+                      <div style={{fontSize:10,color:"#64748B",marginBottom:2}}>الصرف</div>
+                      <div style={{fontSize:13,fontWeight:700,color:"#DC2626"}}>{fD(p.spdDin||0)}</div>
+                      {(p.spdDol||0)>0&&<div style={{fontSize:11,color:"#DC2626"}}>{f$(p.spdDol)}</div>}
+                    </div>
+                    <div style={{textAlign:"center"}}>
+                      <div style={{fontSize:10,color:"#64748B",marginBottom:2}}>الربح</div>
+                      <div style={{fontSize:13,fontWeight:700,color:bDin>=0?"#16A34A":"#DC2626"}}>
+                        {bDin>=0?"+":"-"}{fD(Math.abs(bDin))}</div>
+                      {bDol!==0&&<div style={{fontSize:11,fontWeight:700,color:bDol>=0?"#2563EB":"#DC2626"}}>
+                        {bDol>=0?"+":"-"}{f$(Math.abs(bDol))}</div>}
+                    </div>
                   </div>
                 </div>
-
-                {/* توزيع الدينار */}
-                {((p.recDin||0)>0||(p.spdDin||0)>0)&&(
-                  <div style={{marginBottom:16}}>
-                    <div style={{fontSize:12,fontWeight:700,color:"#16A34A",marginBottom:12}}>
-                      🇮🇶 توزيع ربح الدينار — {fD(bDin)}
-                    </div>
-                    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:10}}>
-                      <div style={{background:"#FFFBEB",borderRadius:12,padding:14,border:"1px solid #D9770620"}}>
-                        <div style={{fontSize:11,fontWeight:700,color:"#D97706",marginBottom:8}}>🏗️ المقاولات</div>
-                        <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:6}}>
-                          <input type="number" inputMode="numeric" pattern="[0-9]*"
-                            min="0" max="100" value={pctDin.contract}
-                            onChange={e=>{const v=Math.min(100,Math.max(0,Number(e.target.value)||0));
-                              setPctDin({contract:v,partners:100-v});}}
-                            style={{width:"100%",border:"2px solid #D97706",borderRadius:10,
-                              padding:"12px",fontSize:22,fontWeight:700,textAlign:"center",
-                              outline:"none",fontFamily:"Tahoma",color:"#D97706"}}/>
-                          <span style={{fontSize:16,color:"#64748B",flexShrink:0}}>%</span>
-                        </div>
-                        <div style={{fontSize:12,fontWeight:700,color:"#D97706",textAlign:"center"}}>
-                          {fD(Math.round(bDin*pctDin.contract/100))}
-                        </div>
-                      </div>
-                      <div style={{background:"#FAF5FF",borderRadius:12,padding:14,border:"1px solid #9333EA20"}}>
-                        <div style={{fontSize:11,fontWeight:700,color:"#9333EA",marginBottom:8}}>👥 الشركاء</div>
-                        <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:6}}>
-                          <input type="number" inputMode="numeric" pattern="[0-9]*"
-                            min="0" max="100" value={pctDin.partners}
-                            onChange={e=>{const v=Math.min(100,Math.max(0,Number(e.target.value)||0));
-                              setPctDin({partners:v,contract:100-v});}}
-                            style={{width:"100%",border:"2px solid #9333EA",borderRadius:10,
-                              padding:"12px",fontSize:22,fontWeight:700,textAlign:"center",
-                              outline:"none",fontFamily:"Tahoma",color:"#9333EA"}}/>
-                          <span style={{fontSize:16,color:"#64748B",flexShrink:0}}>%</span>
-                        </div>
-                        <div style={{fontSize:12,fontWeight:700,color:"#9333EA",textAlign:"center"}}>
-                          {fD(Math.round(bDin*pctDin.partners/100))}
-                        </div>
-                      </div>
-                    </div>
-                    {/* معاينة حصص الشركاء */}
-                    {pctDin.partners>0&&(
-                      <div style={{background:"#F8FAFC",borderRadius:10,padding:"10px 12px"}}>
-                        <div style={{fontSize:10,color:"#64748B",marginBottom:6}}>توزيع حصص الشركاء</div>
-                        {PARTNERS.map(pa=>(
-                          <div key={pa.id} style={{display:"flex",justifyContent:"space-between",
-                            padding:"3px 0",borderBottom:"1px solid #F1F5F9"}}>
-                            <span style={{fontSize:12,color:"#1E293B"}}>{pa.name} ({pa.share}%)</span>
-                            <span style={{fontSize:12,fontWeight:700,color:pa.color}}>
-                              {fD(Math.round(bDin*pctDin.partners/100*pa.share/100))}
-                            </span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                    <div style={{marginTop:8,padding:"6px",borderRadius:8,textAlign:"center",
-                      background:tDin===100?"#F0FDF4":"#FFF1F2"}}>
-                      <span style={{fontSize:12,fontWeight:700,color:tDin===100?"#16A34A":"#DC2626"}}>
-                        المجموع: {tDin}%</span>
-                    </div>
+                <div style={{marginBottom:14}}>
+                  <div style={{fontSize:12,fontWeight:700,color:"#16A34A",marginBottom:8}}>
+                    🇮🇶 توزيع ربح الدينار ({fD(bDin)})</div>
+                  {dDin.map((d,i)=><DR key={d.fundId} d={d} i={i} dists={dDin} setDists={setDDin} profit={bDin} isDolR={false}/>)}
+                  <div style={{padding:"8px",borderRadius:8,textAlign:"center",
+                    background:Math.round(tDin)===100?"#F0FDF4":"#FFF1F2"}}>
+                    <span style={{fontSize:13,fontWeight:700,color:Math.round(tDin)===100?"#16A34A":"#DC2626"}}>
+                      المجموع: {tDin}%</span>
                   </div>
-                )}
-
-                {/* توزيع الدولار */}
-                {((p.recDol||0)>0||(p.spdDol||0)>0)&&(
-                  <div style={{marginBottom:16}}>
-                    <div style={{fontSize:12,fontWeight:700,color:"#2563EB",marginBottom:12}}>
-                      🇺🇸 توزيع ربح الدولار — {f$(bDol)}
-                    </div>
-                    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:10}}>
-                      <div style={{background:"#FFFBEB",borderRadius:12,padding:14,border:"1px solid #D9770620"}}>
-                        <div style={{fontSize:11,fontWeight:700,color:"#D97706",marginBottom:8}}>🏗️ المقاولات</div>
-                        <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:6}}>
-                          <input type="number" inputMode="numeric" pattern="[0-9]*"
-                            min="0" max="100" value={pctDol.contract}
-                            onChange={e=>{const v=Math.min(100,Math.max(0,Number(e.target.value)||0));
-                              setPctDol({contract:v,partners:100-v});}}
-                            style={{width:"100%",border:"2px solid #D97706",borderRadius:10,
-                              padding:"12px",fontSize:22,fontWeight:700,textAlign:"center",
-                              outline:"none",fontFamily:"Tahoma",color:"#D97706"}}/>
-                          <span style={{fontSize:16,color:"#64748B",flexShrink:0}}>%</span>
-                        </div>
-                        <div style={{fontSize:12,fontWeight:700,color:"#D97706",textAlign:"center"}}>
-                          {f$(Math.round(bDol*pctDol.contract/100))}
-                        </div>
-                      </div>
-                      <div style={{background:"#FAF5FF",borderRadius:12,padding:14,border:"1px solid #9333EA20"}}>
-                        <div style={{fontSize:11,fontWeight:700,color:"#9333EA",marginBottom:8}}>👥 الشركاء</div>
-                        <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:6}}>
-                          <input type="number" inputMode="numeric" pattern="[0-9]*"
-                            min="0" max="100" value={pctDol.partners}
-                            onChange={e=>{const v=Math.min(100,Math.max(0,Number(e.target.value)||0));
-                              setPctDol({partners:v,contract:100-v});}}
-                            style={{width:"100%",border:"2px solid #9333EA",borderRadius:10,
-                              padding:"12px",fontSize:22,fontWeight:700,textAlign:"center",
-                              outline:"none",fontFamily:"Tahoma",color:"#9333EA"}}/>
-                          <span style={{fontSize:16,color:"#64748B",flexShrink:0}}>%</span>
-                        </div>
-                        <div style={{fontSize:12,fontWeight:700,color:"#9333EA",textAlign:"center"}}>
-                          {f$(Math.round(bDol*pctDol.partners/100))}
-                        </div>
-                      </div>
-                    </div>
-                    {pctDol.partners>0&&(
-                      <div style={{background:"#F8FAFC",borderRadius:10,padding:"10px 12px"}}>
-                        <div style={{fontSize:10,color:"#64748B",marginBottom:6}}>توزيع حصص الشركاء</div>
-                        {PARTNERS.map(pa=>(
-                          <div key={pa.id} style={{display:"flex",justifyContent:"space-between",
-                            padding:"3px 0",borderBottom:"1px solid #F1F5F9"}}>
-                            <span style={{fontSize:12,color:"#1E293B"}}>{pa.name} ({pa.share}%)</span>
-                            <span style={{fontSize:12,fontWeight:700,color:pa.color}}>
-                              {f$(Math.round(bDol*pctDol.partners/100*pa.share/100))}
-                            </span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                    <div style={{marginTop:8,padding:"6px",borderRadius:8,textAlign:"center",
-                      background:tDol===100?"#EFF6FF":"#FFF1F2"}}>
-                      <span style={{fontSize:12,fontWeight:700,color:tDol===100?"#2563EB":"#DC2626"}}>
-                        المجموع: {tDol}%</span>
-                    </div>
+                </div>}
+                <div style={{marginBottom:14}}>
+                  <div style={{fontSize:12,fontWeight:700,color:"#2563EB",marginBottom:8}}>
+                    🇺🇸 توزيع ربح الدولار ({f$(bDol)})</div>
+                  {dDol.map((d,i)=><DR key={d.fundId} d={d} i={i} dists={dDol} setDists={setDDol} profit={bDol} isDolR={true}/>)}
+                  <div style={{padding:"8px",borderRadius:8,textAlign:"center",
+                    background:Math.round(tDol)===100?"#EFF6FF":"#FFF1F2"}}>
+                    <span style={{fontSize:13,fontWeight:700,color:Math.round(tDol)===100?"#2563EB":"#DC2626"}}>
+                      المجموع: {tDol}%</span>
                   </div>
-                )}
-
+                </div>}
                 <button onClick={doClose}
-                  disabled={closing||(((p.recDin||0)>0||(p.spdDin||0)>0)&&tDin!==100)||(((p.recDol||0)>0||(p.spdDol||0)>0)&&tDol!==100)}
+                  disabled={closing||Math.round(tDin)!==100||Math.round(tDol)!==100}
                   style={{width:"100%",border:"none",borderRadius:12,padding:"14px",fontSize:15,
                     fontWeight:700,cursor:"pointer",fontFamily:"Tahoma",
-                    background:(tDin===100)&&(tDol===100)?"#7C3AED":"#E2E8F0",
-                    color:(tDin===100)&&(tDol===100)?"#fff":"#94A3B8"}}>
-                  {closing?"جاري التوزيع...":"🏁 تأكيد الإغلاق وتوزيع الأرباح"}
-                </button>
+                    background:Math.round(tDin)===100&&Math.round(tDol)===100?"#7C3AED":"#E2E8F0",
+                    color:Math.round(tDin)===100&&Math.round(tDol)===100?"#fff":"#94A3B8"}}>
+                  {closing?"جاري التوزيع...":"🏁 تأكيد الإغلاق وتوزيع الأرباح"}</button>
               </div>
             </div>
           </div>
@@ -1410,211 +1113,6 @@ function PartnerPage({partner,bals,txs,onBack,onWithdraw,onDelTx,onReset}){
           </div>)}
         </>}
       </div>
-    </div>
-  );
-}
-
-// ── تبويب السجل الشامل ──
-function LedgerTab({projs,onDelTx}){
-  const[selProj,setSelProj]=useState(null);
-  const[txs,setTxs]=useState([]);
-  const[loading,setLoading]=useState(false);
-
-  useEffect(()=>{
-    if(!selProj){setTxs([]);return;}
-    setLoading(true);
-    const u=onSnapshot(
-      query(collection(db,"fund_projects_txs"),
-        where("projectId","==",selProj.id),orderBy("createdAt","desc")),
-      snap=>{setTxs(snap.docs.map(d=>({id:d.id,...d.data()})));setLoading(false);}
-    );
-    return()=>u();
-  },[selProj]);
-
-  const bDin=selProj?(selProj.recDin||0)-(selProj.spdDin||0):0;
-  const bDol=selProj?(selProj.recDol||0)-(selProj.spdDol||0):0;
-
-  const doPrint=()=>{
-    if(!selProj||!txs.length)return;
-    const rows=[...txs].sort((a,b)=>a.date?.localeCompare(b.date)).map(t=>{
-      const isIn=t.type==="إيداع";const isDolT=t.currency==="دولار";
-      return"<tr>"
-        +"<td style='padding:8px;border-bottom:1px solid #eee;text-align:center'>"+t.date+"</td>"
-        +"<td style='padding:8px;border-bottom:1px solid #eee;text-align:center;color:"+(isDolT?"#2563EB":"#16A34A")+"'>"+(isDolT?"🇺🇸 دولار":"🇮🇶 دينار")+"</td>"
-        +"<td style='padding:8px;border-bottom:1px solid #eee;text-align:center;color:"+(isIn?"#16A34A":"#DC2626")+"'>"+(isIn?"↓ استلام":"↑ صرف")+"</td>"
-        +"<td style='padding:8px;border-bottom:1px solid #eee'>"+( t.note||"—")+"</td>"
-        +"<td style='padding:8px;border-bottom:1px solid #eee;text-align:center;font-weight:700;color:"+(isIn?"#16A34A":"#DC2626")+"'>"
-          +(isIn?"+":"-")+(isDolT?f$(t.amount):fD(t.amount))+"</td>"
-        +"</tr>";
-    }).join("");
-    const html="<!DOCTYPE html><html dir='rtl'><head><meta charset='utf-8'/>"
-      +"<style>body{font-family:Tahoma;margin:28px;direction:rtl}"
-      +"table{width:100%;border-collapse:collapse}th{background:#F1F5F9;padding:10px;text-align:center}"
-      +"h2{color:#1E293B}p{color:#64748B;font-size:12px}"
-      +"@media print{.noprint{display:none}}</style></head><body>"
-      +"<h2>"+COMPANY.name+"</h2><p>"+COMPANY.address+"</p><hr/>"
-      +"<h3 style='color:#D97706'>"+selProj.name+"</h3>"
-      +(selProj.province?"<p>📍 "+selProj.province+"</p>":"")
-      +(selProj.client?"<p>👤 "+selProj.client+"</p>":"")
-      +"<table style='width:auto;margin-bottom:14px'><tr>"
-      +"<td style='padding:6px 12px;background:#F0FDF4'>استلام د.ع: <b style='color:#16A34A'>"+fD(selProj.recDin||0)+"</b></td>"
-      +"<td style='padding:6px 12px;background:#FFF1F2'>صرف د.ع: <b style='color:#DC2626'>"+fD(selProj.spdDin||0)+"</b></td>"
-      +"<td style='padding:6px 12px;background:#FFFBEB'>ربح د.ع: <b style='color:#D97706'>"+fD(bDin)+"</b></td>"
-      +"</tr></table>"
-      +((selProj.recDol||0)>0||(selProj.spdDol||0)>0?"<table style='width:auto;margin-bottom:14px'><tr>"
-      +"<td style='padding:6px 12px;background:#EFF6FF'>استلام $: <b style='color:#2563EB'>"+f$(selProj.recDol||0)+"</b></td>"
-      +"<td style='padding:6px 12px;background:#FEF2F2'>صرف $: <b style='color:#DC2626'>"+f$(selProj.spdDol||0)+"</b></td>"
-      +"<td style='padding:6px 12px;background:#EFF6FF'>ربح $: <b style='color:#2563EB'>"+f$(bDol)+"</b></td>"
-      +"</tr></table>":"")
-      +"<table><thead><tr><th>التاريخ</th><th>العملة</th><th>النوع</th><th>ملاحظة</th><th>المبلغ</th></tr></thead>"
-      +"<tbody>"+rows+"</tbody></table>"
-      +"<p style='margin-top:16px;color:#94A3B8'>طُبع: "+today()+"</p></body></html>";
-    const fr=document.createElement("iframe");
-    fr.style.cssText="position:fixed;top:-9999px;left:-9999px;width:1px;height:1px;border:none;";
-    document.body.appendChild(fr);fr.contentDocument.open();
-    fr.contentDocument.write(html);fr.contentDocument.close();
-    setTimeout(()=>{fr.contentWindow.focus();fr.contentWindow.print();
-      setTimeout(()=>fr.remove(),2000);},400);
-  };
-
-  return(
-    <div>
-      {/* اختيار المشروع */}
-      <div style={{marginBottom:14}}>
-        <Lbl c="اختر المشروع"/>
-        <select onChange={e=>{
-          const p=projs.find(x=>x.id===e.target.value);
-          setSelProj(p||null);
-        }} style={{width:"100%",border:"1px solid #E2E8F0",borderRadius:10,
-          padding:"12px 14px",fontSize:14,background:"#F8FAFC",color:"#1E293B",
-          outline:"none",fontFamily:"Tahoma",direction:"rtl",marginBottom:0}}>
-          <option value="">— اختر مشروعاً —</option>
-          {[...projs].sort((a,b)=>a.name.localeCompare(b.name,"ar")).map(p=>(
-            <option key={p.id} value={p.id}>
-              {p.name}{p.status==="منتهي"?" ✓":""}
-              {p.client?" — "+p.client:""}
-            </option>
-          ))}
-        </select>
-      </div>
-
-      {/* معلومات المشروع المختار */}
-      {selProj&&(
-        <>
-          <div style={{background:"#fff",borderRadius:14,padding:16,marginBottom:12,
-            border:"1px solid #E2E8F0",borderRight:"4px solid #D97706"}}>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:12}}>
-              <div>
-                <div style={{fontSize:15,fontWeight:700,color:"#1E293B"}}>{selProj.name}</div>
-                {selProj.province&&<div style={{fontSize:12,color:"#64748B",marginTop:2}}>📍 {selProj.province}</div>}
-                {selProj.client&&<div style={{fontSize:12,color:"#64748B"}}>👤 {selProj.client}</div>}
-                <span style={{fontSize:10,fontWeight:600,padding:"2px 8px",borderRadius:20,
-                  marginTop:5,display:"inline-block",
-                  background:selProj.status==="نشط"?"#DCFCE7":"#F1F5F9",
-                  color:selProj.status==="نشط"?"#16A34A":"#64748B"}}>
-                  {selProj.status==="نشط"?"● نشط":"✓ منتهي"}
-                </span>
-              </div>
-              <button onClick={doPrint} style={{background:"#D97706",border:"none",
-                borderRadius:9,padding:"8px 14px",color:"#fff",cursor:"pointer",
-                fontSize:13,fontFamily:"Tahoma",fontWeight:600}}>
-                🖨️ طباعة
-              </button>
-            </div>
-            {/* ملخص */}
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
-              <div>
-                <div style={{fontSize:9,color:"#16A34A",fontWeight:600,marginBottom:4}}>🇮🇶 الدينار</div>
-                <div style={{display:"flex",justifyContent:"space-between",fontSize:12,marginBottom:2}}>
-                  <span style={{color:"#64748B"}}>↓ استلام</span>
-                  <span style={{fontWeight:700,color:"#16A34A"}}>{fD(selProj.recDin||0)}</span>
-                </div>
-                <div style={{display:"flex",justifyContent:"space-between",fontSize:12,marginBottom:2}}>
-                  <span style={{color:"#64748B"}}>↑ صرف</span>
-                  <span style={{fontWeight:700,color:"#DC2626"}}>{fD(selProj.spdDin||0)}</span>
-                </div>
-                <div style={{display:"flex",justifyContent:"space-between",fontSize:13,
-                  borderTop:"1px solid #E2E8F0",paddingTop:4,marginTop:4}}>
-                  <span style={{color:"#64748B",fontWeight:600}}>الربح</span>
-                  <span style={{fontWeight:700,color:bDin>=0?"#D97706":"#DC2626"}}>{fD(Math.abs(bDin))}</span>
-                </div>
-              </div>
-              {((selProj.recDol||0)>0||(selProj.spdDol||0)>0)&&(
-                <div>
-                  <div style={{fontSize:9,color:"#2563EB",fontWeight:600,marginBottom:4}}>🇺🇸 الدولار</div>
-                  <div style={{display:"flex",justifyContent:"space-between",fontSize:12,marginBottom:2}}>
-                    <span style={{color:"#64748B"}}>↓ استلام</span>
-                    <span style={{fontWeight:700,color:"#2563EB"}}>{f$(selProj.recDol||0)}</span>
-                  </div>
-                  <div style={{display:"flex",justifyContent:"space-between",fontSize:12,marginBottom:2}}>
-                    <span style={{color:"#64748B"}}>↑ صرف</span>
-                    <span style={{fontWeight:700,color:"#DC2626"}}>{f$(selProj.spdDol||0)}</span>
-                  </div>
-                  <div style={{display:"flex",justifyContent:"space-between",fontSize:13,
-                    borderTop:"1px solid #E2E8F0",paddingTop:4,marginTop:4}}>
-                    <span style={{color:"#64748B",fontWeight:600}}>الربح</span>
-                    <span style={{fontWeight:700,color:bDol>=0?"#2563EB":"#DC2626"}}>{f$(Math.abs(bDol))}</span>
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* الحركات */}
-          <div style={{fontSize:13,fontWeight:700,color:"#1E293B",marginBottom:10}}>
-            الحركات ({txs.length})
-          </div>
-          {loading&&(
-            <div style={{textAlign:"center",padding:24,color:"#94A3B8"}}>جاري التحميل...</div>
-          )}
-          {!loading&&txs.length===0&&(
-            <div style={{textAlign:"center",padding:24,color:"#94A3B8",
-              background:"#fff",borderRadius:12,border:"1px solid #E2E8F0"}}>
-              ما في حركات مسجلة
-            </div>
-          )}
-          {[...txs].sort((a,b)=>b.date?.localeCompare(a.date)).map(t=>{
-            const isIn=t.type==="إيداع";
-            const isDolT=t.currency==="دولار";
-            return(
-              <div key={t.id} style={{background:"#fff",borderRadius:11,padding:"12px 14px",
-                marginBottom:8,border:"1px solid #E2E8F0",
-                borderRight:"4px solid "+(isIn?"#16A34A":"#DC2626")}}>
-                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                  <div>
-                    <div style={{display:"flex",gap:8,alignItems:"center",marginBottom:3}}>
-                      <span style={{fontSize:12,fontWeight:700,color:isIn?"#16A34A":"#DC2626"}}>
-                        {isIn?"↓ استلام":"↑ صرف"}
-                      </span>
-                      <span style={{fontSize:10,fontWeight:600,padding:"2px 7px",borderRadius:20,
-                        background:isDolT?"#EFF6FF":"#F0FDF4",
-                        color:isDolT?"#2563EB":"#16A34A"}}>
-                        {isDolT?"🇺🇸 دولار":"🇮🇶 دينار"}
-                      </span>
-                    </div>
-                    <div style={{fontSize:11,color:"#64748B"}}>📅 {t.date}</div>
-                    {t.note&&<div style={{fontSize:11,color:"#1E293B",marginTop:2}}>{t.note}</div>}
-                  </div>
-                  <div style={{textAlign:"left"}}>
-                    <div style={{fontSize:16,fontWeight:700,color:isIn?"#16A34A":"#DC2626"}}>
-                      {isIn?"+":"-"}{isDolT?f$(t.amount):fD(t.amount)}
-                    </div>
-                    <DelBtn onClick={()=>onDelTx(t,selProj)}/>
-                  </div>
-                </div>
-              </div>
-            );
-          })}
-        </>
-      )}
-
-      {!selProj&&(
-        <div style={{textAlign:"center",padding:40,color:"#94A3B8",
-          background:"#fff",borderRadius:14,border:"1px solid #E2E8F0"}}>
-          <i className="ti ti-clipboard-list" style={{fontSize:40,color:"#CBD5E1",display:"block",marginBottom:8}} aria-hidden="true"/>
-          اختر مشروعاً لعرض حركاته
-        </div>
-      )}
     </div>
   );
 }
