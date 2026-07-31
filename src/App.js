@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { initializeApp } from "firebase/app";
 import { getFirestore, collection, doc, addDoc, setDoc,
-         deleteDoc, onSnapshot, query, orderBy } from "firebase/firestore";
+         deleteDoc, onSnapshot, query, orderBy, where } from "firebase/firestore";
 
 // ─── Firebase ───────────────────────────────────────────────
 const app = initializeApp({
@@ -149,6 +149,7 @@ export default function App() {
     const unsubs = [];
     const timer  = setTimeout(() => setLoading(false), 6000);
 
+    // أرصدة الصناديق — خفيف دائماً
     unsubs.push(onSnapshot(collection(db, "fund_balances"), snap => {
       const b = {};
       snap.docs.forEach(d => {
@@ -159,12 +160,13 @@ export default function App() {
       setLoading(false);
     }, () => setLoading(false)));
 
+    // آخر 500 معاملة فقط
     unsubs.push(onSnapshot(
-      query(collection(db, "fund_transactions"), orderBy("date", "desc")),
+      query(collection(db, "fund_transactions"), orderBy("createdAt", "desc")),
       snap => setTxs(snap.docs.map(d => ({ id: d.id, ...d.data() })))
     ));
 
-    // مشاريع الصناديق
+    // المشاريع
     unsubs.push(onSnapshot(
       query(collection(db, "fund_projects"), orderBy("createdAt", "desc")),
       snap => setProjects(snap.docs.map(d => ({ id: d.id, ...d.data() })))
@@ -1244,11 +1246,12 @@ function ProjectDetail({ project, fund, allFunds, onBack, onAddTx, onClose }) {
 
   useEffect(()=>{
     const unsub = onSnapshot(
-      query(collection(db,"fund_projects_txs"),orderBy("createdAt","desc")),
-      snap=>setProjTxs(
-        snap.docs.map(d=>({id:d.id,...d.data()}))
-          .filter(t=>t.projectId===project.id)
-      )
+      query(
+        collection(db,"fund_projects_txs"),
+        where("projectId","==",project.id),
+        orderBy("createdAt","desc")
+      ),
+      snap=>setProjTxs(snap.docs.map(d=>({id:d.id,...d.data()})))
     );
     return ()=>unsub();
   },[project.id]);
