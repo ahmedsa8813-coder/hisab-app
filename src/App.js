@@ -41,6 +41,36 @@ const toAr  = n => String(n).replace(/\d/g, d => "٠١٢٣٤٥٦٧٨٩"[d]);
 const fmtD  = n => toAr(Math.abs(Math.round(n||0)).toLocaleString("ar-IQ")) + " د.ع";
 const today = () => new Date().toISOString().split("T")[0];
 
+// معلومات الشركة
+const COMPANY = {
+  name:    "شركة باب المشاريع",
+  address: "بغداد — العرصات، مقابل شركة زين",
+};
+
+// تحويل رقم لكلمات عربية
+function numToWords(n) {
+  if(!n||isNaN(n)) return "";
+  const num = Math.floor(Math.abs(Number(n)));
+  if(num===0) return "صفر";
+  const ones=["","واحد","اثنان","ثلاثة","أربعة","خمسة","ستة","سبعة","ثمانية","تسعة",
+    "عشرة","أحد عشر","اثنا عشر","ثلاثة عشر","أربعة عشر","خمسة عشر",
+    "ستة عشر","سبعة عشر","ثمانية عشر","تسعة عشر"];
+  const tens=["","","عشرون","ثلاثون","أربعون","خمسون","ستون","سبعون","ثمانون","تسعون"];
+  const hundreds=["","مئة","مئتان","ثلاثمئة","أربعمئة","خمسمئة","ستمئة","سبعمئة","ثمانمئة","تسعمئة"];
+  const readGrp = g => {
+    if(g===0) return "";
+    if(g<20) return ones[g];
+    if(g<100) return tens[Math.floor(g/10)]+(g%10?" و"+ones[g%10]:"");
+    return hundreds[Math.floor(g/100)]+(g%100?" و"+readGrp(g%100):"");
+  };
+  const parts=[];
+  if(num>=1000000000) parts.push(readGrp(Math.floor(num/1000000000))+" مليار");
+  if(num%1000000000>=1000000) parts.push(readGrp(Math.floor((num%1000000000)/1000000))+" مليون");
+  if(num%1000000>=1000) parts.push(readGrp(Math.floor((num%1000000)/1000))+" ألف");
+  if(num%1000>0) parts.push(readGrp(num%1000));
+  return parts.join(" و");
+}
+
 const Lbl = ({children}) => (
   <div style={{fontSize:11,color:"#64748B",marginBottom:5,fontWeight:600}}>{children}</div>
 );
@@ -261,11 +291,12 @@ function FundsList({funds, balances, onSelect}) {
 // صفحة أرباح الشركاء
 // ══════════════════════════════════════════
 function PartnersPage({partners, balances, txs, onBack, onDeposit, onWithdraw, onDelete}) {
-  const [selP,   setSelP]   = useState(null);  // شريك مفتوح
-  const [tab,    setTab]    = useState("deposit"); // deposit | withdraw
+  const [selP,   setSelP]   = useState(null);
+  const [tab,    setTab]    = useState("deposit");
   const [form,   setForm]   = useState({amount:"",note:"",date:today()});
   const [saving, setSaving] = useState(false);
   const [done,   setDone]   = useState(false);
+  const [preview,setPreview]= useState(false); // معاينة الطباعة
 
   const set = k => v => setForm(f=>({...f,[k]:v}));
   const totalMain = balances["partners"]||0;
@@ -301,6 +332,8 @@ function PartnersPage({partners, balances, txs, onBack, onDeposit, onWithdraw, o
 
     const printStatement = () => {
       const ar = n => String(Math.round(n||0)).replace(/\B(?=(\d{3})+(?!\d))/g,",");
+
+    const buildHtml = () => {
       let rows = "";
       allTxs.forEach(t=>{
         const isIn=t.type==="إيداع";
@@ -311,26 +344,29 @@ function PartnersPage({partners, balances, txs, onBack, onDeposit, onWithdraw, o
           +"<td style='padding:8px 12px;border-bottom:1px solid #E2E8F0;font-size:12px'>"+(t.note||"—")+"</td>"
           +"</tr>";
       });
-      const html="<!DOCTYPE html><html dir='rtl' lang='ar'><head><meta charset='UTF-8'/>"
+      return "<!DOCTYPE html><html dir='rtl' lang='ar'><head><meta charset='UTF-8'/>"
         +"<title>كشف حساب — "+p.name+"</title>"
-        +"<style>body{font-family:Tahoma,Arial;padding:28px;direction:rtl;color:#1E293B;background:#fff}"
-        +".hdr{display:flex;justify-content:space-between;align-items:center;padding-bottom:16px;margin-bottom:20px;border-bottom:3px solid "+p.color+"}"
-        +".logo{font-size:22px;font-weight:700;color:#1E293B}.sub{font-size:12px;color:#64748B;margin-top:3px}"
-        +".name{font-size:20px;font-weight:700;color:"+p.color+"}"
-        +".cards{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:22px}"
-        +".card{border:1px solid #E2E8F0;border-radius:10px;padding:14px;text-align:center}"
-        +".card-l{font-size:11px;color:#64748B;margin-bottom:5px}"
-        +".card-v{font-size:20px;font-weight:700}"
+        +"<style>body{font-family:Tahoma,Arial;padding:28px;direction:rtl;color:#1E293B;background:#fff;margin:0}"
+        +".co{text-align:center;padding-bottom:14px;margin-bottom:14px;border-bottom:2px solid "+p.color+"}"
+        +".co-name{font-size:22px;font-weight:700;color:"+p.color+";margin-bottom:4px}"
+        +".co-addr{font-size:12px;color:#64748B}"
+        +".hdr{display:flex;justify-content:space-between;align-items:center;background:#F8FAFC;border-radius:10px;padding:14px 16px;margin-bottom:18px;border:1px solid #E2E8F0}"
+        +".name{font-size:18px;font-weight:700;color:"+p.color+"}"
+        +".cards{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:20px}"
+        +".card{border:1px solid #E2E8F0;border-radius:10px;padding:12px;text-align:center}"
+        +".card-l{font-size:11px;color:#64748B;margin-bottom:4px}"
+        +".card-v{font-size:18px;font-weight:700}"
         +"table{width:100%;border-collapse:collapse;font-size:13px}"
         +"th{background:"+p.color+";color:#fff;padding:10px 12px;text-align:right;font-weight:700}"
         +"tr:nth-child(even){background:#F8FAFC}"
         +"tfoot td{font-weight:700;background:#F1F5F9;padding:10px 12px}"
         +".ftr{margin-top:20px;padding-top:12px;border-top:1px solid #E2E8F0;display:flex;justify-content:space-between;font-size:11px;color:#94A3B8}"
-        +"@media print{body{padding:16px}}"
-        +"</style></head><body>"
-        +"<div class='hdr'><div><div class='logo'>حساب</div><div class='sub'>كشف حساب شريك</div></div>"
-        +"<div style='text-align:left'><div class='name'>"+p.name+"</div>"
-        +"<div style='font-size:12px;color:#64748B'>حصة "+p.share+"%</div></div></div>"
+        +"@media print{body{padding:16px}}</style></head><body>"
+        +"<div class='co'><div class='co-name'>"+COMPANY.name+"</div>"
+        +"<div class='co-addr'>"+COMPANY.address+"</div></div>"
+        +"<div class='hdr'>"
+        +"<div><div class='name'>"+p.name+"</div><div style='font-size:12px;color:#64748B'>حصة "+p.share+"% من الأرباح</div></div>"
+        +"<div style='text-align:left;font-size:12px;color:#64748B'>تاريخ الكشف: "+new Date().toLocaleDateString("ar-IQ")+"</div></div>"
         +"<div class='cards'>"
         +"<div class='card'><div class='card-l'>↓ إجمالي الإيداع</div><div class='card-v' style='color:#16A34A'>"+ar(totIn)+" د.ع</div></div>"
         +"<div class='card'><div class='card-l'>↑ إجمالي السحب</div><div class='card-v' style='color:#DC2626'>"+ar(totOut)+" د.ع</div></div>"
@@ -338,12 +374,18 @@ function PartnersPage({partners, balances, txs, onBack, onDeposit, onWithdraw, o
         +"<div class='card-v' style='color:"+p.color+"'>"+ar(pBal)+" د.ع</div></div></div>"
         +"<table><thead><tr><th>التاريخ</th><th>النوع</th><th>المبلغ</th><th>ملاحظة</th></tr></thead>"
         +"<tbody>"+rows+"</tbody>"
-        +"<tfoot><tr><td>الإجمالي</td><td></td>"
-        +"<td style='color:#DC2626'>-"+ar(totOut)+" د.ع</td><td></td></tr></tfoot>"
+        +"<tfoot><tr><td colspan='2'>إجمالي السحوبات</td>"
+        +"<td style='color:#DC2626'>"+ar(totOut)+" د.ع</td><td></td></tr></tfoot>"
         +"</table>"
-        +"<div class='ftr'><span>نظام حساب</span><span>"+new Date().toLocaleDateString("ar-IQ")+"</span></div>"
+        +"<div class='ftr'><span>"+COMPANY.name+"</span><span>"+COMPANY.address+"</span></div>"
         +"</body></html>";
-      const w=window.open("","_blank");w.document.write(html);w.document.close();setTimeout(()=>w.print(),500);
+    };
+
+    const printStatement = () => {
+      const w=window.open("","_blank");
+      w.document.write(buildHtml());
+      w.document.close();
+      setTimeout(()=>w.print(),500);
     };
 
     return (
@@ -372,12 +414,12 @@ function PartnersPage({partners, balances, txs, onBack, onDeposit, onWithdraw, o
                 <div style={{fontSize:12,color:"#64748B",marginTop:2}}>حصة {toAr(p.share)}%</div>
               </div>
             </div>
-            <button onClick={printStatement} style={{
+            <button onClick={()=>setPreview(true)} style={{
               background:p.color,border:"none",borderRadius:10,padding:"9px 14px",
               color:"#fff",cursor:"pointer",fontSize:13,fontFamily:"Tahoma",
               display:"flex",alignItems:"center",gap:6,fontWeight:600}}>
-              <i className="ti ti-printer" style={{fontSize:16}} aria-hidden="true"/>
-              طباعة الكشف
+              <i className="ti ti-eye" style={{fontSize:16}} aria-hidden="true"/>
+              معاينة وطباعة
             </button>
           </div>
 
@@ -415,11 +457,18 @@ function PartnersPage({partners, balances, txs, onBack, onDeposit, onWithdraw, o
                 type="number" placeholder="٠" value={form.amount}
                 onChange={e=>set("amount")(e.target.value)} autoFocus/>
               {Number(form.amount)>0&&(
-                <div style={{fontSize:12,marginBottom:10,padding:"7px 12px",borderRadius:8,fontWeight:600,
-                  color:Number(form.amount)<=avail?"#16A34A":"#DC2626",
-                  background:Number(form.amount)<=avail?"#F0FDF4":"#FFF1F2"}}>
-                  {Number(form.amount)<=avail?"✅ الرصيد كافٍ":"⚠️ تجاوز الرصيد — المتاح: "+fmtD(avail)}
-                </div>
+                <>
+                  <div style={{fontSize:13,color:p.color,fontWeight:600,
+                    marginBottom:8,padding:"8px 12px",background:p.light||p.color+"10",
+                    borderRadius:8,border:"1px solid "+p.color+"30"}}>
+                    ✍️ {numToWords(Number(form.amount))} دينار
+                  </div>
+                  <div style={{fontSize:12,marginBottom:10,padding:"7px 12px",borderRadius:8,fontWeight:600,
+                    color:Number(form.amount)<=avail?"#16A34A":"#DC2626",
+                    background:Number(form.amount)<=avail?"#F0FDF4":"#FFF1F2"}}>
+                    {Number(form.amount)<=avail?"✅ الرصيد كافٍ":"⚠️ تجاوز الرصيد — المتاح: "+fmtD(avail)}
+                  </div>
+                </>
               )}
               <Lbl>التاريخ</Lbl>
               <Inp style={{marginBottom:10}} type="date" value={form.date} onChange={e=>set("date")(e.target.value)}/>
@@ -490,6 +539,38 @@ function PartnersPage({partners, balances, txs, onBack, onDeposit, onWithdraw, o
             </div>
           ))
         }
+
+      {/* ══ نافذة المعاينة ══ */}
+      {preview&&(
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.55)",zIndex:999,
+          display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
+          <div style={{background:"#fff",borderRadius:20,width:"100%",maxWidth:680,
+            maxHeight:"92vh",display:"flex",flexDirection:"column",overflow:"hidden",
+            boxShadow:"0 20px 60px rgba(0,0,0,0.3)"}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",
+              padding:"14px 18px",borderBottom:"1px solid #E2E8F0"}}>
+              <div style={{fontSize:15,fontWeight:700,color:"#1E293B"}}>معاينة كشف الحساب</div>
+              <div style={{display:"flex",gap:8}}>
+                <button onClick={printStatement} style={{
+                  background:p.color,border:"none",borderRadius:9,padding:"8px 16px",
+                  color:"#fff",cursor:"pointer",fontSize:13,fontFamily:"Tahoma",
+                  display:"flex",alignItems:"center",gap:6,fontWeight:600}}>
+                  <i className="ti ti-printer" style={{fontSize:15}} aria-hidden="true"/>
+                  طباعة
+                </button>
+                <button onClick={()=>setPreview(false)} style={{
+                  background:"#F1F5F9",border:"none",borderRadius:9,padding:"8px 14px",
+                  color:"#64748B",cursor:"pointer",fontSize:13,fontFamily:"Tahoma"}}>
+                  ✕ إغلاق
+                </button>
+              </div>
+            </div>
+            <div style={{flex:1,overflow:"auto"}}>
+              <iframe srcDoc={buildHtml()} style={{width:"100%",height:"580px",border:"none"}} title="معاينة"/>
+            </div>
+          </div>
+        </div>
+      )}
       </div>
     );
   }
