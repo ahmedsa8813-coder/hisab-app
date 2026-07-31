@@ -331,6 +331,7 @@ export default function App(){
     onSelProj={p=>{setSelProj(p);setPage("project");}}
     onAddProject={addProject} onDelProject={delProject}
     onAddEmployee={addEmployee} onDelEmployee={delEmployee}
+    onDelProjTx={delProjTx}
     onReset={resetAll}/>;
 
   return(
@@ -385,8 +386,11 @@ export default function App(){
 }
 
 // ── صفحة المقاولات ──
-function ContractingPage({projs,emps,bals,onBack,onSelProj,onAddProject,onDelProject,onAddEmployee,onDelEmployee,onReset}){
+function ContractingPage({projs,emps,bals,onBack,onSelProj,onAddProject,onDelProject,onAddEmployee,onDelEmployee,onDelProjTx,onReset}){
   const[tab,setTab]=useState("projects");
+  const[ledgerProj,setLedgerProj]=useState(null);
+  const[ledgerTxs,setLedgerTxs]=useState([]);
+  const[ledgerLoading,setLedgerLoading]=useState(false);
   const[showP,setShowP]=useState(false);
   const[showE,setShowE]=useState(false);
   const[pf,setPf]=useState({name:"",province:"",client:"",totalDin:"",totalDol:"",note:""});
@@ -459,9 +463,10 @@ function ContractingPage({projs,emps,bals,onBack,onSelProj,onAddProject,onDelPro
         </div>
 
         {/* تبويبات */}
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6,marginBottom:14}}>
-          {[["projects","🏗️ المشاريع"],["employees","👷 الموظفون"]].map(([v,l])=>(
-            <button key={v} onClick={()=>setTab(v)} style={{border:tab===v?"none":"1px solid #E2E8F0",
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:6,marginBottom:14}}>
+          {[["projects","🏗️ المشاريع"],["employees","👷 الموظفون"],["ledger","📋 السجل"]].map(([v,l])=>(
+            <button key={v} onClick={()=>{setTab(v);if(v!=="ledger"){setLedgerProj(null);setLedgerTxs([]);}}}
+              style={{border:tab===v?"none":"1px solid #E2E8F0",
               borderRadius:10,padding:"12px",cursor:"pointer",fontWeight:700,fontSize:13,
               fontFamily:"Tahoma",background:tab===v?"#D97706":"#fff",
               color:tab===v?"#fff":"#64748B"}}>{l}</button>
@@ -624,6 +629,11 @@ function ContractingPage({projs,emps,bals,onBack,onSelProj,onAddProject,onDelPro
         )}
 
         {/* الموظفون */}
+        {/* السجل */}
+        {tab==="ledger"&&(
+          <LedgerTab projs={projs} onDelTx={onDelProjTx}/>
+        )}
+
         {tab==="employees"&&(
           <div>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
@@ -1400,6 +1410,211 @@ function PartnerPage({partner,bals,txs,onBack,onWithdraw,onDelTx,onReset}){
           </div>)}
         </>}
       </div>
+    </div>
+  );
+}
+
+// ── تبويب السجل الشامل ──
+function LedgerTab({projs,onDelTx}){
+  const[selProj,setSelProj]=useState(null);
+  const[txs,setTxs]=useState([]);
+  const[loading,setLoading]=useState(false);
+
+  useEffect(()=>{
+    if(!selProj){setTxs([]);return;}
+    setLoading(true);
+    const u=onSnapshot(
+      query(collection(db,"fund_projects_txs"),
+        where("projectId","==",selProj.id),orderBy("createdAt","desc")),
+      snap=>{setTxs(snap.docs.map(d=>({id:d.id,...d.data()})));setLoading(false);}
+    );
+    return()=>u();
+  },[selProj]);
+
+  const bDin=selProj?(selProj.recDin||0)-(selProj.spdDin||0):0;
+  const bDol=selProj?(selProj.recDol||0)-(selProj.spdDol||0):0;
+
+  const doPrint=()=>{
+    if(!selProj||!txs.length)return;
+    const rows=[...txs].sort((a,b)=>a.date?.localeCompare(b.date)).map(t=>{
+      const isIn=t.type==="إيداع";const isDolT=t.currency==="دولار";
+      return"<tr>"
+        +"<td style='padding:8px;border-bottom:1px solid #eee;text-align:center'>"+t.date+"</td>"
+        +"<td style='padding:8px;border-bottom:1px solid #eee;text-align:center;color:"+(isDolT?"#2563EB":"#16A34A")+"'>"+(isDolT?"🇺🇸 دولار":"🇮🇶 دينار")+"</td>"
+        +"<td style='padding:8px;border-bottom:1px solid #eee;text-align:center;color:"+(isIn?"#16A34A":"#DC2626")+"'>"+(isIn?"↓ استلام":"↑ صرف")+"</td>"
+        +"<td style='padding:8px;border-bottom:1px solid #eee'>"+( t.note||"—")+"</td>"
+        +"<td style='padding:8px;border-bottom:1px solid #eee;text-align:center;font-weight:700;color:"+(isIn?"#16A34A":"#DC2626")+"'>"
+          +(isIn?"+":"-")+(isDolT?f$(t.amount):fD(t.amount))+"</td>"
+        +"</tr>";
+    }).join("");
+    const html="<!DOCTYPE html><html dir='rtl'><head><meta charset='utf-8'/>"
+      +"<style>body{font-family:Tahoma;margin:28px;direction:rtl}"
+      +"table{width:100%;border-collapse:collapse}th{background:#F1F5F9;padding:10px;text-align:center}"
+      +"h2{color:#1E293B}p{color:#64748B;font-size:12px}"
+      +"@media print{.noprint{display:none}}</style></head><body>"
+      +"<h2>"+COMPANY.name+"</h2><p>"+COMPANY.address+"</p><hr/>"
+      +"<h3 style='color:#D97706'>"+selProj.name+"</h3>"
+      +(selProj.province?"<p>📍 "+selProj.province+"</p>":"")
+      +(selProj.client?"<p>👤 "+selProj.client+"</p>":"")
+      +"<table style='width:auto;margin-bottom:14px'><tr>"
+      +"<td style='padding:6px 12px;background:#F0FDF4'>استلام د.ع: <b style='color:#16A34A'>"+fD(selProj.recDin||0)+"</b></td>"
+      +"<td style='padding:6px 12px;background:#FFF1F2'>صرف د.ع: <b style='color:#DC2626'>"+fD(selProj.spdDin||0)+"</b></td>"
+      +"<td style='padding:6px 12px;background:#FFFBEB'>ربح د.ع: <b style='color:#D97706'>"+fD(bDin)+"</b></td>"
+      +"</tr></table>"
+      +((selProj.recDol||0)>0||(selProj.spdDol||0)>0?"<table style='width:auto;margin-bottom:14px'><tr>"
+      +"<td style='padding:6px 12px;background:#EFF6FF'>استلام $: <b style='color:#2563EB'>"+f$(selProj.recDol||0)+"</b></td>"
+      +"<td style='padding:6px 12px;background:#FEF2F2'>صرف $: <b style='color:#DC2626'>"+f$(selProj.spdDol||0)+"</b></td>"
+      +"<td style='padding:6px 12px;background:#EFF6FF'>ربح $: <b style='color:#2563EB'>"+f$(bDol)+"</b></td>"
+      +"</tr></table>":"")
+      +"<table><thead><tr><th>التاريخ</th><th>العملة</th><th>النوع</th><th>ملاحظة</th><th>المبلغ</th></tr></thead>"
+      +"<tbody>"+rows+"</tbody></table>"
+      +"<p style='margin-top:16px;color:#94A3B8'>طُبع: "+today()+"</p></body></html>";
+    const fr=document.createElement("iframe");
+    fr.style.cssText="position:fixed;top:-9999px;left:-9999px;width:1px;height:1px;border:none;";
+    document.body.appendChild(fr);fr.contentDocument.open();
+    fr.contentDocument.write(html);fr.contentDocument.close();
+    setTimeout(()=>{fr.contentWindow.focus();fr.contentWindow.print();
+      setTimeout(()=>fr.remove(),2000);},400);
+  };
+
+  return(
+    <div>
+      {/* اختيار المشروع */}
+      <div style={{marginBottom:14}}>
+        <Lbl c="اختر المشروع"/>
+        <select onChange={e=>{
+          const p=projs.find(x=>x.id===e.target.value);
+          setSelProj(p||null);
+        }} style={{width:"100%",border:"1px solid #E2E8F0",borderRadius:10,
+          padding:"12px 14px",fontSize:14,background:"#F8FAFC",color:"#1E293B",
+          outline:"none",fontFamily:"Tahoma",direction:"rtl",marginBottom:0}}>
+          <option value="">— اختر مشروعاً —</option>
+          {[...projs].sort((a,b)=>a.name.localeCompare(b.name,"ar")).map(p=>(
+            <option key={p.id} value={p.id}>
+              {p.name}{p.status==="منتهي"?" ✓":""}
+              {p.client?" — "+p.client:""}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      {/* معلومات المشروع المختار */}
+      {selProj&&(
+        <>
+          <div style={{background:"#fff",borderRadius:14,padding:16,marginBottom:12,
+            border:"1px solid #E2E8F0",borderRight:"4px solid #D97706"}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:12}}>
+              <div>
+                <div style={{fontSize:15,fontWeight:700,color:"#1E293B"}}>{selProj.name}</div>
+                {selProj.province&&<div style={{fontSize:12,color:"#64748B",marginTop:2}}>📍 {selProj.province}</div>}
+                {selProj.client&&<div style={{fontSize:12,color:"#64748B"}}>👤 {selProj.client}</div>}
+                <span style={{fontSize:10,fontWeight:600,padding:"2px 8px",borderRadius:20,
+                  marginTop:5,display:"inline-block",
+                  background:selProj.status==="نشط"?"#DCFCE7":"#F1F5F9",
+                  color:selProj.status==="نشط"?"#16A34A":"#64748B"}}>
+                  {selProj.status==="نشط"?"● نشط":"✓ منتهي"}
+                </span>
+              </div>
+              <button onClick={doPrint} style={{background:"#D97706",border:"none",
+                borderRadius:9,padding:"8px 14px",color:"#fff",cursor:"pointer",
+                fontSize:13,fontFamily:"Tahoma",fontWeight:600}}>
+                🖨️ طباعة
+              </button>
+            </div>
+            {/* ملخص */}
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+              <div>
+                <div style={{fontSize:9,color:"#16A34A",fontWeight:600,marginBottom:4}}>🇮🇶 الدينار</div>
+                <div style={{display:"flex",justifyContent:"space-between",fontSize:12,marginBottom:2}}>
+                  <span style={{color:"#64748B"}}>↓ استلام</span>
+                  <span style={{fontWeight:700,color:"#16A34A"}}>{fD(selProj.recDin||0)}</span>
+                </div>
+                <div style={{display:"flex",justifyContent:"space-between",fontSize:12,marginBottom:2}}>
+                  <span style={{color:"#64748B"}}>↑ صرف</span>
+                  <span style={{fontWeight:700,color:"#DC2626"}}>{fD(selProj.spdDin||0)}</span>
+                </div>
+                <div style={{display:"flex",justifyContent:"space-between",fontSize:13,
+                  borderTop:"1px solid #E2E8F0",paddingTop:4,marginTop:4}}>
+                  <span style={{color:"#64748B",fontWeight:600}}>الربح</span>
+                  <span style={{fontWeight:700,color:bDin>=0?"#D97706":"#DC2626"}}>{fD(Math.abs(bDin))}</span>
+                </div>
+              </div>
+              {((selProj.recDol||0)>0||(selProj.spdDol||0)>0)&&(
+                <div>
+                  <div style={{fontSize:9,color:"#2563EB",fontWeight:600,marginBottom:4}}>🇺🇸 الدولار</div>
+                  <div style={{display:"flex",justifyContent:"space-between",fontSize:12,marginBottom:2}}>
+                    <span style={{color:"#64748B"}}>↓ استلام</span>
+                    <span style={{fontWeight:700,color:"#2563EB"}}>{f$(selProj.recDol||0)}</span>
+                  </div>
+                  <div style={{display:"flex",justifyContent:"space-between",fontSize:12,marginBottom:2}}>
+                    <span style={{color:"#64748B"}}>↑ صرف</span>
+                    <span style={{fontWeight:700,color:"#DC2626"}}>{f$(selProj.spdDol||0)}</span>
+                  </div>
+                  <div style={{display:"flex",justifyContent:"space-between",fontSize:13,
+                    borderTop:"1px solid #E2E8F0",paddingTop:4,marginTop:4}}>
+                    <span style={{color:"#64748B",fontWeight:600}}>الربح</span>
+                    <span style={{fontWeight:700,color:bDol>=0?"#2563EB":"#DC2626"}}>{f$(Math.abs(bDol))}</span>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* الحركات */}
+          <div style={{fontSize:13,fontWeight:700,color:"#1E293B",marginBottom:10}}>
+            الحركات ({txs.length})
+          </div>
+          {loading&&(
+            <div style={{textAlign:"center",padding:24,color:"#94A3B8"}}>جاري التحميل...</div>
+          )}
+          {!loading&&txs.length===0&&(
+            <div style={{textAlign:"center",padding:24,color:"#94A3B8",
+              background:"#fff",borderRadius:12,border:"1px solid #E2E8F0"}}>
+              ما في حركات مسجلة
+            </div>
+          )}
+          {[...txs].sort((a,b)=>b.date?.localeCompare(a.date)).map(t=>{
+            const isIn=t.type==="إيداع";
+            const isDolT=t.currency==="دولار";
+            return(
+              <div key={t.id} style={{background:"#fff",borderRadius:11,padding:"12px 14px",
+                marginBottom:8,border:"1px solid #E2E8F0",
+                borderRight:"4px solid "+(isIn?"#16A34A":"#DC2626")}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                  <div>
+                    <div style={{display:"flex",gap:8,alignItems:"center",marginBottom:3}}>
+                      <span style={{fontSize:12,fontWeight:700,color:isIn?"#16A34A":"#DC2626"}}>
+                        {isIn?"↓ استلام":"↑ صرف"}
+                      </span>
+                      <span style={{fontSize:10,fontWeight:600,padding:"2px 7px",borderRadius:20,
+                        background:isDolT?"#EFF6FF":"#F0FDF4",
+                        color:isDolT?"#2563EB":"#16A34A"}}>
+                        {isDolT?"🇺🇸 دولار":"🇮🇶 دينار"}
+                      </span>
+                    </div>
+                    <div style={{fontSize:11,color:"#64748B"}}>📅 {t.date}</div>
+                    {t.note&&<div style={{fontSize:11,color:"#1E293B",marginTop:2}}>{t.note}</div>}
+                  </div>
+                  <div style={{textAlign:"left"}}>
+                    <div style={{fontSize:16,fontWeight:700,color:isIn?"#16A34A":"#DC2626"}}>
+                      {isIn?"+":"-"}{isDolT?f$(t.amount):fD(t.amount)}
+                    </div>
+                    <DelBtn onClick={()=>onDelTx(t,selProj)}/>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </>
+      )}
+
+      {!selProj&&(
+        <div style={{textAlign:"center",padding:40,color:"#94A3B8",
+          background:"#fff",borderRadius:14,border:"1px solid #E2E8F0"}}>
+          <i className="ti ti-clipboard-list" style={{fontSize:40,color:"#CBD5E1",display:"block",marginBottom:8}} aria-hidden="true"/>
+          اختر مشروعاً لعرض حركاته
+        </div>
+      )}
     </div>
   );
 }
