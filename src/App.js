@@ -21,11 +21,7 @@ const COMPANY = {
 const FUNDS = [
   { id:"capital",     name:"رأس المال",        icon:"ti-safe",          color:"#2563EB", light:"#EFF6FF" },
   { id:"general",     name:"الصندوق العام",     icon:"ti-building-bank", color:"#0891B2", light:"#ECFEFF" },
-  { id:"decor",       name:"الديكور",           icon:"ti-palette",       color:"#7C3AED", light:"#F5F3FF" },
   { id:"contracting", name:"المقاولات",         icon:"ti-building",      color:"#D97706", light:"#FFFBEB" },
-  { id:"facades",     name:"الواجهات",          icon:"ti-layers",        color:"#059669", light:"#ECFDF5" },
-  { id:"engineering", name:"أعمال هندسية",      icon:"ti-ruler-2",       color:"#DC2626", light:"#FEF2F2" },
-  { id:"trade",       name:"التجارة",           icon:"ti-briefcase",     color:"#16A34A", light:"#F0FDF4" },
   { id:"partners",    name:"أرباح الشركاء",     icon:"ti-users",         color:"#9333EA", light:"#FAF5FF" },
 ];
 
@@ -367,8 +363,7 @@ export default function App() {
 
     // تصفير كل الأرصدة
     const allIds=[
-      ...FUNDS.map(f=>f.id),
-      "partners",
+      "capital","general","contracting","partners",
       ...PARTNERS.map(p=>"partner_"+p.id),
     ];
     for (const id of allIds) {
