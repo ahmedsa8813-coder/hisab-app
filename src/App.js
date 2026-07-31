@@ -97,7 +97,7 @@ export default function App(){
 
   // أرصدة
   useEffect(()=>{
-    const t=setTimeout(()=>setLoading(false),4000);
+    const t=setTimeout(()=>setLoading(false),800);
     const u=onSnapshot(collection(db,"fund_balances"),snap=>{
       const b={};snap.docs.forEach(d=>{const x=d.data();b[d.id]={din:x.din??0,dol:x.dol??0};});
       setBals(b);setLoading(false);
@@ -266,7 +266,6 @@ export default function App(){
   const resetAll=async()=>{
     const pw=window.prompt("⚠️ تصفية شاملة كاملة\nالباسورد:");
     if(!pw||pw!==PASS){if(pw!==null)alert("❌ باسورد غلط");return;}
-    if(window.prompt("اكتب \"تصفية\" للتأكيد:")!=="تصفية"){alert("إلغاء");return;}
     const ids=["partners",...PARTNERS.map(p=>"partner_"+p.id)];
     for(const id of ids)await setDoc(doc(db,"fund_balances",id),{din:0,dol:0},{merge:true});
     for(const col of["fund_transactions","fund_projects","fund_projects_txs","employees"]){
@@ -505,6 +504,7 @@ function ContractingPage({projs,emps,bals,onBack,onSelProj,onAddProject,onDelPro
                       <div style={{fontSize:12,fontWeight:700,color:"#2563EB"}}>
                         {f$(Math.abs((p.recDol||0)-(p.spdDol||0)))}</div>
                     )}
+                    <DelBtn onClick={e=>{e.stopPropagation();onDelProject(p.id);}}/>
                   </div>
                 </div>
                 <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6}}>
@@ -529,13 +529,16 @@ function ContractingPage({projs,emps,bals,onBack,onSelProj,onAddProject,onDelPro
                   <div key={p.id} style={{background:"#FAFAFA",border:"1px solid #E2E8F0",
                     borderRight:"4px solid #94A3B8",borderRadius:14,padding:"12px 16px",
                     marginBottom:8,cursor:"pointer",opacity:0.8}} onClick={()=>onSelProj(p)}>
-                    <div style={{display:"flex",justifyContent:"space-between"}}>
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
                       <div>
                         <div style={{fontSize:13,fontWeight:700,color:"#64748B"}}>{p.name}</div>
                         {p.client&&<div style={{fontSize:11,color:"#94A3B8"}}>👤 {p.client}</div>}
                       </div>
-                      <span style={{fontSize:10,fontWeight:600,padding:"2px 8px",borderRadius:20,
-                        background:"#F1F5F9",color:"#64748B",alignSelf:"flex-start"}}>✓ منتهي</span>
+                      <div style={{display:"flex",alignItems:"center",gap:8}}>
+                        <span style={{fontSize:10,fontWeight:600,padding:"2px 8px",borderRadius:20,
+                          background:"#F1F5F9",color:"#64748B"}}>✓ منتهي</span>
+                        <DelBtn onClick={e=>{e.stopPropagation();onDelProject(p.id);}}/>
+                      </div>
                     </div>
                   </div>
                 ))}
