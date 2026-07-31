@@ -431,28 +431,36 @@ function ContractingPage({projs,emps,bals,onBack,onSelProj,onAddProject,onDelPro
               display:"flex",alignItems:"center",justifyContent:"center"}}>
               <i className="ti ti-building" style={{fontSize:24,color:"#D97706"}} aria-hidden="true"/>
             </div>
-            <div style={{fontSize:18,fontWeight:700,color:"#1E293B"}}>صندوق المقاولات</div>
-          </div>
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
-            <div style={{background:"#F0FDF4",borderRadius:10,padding:"10px",textAlign:"center"}}>
-              <div style={{fontSize:9,color:"#64748B",marginBottom:2}}>↓ مستلم</div>
-              <div style={{fontSize:13,fontWeight:700,color:"#16A34A"}}>{fD(tRD)}</div>
-              {tRL>0&&<div style={{fontSize:10,color:"#2563EB"}}>{f$(tRL)}</div>}
-            </div>
-            <div style={{background:"#FFF1F2",borderRadius:10,padding:"10px",textAlign:"center"}}>
-              <div style={{fontSize:9,color:"#64748B",marginBottom:2}}>↑ مصروف</div>
-              <div style={{fontSize:13,fontWeight:700,color:"#DC2626"}}>{fD(tSD)}</div>
-              {tSL>0&&<div style={{fontSize:10,color:"#DC2626"}}>{f$(tSL)}</div>}
-            </div>
-            <div style={{background:tRD-tSD>=0?"#FFFBEB":"#FFF1F2",borderRadius:10,padding:"10px",
-              textAlign:"center",border:"1.5px solid "+(tRD-tSD>=0?"#D9770640":"#DC262640")}}>
-              <div style={{fontSize:9,color:"#64748B",marginBottom:2}}>💰 الربح</div>
-              <div style={{fontSize:13,fontWeight:700,color:tRD-tSD>=0?"#D97706":"#DC2626"}}>
-                {tRD-tSD>=0?"":"-"}{fD(Math.abs(tRD-tSD))}</div>
-              {tRL-tSL!==0&&<div style={{fontSize:10,fontWeight:700,color:tRL-tSL>=0?"#2563EB":"#DC2626"}}>
-                {tRL-tSL>=0?"":"-"}{f$(Math.abs(tRL-tSL))}</div>}
+            <div>
+              <div style={{fontSize:18,fontWeight:700,color:"#1E293B"}}>صندوق المقاولات</div>
+              <div style={{fontSize:11,color:"#64748B",marginTop:2}}>الرصيد من أرباح المشاريع المغلقة فقط</div>
             </div>
           </div>
+          {(bals["contracting"]||{din:0,dol:0}).din===0&&(bals["contracting"]||{din:0,dol:0}).dol===0?(
+            <div style={{background:"#F8FAFC",borderRadius:10,padding:"12px 14px",
+              textAlign:"center",border:"1px solid #E2E8F0"}}>
+              <div style={{fontSize:12,color:"#94A3B8"}}>لا يوجد رصيد — يظهر عند إغلاق المشاريع وتوزيع الأرباح</div>
+            </div>
+          ):(
+            <div style={{background:"#FFFBEB",borderRadius:10,padding:"12px 14px",
+              border:"1.5px solid #D9770640"}}>
+              <div style={{fontSize:10,color:"#D97706",fontWeight:600,marginBottom:8}}>💎 رصيد الصندوق</div>
+              <div style={{display:"flex",gap:20,alignItems:"center"}}>
+                {(bals["contracting"]||{din:0}).din!==0&&(
+                  <div>
+                    <div style={{fontSize:9,color:"#64748B",marginBottom:2}}>🇮🇶 دينار</div>
+                    <div style={{fontSize:20,fontWeight:700,color:"#D97706"}}>{fD((bals["contracting"]||{din:0}).din)}</div>
+                  </div>
+                )}
+                {(bals["contracting"]||{dol:0}).dol!==0&&(
+                  <div>
+                    <div style={{fontSize:9,color:"#64748B",marginBottom:2}}>🇺🇸 دولار</div>
+                    <div style={{fontSize:18,fontWeight:700,color:"#2563EB"}}>{f$((bals["contracting"]||{dol:0}).dol)}</div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* تبويبات */}
@@ -694,10 +702,16 @@ function ProjPage({proj,txs,onBack,onAddTx,onDelTx,onClose,onDel,onReset}){
   const[done,setDone]=useState(false);
   const[showClose,setShowClose]=useState(false);
   const[closing,setClosing]=useState(false);
-  const initD=()=>[{fundId:"partners",pct:100,name:"أرباح الشركاء"}];
+  const initD=()=>[
+    {fundId:"contracting",pct:0,  name:"صندوق المقاولات"},
+    {fundId:"partners",   pct:100,name:"أرباح الشركاء"},
+  ];
   const[dDin,setDDin]=useState(initD);
   const[dDol,setDDol]=useState(initD);
-  const ALL_FUNDS=[{id:"partners",name:"أرباح الشركاء"}];
+  const ALL_FUNDS=[
+    {id:"contracting",name:"صندوق المقاولات"},
+    {id:"partners",   name:"أرباح الشركاء"},
+  ];
   const s=k=>v=>setF(x=>({...x,[k]:v}));
   const amtN=Number(f.amount)||0;
   const isDol=cur==="دولار";
