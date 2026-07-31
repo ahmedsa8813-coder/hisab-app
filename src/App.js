@@ -1843,10 +1843,22 @@ function PartnersPage({ partners, balances, txs, onBack, onDeposit, onWithdraw, 
     };
 
     const printStatement = () => {
-      const w = window.open("", "_blank");
-      w.document.write(buildHtml());
-      w.document.close();
-      setTimeout(() => w.print(), 500);
+      const html = buildHtml();
+      // إنشاء iframe مخفي داخل الصفحة بدل window.open
+      const old = document.getElementById("__print_frame");
+      if (old) old.remove();
+      const frame = document.createElement("iframe");
+      frame.id = "__print_frame";
+      frame.style.cssText = "position:fixed;top:-9999px;left:-9999px;width:1px;height:1px;border:none;";
+      document.body.appendChild(frame);
+      frame.contentDocument.open();
+      frame.contentDocument.write(html);
+      frame.contentDocument.close();
+      setTimeout(() => {
+        frame.contentWindow.focus();
+        frame.contentWindow.print();
+        setTimeout(() => frame.remove(), 2000);
+      }, 400);
     };
 
     return (
