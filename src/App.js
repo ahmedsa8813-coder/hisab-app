@@ -377,28 +377,29 @@ export default function App() {
     });
   };
 
-  const addProjectTx = async (proj, type, subType, amount, currency, exchRate, note, date) => {
+  const addProjectTx = async (proj, type, amount, currency, exchRate, note, date) => {
     const amt    = Math.round(Number(amount));
     if (!amt || amt <= 0) return;
     const isDol  = currency === "دولار";
-    const amtDin = isDol ? amt * (Number(exchRate) || 0) : amt;
-    const isRec  = type === "استلام";
-    const fieldDin = isRec ? "recDin" : "spdDin";
-    const fieldDol = isRec ? "recDol" : "spdDol";
-    await setDoc(doc(db, "fund_projects", proj.id), {
-      [fieldDin]: (proj[fieldDin] || 0) + (isDol ? amtDin : amt),
-      [fieldDol]: (proj[fieldDol] || 0) + (isDol ? amt : 0),
-    }, { merge: true });
-    await addDoc(collection(db, "fund_projects_txs"), {
-      projectId: proj.id, projectName: proj.name,
-      fundId: proj.fundId,
-      type, subType: subType || "",
-      amount: amt, currency,
-      exchRate: Number(exchRate) || 0,
-      amtInDinar: amtDin,
-      note: note || "",
-      date: date || today(),
-      createdAt: new Date().toISOString(),
+    const amtDin = isDol ? amt*(Number(exchRate)||0) : amt;
+    const isRec  = type === "إيداع";
+    // حدّث إجماليات المشروع
+    const updDin = isRec
+      ? { recDin:(proj.recDin||0)+(isDol?amtDin:amt) }
+      : { spdDin:(proj.spdDin||0)+(isDol?amtDin:amt) };
+    const updDol = isDol
+      ? (isRec ? { recDol:(proj.recDol||0)+amt } : { spdDol:(proj.spdDol||0)+amt })
+      : {};
+    await setDoc(doc(db,"fund_projects",proj.id),
+      { ...updDin, ...updDol }, { merge:true });
+    await addDoc(collection(db,"fund_projects_txs"), {
+      projectId:proj.id, projectName:proj.name,
+      fundId:proj.fundId,
+      type, amount:amt, currency,
+      exchRate:Number(exchRate)||0,
+      amtInDinar:amtDin,
+      note:note||"", date:date||today(),
+      createdAt:new Date().toISOString(),
     });
   };
 
@@ -481,7 +482,7 @@ export default function App() {
       fund={FUNDS.find(f=>f.id===selProject.fundId)}
       allFunds={FUNDS}
       onBack={()=>{ setPage("fund"); setSelProject(null); }}
-      onAddTx={(proj,type,sub,amt,cur,exch,note,date)=>addProjectTx(proj,type,sub,amt,cur,exch,note,date)}
+      onAddTx={(proj,type,amt,cur,exch,note,date)=>addProjectTx(proj,type,amt,cur,exch,note,date)}
       onClose={closeProject}
       onDelete={deleteProject}
     />;
@@ -898,71 +899,86 @@ function FundDetail({ fund, balDin=0, balDol=0, txs, projects=[], onBack, onAdd,
   );
 }
 
-// ─── أنواع المشاريع والصرف والاستلام ───────────────────────────
-const PROJECT_TYPES = [
-  { id:"residential", label:"سكني",      icon:"ti-home-2",        color:"#2563EB" },
-  { id:"commercial",  label:"تجاري",      icon:"ti-building-store",color:"#D97706" },
-  { id:"government",  label:"حكومي",      icon:"ti-building-arch", color:"#DC2626" },
-  { id:"industrial",  label:"صناعي",      icon:"ti-building-factory-2",color:"#7C3AED"},
-  { id:"interior",    label:"ديكور داخلي",icon:"ti-palette",       color:"#059669" },
-  { id:"facade",      label:"واجهات",     icon:"ti-layers",        color:"#0891B2" },
-  { id:"road",        label:"طرق وبنية",  icon:"ti-road",          color:"#92400E" },
-  { id:"other",       label:"أخرى",       icon:"ti-briefcase",     color:"#64748B" },
+// ─── أنواع المشاريع ────────────────────────────────────────
+const PROJECT_ICONS = [
+  { id:"residential", label:"سكني",       icon:"ti-home-2",             color:"#2563EB" },
+  { id:"commercial",  label:"تجاري",       icon:"ti-building-store",     color:"#D97706" },
+  { id:"government",  label:"حكومي",       icon:"ti-building-arch",      color:"#DC2626" },
+  { id:"industrial",  label:"صناعي",       icon:"ti-building-factory-2", color:"#7C3AED" },
+  { id:"interior",    label:"ديكور",       icon:"ti-palette",            color:"#059669" },
+  { id:"facade",      label:"واجهات",      icon:"ti-layers",             color:"#0891B2" },
+  { id:"road",        label:"طرق",         icon:"ti-road",               color:"#92400E" },
+  { id:"other",       label:"أخرى",        icon:"ti-briefcase",          color:"#64748B" },
 ];
+const getPT = id => PROJECT_ICONS.find(t => t.id === id) || PROJECT_ICONS[7];
 
-const RECEIPT_TYPES = [
-  { id:"advance",     label:"دفعة أولى (سلفة)",    icon:"ti-cash" },
-  { id:"progress",    label:"دفعة مرحلية",          icon:"ti-cash-banknote" },
-  { id:"completion",  label:"دفعة إنجاز",           icon:"ti-checkup-list" },
-  { id:"final",       label:"دفعة نهائية",           icon:"ti-check-all" },
-  { id:"retention",   label:"استرداد ضمان",          icon:"ti-lock-open" },
-  { id:"other",       label:"استلام أخرى",           icon:"ti-dots" },
-];
-
-const EXPENSE_TYPES = [
-  { id:"materials",   label:"مواد البناء",           icon:"ti-packages" },
-  { id:"labor",       label:"عمالة وأجور",           icon:"ti-users" },
-  { id:"subcontract", label:"مقاولون فرعيون",        icon:"ti-tool" },
-  { id:"equipment",   label:"معدات وآليات",          icon:"ti-tractor" },
-  { id:"transport",   label:"نقل ومواصلات",          icon:"ti-truck" },
-  { id:"admin",       label:"مصاريف إدارية",         icon:"ti-file-invoice" },
-  { id:"consulting",  label:"استشارات وهندسة",       icon:"ti-ruler-2" },
-  { id:"other",       label:"مصاريف أخرى",           icon:"ti-dots" },
-];
-
-// ─── تبويب المشاريع داخل الصندوق ────────────────────────────
+// ─── قائمة مشاريع الصندوق ───────────────────────────────────
 function ProjectsTab({ fund, projects, onAddProject, onOpenProject }) {
   const [showForm, setShowForm] = useState(false);
   const [name,     setName]     = useState("");
-  const [projType, setProjType] = useState("residential");
+  const [ptype,    setPtype]    = useState("residential");
   const [client,   setClient]   = useState("");
   const [note,     setNote]     = useState("");
   const [saving,   setSaving]   = useState(false);
 
-  const selType = PROJECT_TYPES.find(t => t.id === projType);
-
   const save = async () => {
     if (!name.trim() || saving) return;
     setSaving(true);
-    await onAddProject(name, projType, client, note);
+    await onAddProject(name, ptype, client, note);
     setSaving(false);
     setName(""); setClient(""); setNote(""); setShowForm(false);
   };
 
-  const active   = projects.filter(p => p.status === "نشط");
-  const finished = projects.filter(p => p.status === "منتهي");
+  // إجماليات كل المشاريع للصندوق
+  const totalRec = projects.reduce((s,p) => s + (p.recDin||0), 0);
+  const totalSpd = projects.reduce((s,p) => s + (p.spdDin||0), 0);
+  const totalBal = totalRec - totalSpd;
 
   return (
     <div>
-      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:14 }}>
+      {/* إجمالي الصندوق */}
+      {projects.length > 0 && (
+        <div style={{ background:"#fff", borderRadius:14, padding:14,
+          marginBottom:14, border:"1px solid #E2E8F0" }}>
+          <div style={{ fontSize:12, color:"#64748B", marginBottom:10, fontWeight:600 }}>
+            إجمالي مشاريع {fund?.name}
+          </div>
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:8 }}>
+            <div style={{ background:"#F0FDF4", borderRadius:10, padding:"10px 12px", textAlign:"center" }}>
+              <div style={{ fontSize:10, color:"#64748B", marginBottom:3 }}>↓ إجمالي الإيداع</div>
+              <div style={{ fontSize:14, fontWeight:700, color:"#16A34A" }}>{fmtD(totalRec)}</div>
+            </div>
+            <div style={{ background:"#FFF1F2", borderRadius:10, padding:"10px 12px", textAlign:"center" }}>
+              <div style={{ fontSize:10, color:"#64748B", marginBottom:3 }}>↑ إجمالي السحب</div>
+              <div style={{ fontSize:14, fontWeight:700, color:"#DC2626" }}>{fmtD(totalSpd)}</div>
+            </div>
+            <div style={{
+              background: totalBal >= 0 ? "#EFF6FF" : "#FFF1F2",
+              borderRadius:10, padding:"10px 12px", textAlign:"center",
+              border:"1.5px solid " + (totalBal>=0 ? fund?.color+"40" : "#DC262640") }}>
+              <div style={{ fontSize:10, color:"#64748B", marginBottom:3 }}>💰 الرصيد الكلي</div>
+              <div style={{ fontSize:14, fontWeight:700,
+                color: totalBal >= 0 ? (fund?.color||"#2563EB") : "#DC2626" }}>
+                {totalBal >= 0 ? "" : "-"}{fmtD(Math.abs(totalBal))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* رأس القسم */}
+      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:12 }}>
         <div>
-          <div style={{ fontSize:14, fontWeight:700, color:"#1E293B" }}>مشاريع {fund?.name}</div>
-          <div style={{ fontSize:11, color:"#64748B", marginTop:2 }}>
-            {active.length} نشط · {finished.length} منتهي
+          <div style={{ fontSize:14, fontWeight:700, color:"#1E293B" }}>
+            المشاريع ({projects.length})
+          </div>
+          <div style={{ fontSize:11, color:"#64748B", marginTop:1 }}>
+            {projects.filter(p=>p.status==="نشط").length} نشط ·{" "}
+            {projects.filter(p=>p.status==="منتهي").length} منتهي
           </div>
         </div>
         <button onClick={() => setShowForm(v => !v)} style={{
-          background: showForm ? "#64748B" : (fund?.color || "#2563EB"),
+          background: showForm ? "#64748B" : (fund?.color||"#2563EB"),
           border:"none", borderRadius:9, padding:"8px 16px",
           color:"#fff", cursor:"pointer", fontSize:13,
           fontFamily:"Tahoma", fontWeight:600 }}>
@@ -970,107 +986,135 @@ function ProjectsTab({ fund, projects, onAddProject, onOpenProject }) {
         </button>
       </div>
 
+      {/* نموذج إنشاء مشروع */}
       {showForm && (
-        <div style={{ background:"#fff", border:"1px solid #E2E8F0", borderRadius:14,
-          padding:18, marginBottom:14 }}>
+        <div style={{ background:"#fff", border:"1px solid #E2E8F0",
+          borderRadius:14, padding:18, marginBottom:14 }}>
 
           <Lbl>نوع المشروع</Lbl>
           <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:6, marginBottom:14 }}>
-            {PROJECT_TYPES.map(t => (
-              <button key={t.id} onClick={() => setProjType(t.id)} style={{
+            {PROJECT_ICONS.map(t => (
+              <button key={t.id} onClick={() => setPtype(t.id)} style={{
                 padding:"8px 4px", borderRadius:9, border:"1.5px solid",
                 cursor:"pointer", fontFamily:"Tahoma", fontSize:11, fontWeight:600,
-                borderColor: projType === t.id ? t.color : "#E2E8F0",
-                background:  projType === t.id ? t.color + "15" : "transparent",
-                color:       projType === t.id ? t.color : "#64748B",
+                borderColor: ptype===t.id ? t.color : "#E2E8F0",
+                background:  ptype===t.id ? t.color+"18" : "transparent",
+                color:       ptype===t.id ? t.color : "#64748B",
                 display:"flex", flexDirection:"column", alignItems:"center", gap:4 }}>
-                <i className={"ti " + t.icon} style={{ fontSize:18, color: projType === t.id ? t.color : "#94A3B8" }} aria-hidden="true"/>
+                <i className={"ti "+t.icon}
+                  style={{ fontSize:18, color:ptype===t.id?t.color:"#CBD5E1" }}
+                  aria-hidden="true"/>
                 {t.label}
               </button>
             ))}
           </div>
 
           <Lbl>اسم المشروع</Lbl>
-          <Inp style={{ marginBottom:10 }} placeholder="مثال: فيلا العميل / مجمع الرشيد..."
+          <Inp style={{ marginBottom:10 }}
+            placeholder="مثال: مشروع فيلا الرشيد..."
             value={name} onChange={e => setName(e.target.value)} autoFocus/>
 
           <Lbl>اسم العميل</Lbl>
-          <Inp style={{ marginBottom:10 }} placeholder="اسم صاحب المشروع..."
+          <Inp style={{ marginBottom:10 }}
+            placeholder="اسم صاحب المشروع..."
             value={client} onChange={e => setClient(e.target.value)}/>
 
           <Lbl>ملاحظة</Lbl>
-          <Inp style={{ marginBottom:14 }} placeholder="موقع، وصف..."
+          <Inp style={{ marginBottom:14 }}
+            placeholder="موقع، تفاصيل..."
             value={note} onChange={e => setNote(e.target.value)}/>
 
-          <button onClick={save} disabled={!name.trim() || saving} style={{
-            width:"100%", border:"none", borderRadius:10, padding:"12px",
+          <button onClick={save} disabled={!name.trim()||saving} style={{
+            width:"100%", border:"none", borderRadius:10, padding:"13px",
             fontSize:14, fontWeight:700, fontFamily:"Tahoma", cursor:"pointer",
-            background: name.trim() ? (selType?.color || fund?.color || "#2563EB") : "#E2E8F0",
+            background: name.trim() ? (getPT(ptype).color||fund?.color||"#2563EB") : "#E2E8F0",
             color: name.trim() ? "#fff" : "#94A3B8" }}>
-            {saving ? "جاري الحفظ..." : "✅ إنشاء المشروع"}
+            {saving ? "جاري الإنشاء..." : "✅ إنشاء صندوق المشروع"}
           </button>
         </div>
       )}
 
+      {/* قائمة المشاريع */}
       {projects.length === 0 ? (
         <div style={{ textAlign:"center", padding:32, color:"#94A3B8",
           background:"#fff", borderRadius:14, border:"1px solid #E2E8F0" }}>
-          <i className="ti ti-building-plus" style={{ fontSize:40, color:"#CBD5E1", display:"block", marginBottom:8 }} aria-hidden="true"/>
-          ما في مشاريع — اضغط "+ مشروع جديد"
+          <i className="ti ti-building-plus"
+            style={{ fontSize:40, color:"#CBD5E1", display:"block", marginBottom:8 }}
+            aria-hidden="true"/>
+          ما في مشاريع — أنشئ مشروعاً جديداً
         </div>
       ) : projects.map(proj => {
-        const pt      = PROJECT_TYPES.find(t => t.id === proj.projType) || PROJECT_TYPES[7];
-        const profDin = (proj.recDin || 0) - (proj.spdDin || 0);
-        const profDol = (proj.recDol || 0) - (proj.spdDol || 0);
-        const isActive = proj.status === "نشط";
+        const pt   = getPT(proj.projType);
+        const bal  = (proj.recDin||0) - (proj.spdDin||0);
+        const isAct= proj.status === "نشط";
         return (
           <button key={proj.id} onClick={() => onOpenProject(proj)} style={{
             width:"100%", background:"#fff", border:"1px solid #E2E8F0",
-            borderRight:"4px solid " + (isActive ? pt.color : "#CBD5E1"),
+            borderRight:"4px solid " + (isAct ? pt.color : "#CBD5E1"),
             borderRadius:14, padding:"14px 16px", marginBottom:10,
             cursor:"pointer", textAlign:"right", fontFamily:"Tahoma",
-            boxShadow:"0 1px 3px rgba(0,0,0,0.04)" }}>
-            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:10 }}>
+            boxShadow:"0 1px 3px rgba(0,0,0,0.04)",
+            transition:"box-shadow 0.15s" }}>
+
+            <div style={{ display:"flex", justifyContent:"space-between",
+              alignItems:"flex-start", marginBottom:10 }}>
+              {/* أيقونة + اسم */}
               <div style={{ display:"flex", alignItems:"center", gap:10 }}>
                 <div style={{ width:42, height:42, borderRadius:12,
-                  background: pt.color + "15",
-                  display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
-                  <i className={"ti " + pt.icon} style={{ fontSize:22, color: isActive ? pt.color : "#94A3B8" }} aria-hidden="true"/>
+                  background:pt.color+"15", flexShrink:0,
+                  display:"flex", alignItems:"center", justifyContent:"center" }}>
+                  <i className={"ti "+pt.icon}
+                    style={{ fontSize:22, color:isAct?pt.color:"#94A3B8" }}
+                    aria-hidden="true"/>
                 </div>
                 <div>
                   <div style={{ fontSize:14, fontWeight:700, color:"#1E293B" }}>{proj.name}</div>
-                  {proj.client && <div style={{ fontSize:11, color:"#64748B", marginTop:1 }}>👤 {proj.client}</div>}
-                  <div style={{ display:"flex", alignItems:"center", gap:6, marginTop:4 }}>
-                    <span style={{ fontSize:10, fontWeight:600, padding:"2px 8px", borderRadius:20,
-                      background: isActive ? "#DCFCE7" : "#F1F5F9",
-                      color: isActive ? "#16A34A" : "#64748B" }}>
-                      {isActive ? "● نشط" : "✓ منتهي"}
+                  {proj.client && (
+                    <div style={{ fontSize:11, color:"#64748B", marginTop:1 }}>👤 {proj.client}</div>
+                  )}
+                  <div style={{ display:"flex", gap:6, marginTop:4, alignItems:"center" }}>
+                    <span style={{ fontSize:10, fontWeight:600, padding:"2px 8px",
+                      borderRadius:20,
+                      background:isAct?"#DCFCE7":"#F1F5F9",
+                      color:isAct?"#16A34A":"#64748B" }}>
+                      {isAct ? "● نشط" : "✓ منتهي"}
                     </span>
-                    <span style={{ fontSize:10, color:pt.color, fontWeight:600 }}>{pt.label}</span>
+                    <span style={{ fontSize:10, color:pt.color, fontWeight:600 }}>
+                      {pt.label}
+                    </span>
                   </div>
                 </div>
               </div>
+
+              {/* الرصيد */}
               <div style={{ textAlign:"left" }}>
-                <div style={{ fontSize:11, color:"#64748B", marginBottom:2 }}>صافي الربح</div>
-                <div style={{ fontSize:16, fontWeight:700,
-                  color: profDin >= 0 ? "#16A34A" : "#DC2626" }}>
-                  {profDin >= 0 ? "+" : "-"}{fmtD(Math.abs(profDin))}
+                <div style={{ fontSize:10, color:"#64748B", marginBottom:2 }}>الرصيد</div>
+                <div style={{ fontSize:17, fontWeight:700,
+                  color:bal>=0?"#16A34A":"#DC2626" }}>
+                  {bal>=0?"":"-"}{fmtD(Math.abs(bal))}
                 </div>
-                {profDol !== 0 && (
-                  <div style={{ fontSize:12, color:"#2563EB", fontWeight:600 }}>
-                    {profDol >= 0 ? "+" : "-"}{toAr(Math.abs(Math.round(profDol)))} $
-                  </div>
-                )}
               </div>
             </div>
+
+            {/* شريط الإيداع والسحب */}
             <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
               <div style={{ background:"#F0FDF4", borderRadius:9, padding:"7px 10px" }}>
-                <div style={{ fontSize:10, color:"#64748B" }}>↓ إجمالي الاستلام</div>
-                <div style={{ fontSize:13, fontWeight:700, color:"#16A34A" }}>{fmtD(proj.recDin || 0)}</div>
+                <div style={{ fontSize:10, color:"#64748B" }}>↓ الإيداع</div>
+                <div style={{ fontSize:13, fontWeight:700, color:"#16A34A" }}>
+                  {fmtD(proj.recDin||0)}
+                </div>
+                {(proj.recDol||0)>0 && (
+                  <div style={{ fontSize:11, color:"#2563EB" }}>{toAr(Math.round(proj.recDol))} $</div>
+                )}
               </div>
               <div style={{ background:"#FFF1F2", borderRadius:9, padding:"7px 10px" }}>
-                <div style={{ fontSize:10, color:"#64748B" }}>↑ إجمالي المصروف</div>
-                <div style={{ fontSize:13, fontWeight:700, color:"#DC2626" }}>{fmtD(proj.spdDin || 0)}</div>
+                <div style={{ fontSize:10, color:"#64748B" }}>↑ السحب</div>
+                <div style={{ fontSize:13, fontWeight:700, color:"#DC2626" }}>
+                  {fmtD(proj.spdDin||0)}
+                </div>
+                {(proj.spdDol||0)>0 && (
+                  <div style={{ fontSize:11, color:"#DC2626" }}>{toAr(Math.round(proj.spdDol))} $</div>
+                )}
               </div>
             </div>
           </button>
@@ -1080,14 +1124,12 @@ function ProjectsTab({ fund, projects, onAddProject, onOpenProject }) {
   );
 }
 
-// ─── صفحة تفاصيل المشروع (قيد مزدوج) ───────────────────────
+// ─── صفحة صندوق المشروع ─────────────────────────────────────
 function ProjectDetail({ project, fund, allFunds, onBack, onAddTx, onClose, onDelete }) {
   const [proj,      setProj]     = useState(project);
-  const [tab,       setTab]      = useState("receipt"); // receipt | expense | ledger | close
+  const [tab,       setTab]      = useState("deposit");
   const [form,      setForm]     = useState({
-    recType:"advance", expType:"materials",
-    amount:"", currency:"دينار", exchRate:"",
-    note:"", date:today(),
+    amount:"", currency:"دينار", exchRate:"", note:"", date:today(),
   });
   const [saving,    setSaving]   = useState(false);
   const [done,      setDone]     = useState(false);
@@ -1100,18 +1142,23 @@ function ProjectDetail({ project, fund, allFunds, onBack, onAddTx, onClose, onDe
   const [closing,   setClosing]  = useState(false);
   const [projTxs,   setProjTxs] = useState([]);
 
-  const set = k => v => setForm(f => ({ ...f, [k]: v }));
-  const amtN   = Number(form.amount) || 0;
-  const isDol  = form.currency === "دولار";
-  const amtDin = isDol ? amtN * (Number(form.exchRate) || 0) : amtN;
+  const set   = k => v => setForm(f => ({ ...f, [k]:v }));
+  const amtN  = Number(form.amount)||0;
+  const isDol = form.currency === "دولار";
+  const amtDin= isDol ? amtN*(Number(form.exchRate)||0) : amtN;
+
+  const balDin = (proj.recDin||0) - (proj.spdDin||0);
+  const balDol = (proj.recDol||0) - (proj.spdDol||0);
+  const isActive = proj.status === "نشط";
+  const pt = getPT(proj.projType);
 
   useEffect(() => { setProj(project); }, [project]);
 
   useEffect(() => {
     const unsub = onSnapshot(
-      query(collection(db, "fund_projects_txs"), orderBy("createdAt", "desc")),
+      query(collection(db,"fund_projects_txs"), orderBy("createdAt","desc")),
       snap => setProjTxs(
-        snap.docs.map(d => ({ id:d.id, ...d.data() }))
+        snap.docs.map(d=>({id:d.id,...d.data()}))
           .filter(t => t.projectId === project.id)
       )
     );
@@ -1120,162 +1167,163 @@ function ProjectDetail({ project, fund, allFunds, onBack, onAddTx, onClose, onDe
 
   const save = async () => {
     if (!amtN || saving) return;
+    const type = tab === "deposit" ? "إيداع" : "سحب";
+    // تحقق من الرصيد عند السحب
+    if (tab === "withdraw") {
+      const needed = isDol ? amtN : amtN;
+      const avail  = isDol ? balDol : balDin;
+      if (needed > avail) {
+        alert("لا يمكن السحب — الرصيد غير كافٍ\nالمتاح: " + (isDol ? toAr(Math.round(avail))+" $" : fmtD(avail)));
+        return;
+      }
+    }
     setSaving(true);
-    const type = tab === "receipt" ? "استلام" : "صرف";
-    const subType = tab === "receipt" ? form.recType : form.expType;
-    await onAddTx(proj, type, subType, form.amount, form.currency, form.exchRate, form.note, form.date);
+    await onAddTx(proj, type, form.amount, form.currency, form.exchRate, form.note, form.date);
     setSaving(false); setDone(true);
     setTimeout(() => {
       setDone(false);
-      setForm(f => ({ ...f, amount:"", note:"", exchRate:"" }));
+      setForm({ amount:"", currency:"دينار", exchRate:"", note:"", date:today() });
     }, 1400);
   };
 
-  const totalPct  = dists.reduce((s, d) => s + Number(d.pct), 0);
-  const profitDin = (proj.recDin || 0) - (proj.spdDin || 0);
-  const profitDol = (proj.recDol || 0) - (proj.spdDol || 0);
-  const isActive  = proj.status === "نشط";
-  const pt        = PROJECT_TYPES.find(t => t.id === proj.projType) || PROJECT_TYPES[7];
-
-  const receipts = projTxs.filter(t => t.type === "استلام");
-  const expenses = projTxs.filter(t => t.type === "صرف");
+  const totalPct  = dists.reduce((s,d) => s+Number(d.pct), 0);
+  const receipts  = projTxs.filter(t => t.type==="إيداع");
+  const expenses  = projTxs.filter(t => t.type==="سحب");
 
   const doClose = async () => {
     if (Math.round(totalPct) !== 100) { alert("مجموع النسب يجب أن يكون 100%"); return; }
     setClosing(true);
-    await onClose(proj, dists.map(d => ({ fundId:d.fundId, pct:Number(d.pct) })));
+    await onClose(proj, dists.map(d=>({fundId:d.fundId, pct:Number(d.pct)})));
     setClosing(false); setShowClose(false);
   };
 
-  const TABS = [
-    { id:"receipt", label:"↓ استلام", color:"#16A34A" },
-    { id:"expense", label:"↑ صرف",    color:"#DC2626" },
-    { id:"ledger",  label:"📋 القيود", color:"#2563EB" },
-    { id:"close",   label:"🏁 إنهاء",  color:"#9333EA" },
-  ];
-
   return (
-    <div style={{ minHeight:"100vh", background:"#F1F5F9", fontFamily:"Tahoma", direction:"rtl" }}>
+    <div style={{ minHeight:"100vh", background:"#F1F5F9",
+      fontFamily:"Tahoma", direction:"rtl" }}>
       <div style={{ maxWidth:660, margin:"0 auto", padding:"20px 14px" }}>
 
-        <BackBtn onClick={onBack} label={"رجوع لـ " + (fund?.name || "الصندوق")}/>
+        <BackBtn onClick={onBack} label={"رجوع لـ " + (fund?.name||"الصندوق")}/>
 
         {/* بطاقة المشروع */}
-        <div style={{ background:"#fff", borderRadius:18, padding:18, marginBottom:14,
-          border:"1px solid #E2E8F0", borderTop:"5px solid " + pt.color,
+        <div style={{ background:"#fff", borderRadius:18, padding:18,
+          marginBottom:14, border:"1px solid #E2E8F0",
+          borderTop:"5px solid "+pt.color,
           boxShadow:"0 1px 4px rgba(0,0,0,0.04)" }}>
 
-          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:14 }}>
-            <div style={{ display:"flex", alignItems:"center", gap:12 }}>
-              <div style={{ width:48, height:48, borderRadius:13, background:pt.color+"15",
-                display:"flex", alignItems:"center", justifyContent:"center" }}>
-                <i className={"ti " + pt.icon} style={{ fontSize:26, color:pt.color }} aria-hidden="true"/>
-              </div>
-              <div>
-                <div style={{ fontSize:18, fontWeight:700, color:"#1E293B" }}>{proj.name}</div>
-                {proj.client && <div style={{ fontSize:12, color:"#64748B", marginTop:2 }}>👤 {proj.client}</div>}
-                <div style={{ display:"flex", gap:8, marginTop:4 }}>
-                  <span style={{ fontSize:10, fontWeight:600, padding:"2px 8px", borderRadius:20,
-                    background:isActive?"#DCFCE7":"#F1F5F9",
-                    color:isActive?"#16A34A":"#64748B" }}>
-                    {isActive ? "● نشط" : "✓ منتهي"}
-                  </span>
-                  <span style={{ fontSize:10, color:pt.color, fontWeight:600 }}>{pt.label}</span>
-                </div>
+          <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:16 }}>
+            <div style={{ width:50, height:50, borderRadius:14, background:pt.color+"15",
+              display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
+              <i className={"ti "+pt.icon}
+                style={{ fontSize:26, color:pt.color }} aria-hidden="true"/>
+            </div>
+            <div style={{ flex:1 }}>
+              <div style={{ fontSize:19, fontWeight:700, color:"#1E293B" }}>{proj.name}</div>
+              {proj.client && (
+                <div style={{ fontSize:12, color:"#64748B", marginTop:2 }}>👤 {proj.client}</div>
+              )}
+              <div style={{ display:"flex", gap:8, marginTop:5, alignItems:"center" }}>
+                <span style={{ fontSize:10, fontWeight:600, padding:"2px 8px",
+                  borderRadius:20,
+                  background:isActive?"#DCFCE7":"#F1F5F9",
+                  color:isActive?"#16A34A":"#64748B" }}>
+                  {isActive?"● نشط":"✓ منتهي"}
+                </span>
+                <span style={{ fontSize:10, color:pt.color, fontWeight:600 }}>{pt.label}</span>
               </div>
             </div>
+            {isActive && (
+              <button onClick={() => setShowClose(true)} style={{
+                background:"#DC2626", border:"none", borderRadius:10,
+                padding:"8px 12px", color:"#fff", cursor:"pointer",
+                fontSize:12, fontFamily:"Tahoma", fontWeight:700 }}>
+                🏁 إنهاء
+              </button>
+            )}
           </div>
 
-          {/* الأرقام الثلاثة */}
+          {/* الأرصدة الثلاثة */}
           <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:8 }}>
-            <div style={{ background:"#F0FDF4", borderRadius:11, padding:"10px 12px" }}>
-              <div style={{ fontSize:9, color:"#64748B", marginBottom:3 }}>↓ إجمالي الاستلام</div>
+            <div style={{ background:"#F0FDF4", borderRadius:11, padding:"11px 12px" }}>
+              <div style={{ fontSize:10, color:"#64748B", marginBottom:3 }}>↓ إجمالي الإيداع</div>
               <div style={{ fontSize:14, fontWeight:700, color:"#16A34A" }}>{fmtD(proj.recDin||0)}</div>
-              {(proj.recDol||0)>0 && <div style={{ fontSize:11, color:"#2563EB" }}>{toAr(Math.round(proj.recDol))} $</div>}
+              {(proj.recDol||0)>0 && (
+                <div style={{ fontSize:11, color:"#2563EB" }}>{toAr(Math.round(proj.recDol))} $</div>
+              )}
             </div>
-            <div style={{ background:"#FFF1F2", borderRadius:11, padding:"10px 12px" }}>
-              <div style={{ fontSize:9, color:"#64748B", marginBottom:3 }}>↑ إجمالي المصروف</div>
+            <div style={{ background:"#FFF1F2", borderRadius:11, padding:"11px 12px" }}>
+              <div style={{ fontSize:10, color:"#64748B", marginBottom:3 }}>↑ إجمالي السحب</div>
               <div style={{ fontSize:14, fontWeight:700, color:"#DC2626" }}>{fmtD(proj.spdDin||0)}</div>
-              {(proj.spdDol||0)>0 && <div style={{ fontSize:11, color:"#DC2626" }}>{toAr(Math.round(proj.spdDol))} $</div>}
+              {(proj.spdDol||0)>0 && (
+                <div style={{ fontSize:11, color:"#DC2626" }}>{toAr(Math.round(proj.spdDol))} $</div>
+              )}
             </div>
-            <div style={{ background:profitDin>=0?"#EFF6FF":"#FFF1F2", borderRadius:11,
-              padding:"10px 12px", border:"1.5px solid "+(profitDin>=0?"#2563EB40":"#DC262640") }}>
-              <div style={{ fontSize:9, color:"#64748B", marginBottom:3 }}>💰 صافي الربح</div>
-              <div style={{ fontSize:14, fontWeight:700, color:profitDin>=0?"#2563EB":"#DC2626" }}>
-                {profitDin>=0?"+":"-"}{fmtD(Math.abs(profitDin))}
+            <div style={{
+              background: balDin>=0 ? "#EFF6FF" : "#FFF1F2",
+              borderRadius:11, padding:"11px 12px",
+              border:"1.5px solid "+(balDin>=0?pt.color+"40":"#DC262640") }}>
+              <div style={{ fontSize:10, color:"#64748B", marginBottom:3 }}>💰 الرصيد المتاح</div>
+              <div style={{ fontSize:14, fontWeight:700,
+                color:balDin>=0?pt.color:"#DC2626" }}>
+                {balDin>=0?"":"-"}{fmtD(Math.abs(balDin))}
               </div>
-              {profitDol!==0 && <div style={{ fontSize:11, color:"#2563EB" }}>
-                {profitDol>=0?"+":"-"}{toAr(Math.abs(Math.round(profitDol)))} $
-              </div>}
+              {balDol!==0 && (
+                <div style={{ fontSize:11, color:"#2563EB" }}>
+                  {balDol>=0?"":"-"}{toAr(Math.abs(Math.round(balDol)))} $
+                </div>
+              )}
             </div>
           </div>
         </div>
 
         {/* تبويبات */}
-        <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:4, marginBottom:14 }}>
-          {TABS.map(t => (
+        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:6, marginBottom:14 }}>
+          {[
+            { id:"deposit",  label:"↓ إيداع",    color:"#16A34A" },
+            { id:"withdraw", label:"↑ سحب",       color:"#DC2626" },
+            { id:"history",  label:"📋 السجل",    color:"#2563EB" },
+          ].map(t => (
             <button key={t.id} onClick={() => setTab(t.id)} style={{
-              border:"none", borderRadius:10, padding:"10px 4px",
-              cursor:"pointer", fontWeight:700, fontSize:12,
+              border: tab===t.id ? "none" : "1px solid #E2E8F0",
+              borderRadius:10, padding:"11px 6px",
+              cursor:"pointer", fontWeight:700, fontSize:13,
               fontFamily:"Tahoma", textAlign:"center",
               background: tab===t.id ? t.color : "#fff",
-              color: tab===t.id ? "#fff" : "#64748B",
-              border: tab===t.id ? "none" : "1px solid #E2E8F0" }}>
+              color: tab===t.id ? "#fff" : "#64748B" }}>
               {t.label}
             </button>
           ))}
         </div>
 
-        {/* ── استلام ── */}
-        {(tab==="receipt"||tab==="expense") && isActive && (
-        <div style={{ background:"#fff", border:"1px solid #E2E8F0", borderRadius:16, padding:18, marginBottom:14 }}>
-          <div style={{ fontSize:13, fontWeight:700, color:"#1E293B", marginBottom:14 }}>
-            {tab==="receipt" ? "↓ تسجيل استلام" : "↑ تسجيل مصروف"}
-          </div>
+        {/* ── نموذج الإيداع/السحب ── */}
+        {(tab==="deposit"||tab==="withdraw") && (
+        <div style={{ background:"#fff", border:"1px solid #E2E8F0",
+          borderRadius:16, padding:18, marginBottom:14 }}>
 
-          {done ? (
+          {!isActive ? (
+            <div style={{ textAlign:"center", padding:16, color:"#94A3B8" }}>
+              المشروع منتهي — لا يمكن إضافة حركات
+            </div>
+          ) : done ? (
             <div style={{ textAlign:"center", padding:"14px 0" }}>
               <div style={{ fontSize:36 }}>✅</div>
-              <div style={{ fontWeight:700, color:"#16A34A", marginTop:6 }}>تم تسجيل القيد</div>
+              <div style={{ fontWeight:700, color:"#16A34A", marginTop:6 }}>تم التسجيل</div>
             </div>
           ) : (
             <>
-              {/* نوع الاستلام أو الصرف */}
-              <Lbl>{tab==="receipt" ? "نوع الاستلام" : "نوع المصروف"}</Lbl>
-              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:6, marginBottom:14 }}>
-                {(tab==="receipt" ? RECEIPT_TYPES : EXPENSE_TYPES).map(rt => (
-                  <button key={rt.id}
-                    onClick={() => tab==="receipt" ? set("recType")(rt.id) : set("expType")(rt.id)}
-                    style={{
-                      padding:"9px 8px", borderRadius:9, border:"1.5px solid",
-                      cursor:"pointer", fontFamily:"Tahoma", fontSize:12, fontWeight:600,
-                      textAlign:"right", display:"flex", alignItems:"center", gap:6,
-                      borderColor: (tab==="receipt"?form.recType:form.expType)===rt.id
-                        ? (tab==="receipt"?"#16A34A":"#DC2626") : "#E2E8F0",
-                      background: (tab==="receipt"?form.recType:form.expType)===rt.id
-                        ? (tab==="receipt"?"#F0FDF4":"#FFF1F2") : "transparent",
-                      color: (tab==="receipt"?form.recType:form.expType)===rt.id
-                        ? (tab==="receipt"?"#16A34A":"#DC2626") : "#64748B" }}>
-                    <i className={"ti " + rt.icon} style={{ fontSize:16 }} aria-hidden="true"/>
-                    {rt.label}
-                  </button>
-                ))}
-              </div>
-
-              {/* المبلغ والعملة */}
               <Lbl>المبلغ والعملة</Lbl>
               <div style={{ display:"flex", gap:8, marginBottom:8 }}>
-                <Inp style={{ flex:2, fontSize:20, fontWeight:700, textAlign:"center" }}
+                <Inp style={{ flex:2, fontSize:22, fontWeight:700, textAlign:"center" }}
                   type="number" placeholder="٠"
-                  value={form.amount} onChange={e => set("amount")(e.target.value)} autoFocus/>
-                <CurrencySelect value={form.currency} onChange={e => set("currency")(e.target.value)}/>
+                  value={form.amount} onChange={e=>set("amount")(e.target.value)} autoFocus/>
+                <CurrencySelect value={form.currency} onChange={e=>set("currency")(e.target.value)}/>
               </div>
 
-              {/* المبلغ كتابةً */}
-              {amtN > 0 && (
-                <div style={{ fontSize:12, color:tab==="receipt"?"#16A34A":"#DC2626",
+              {amtN>0 && (
+                <div style={{ fontSize:12,
+                  color:tab==="deposit"?"#16A34A":"#DC2626",
                   fontWeight:600, marginBottom:8, padding:"7px 12px",
-                  background:tab==="receipt"?"#F0FDF4":"#FFF1F2", borderRadius:8 }}>
+                  background:tab==="deposit"?"#F0FDF4":"#FFF1F2",
+                  borderRadius:8 }}>
                   ✍️ {numToWords(amtN)} {isDol?"دولار":"دينار"}
                 </div>
               )}
@@ -1284,129 +1332,88 @@ function ProjectDetail({ project, fund, allFunds, onBack, onAddTx, onClose, onDe
                 <>
                   <Lbl>سعر الصرف</Lbl>
                   <Inp style={{ marginBottom:6 }} type="number" placeholder="مثال: 1480"
-                    value={form.exchRate} onChange={e => set("exchRate")(e.target.value)}/>
+                    value={form.exchRate} onChange={e=>set("exchRate")(e.target.value)}/>
                   {amtN>0 && Number(form.exchRate)>0 && (
                     <div style={{ fontSize:12, color:"#2563EB", fontWeight:600,
-                      marginBottom:8, padding:"7px 12px", background:"#EFF6FF", borderRadius:8 }}>
+                      marginBottom:8, padding:"7px 12px",
+                      background:"#EFF6FF", borderRadius:8 }}>
                       💱 يعادل: {fmtD(amtDin)}
                     </div>
                   )}
                 </>
               )}
 
-              {/* القيد المحاسبي */}
-              <div style={{ background:"#F8FAFC", borderRadius:10, padding:"10px 14px",
-                marginBottom:12, border:"1px solid #E2E8F0" }}>
-                <div style={{ fontSize:11, color:"#64748B", fontWeight:600, marginBottom:6 }}>📒 القيد المحاسبي</div>
-                <div style={{ display:"flex", justifyContent:"space-between", fontSize:12 }}>
-                  <div>
-                    <div style={{ color:"#16A34A", fontWeight:600 }}>
-                      مدين: {tab==="receipt" ? "صندوق المشروع" : (EXPENSE_TYPES.find(e=>e.id===form.expType)?.label||"مصروف")}
-                    </div>
-                    <div style={{ color:"#DC2626", fontWeight:600 }}>
-                      دائن: {tab==="receipt" ? (RECEIPT_TYPES.find(r=>r.id===form.recType)?.label||"استلام") : "صندوق المشروع"}
-                    </div>
-                  </div>
-                  <div style={{ fontWeight:700, color:"#1E293B", fontSize:14 }}>
-                    {amtN>0 ? (isDol?toAr(amtN)+" $":fmtD(amtN)) : "—"}
-                  </div>
+              {/* تنبيه الرصيد عند السحب */}
+              {tab==="withdraw" && amtN>0 && (
+                <div style={{ fontSize:12, marginBottom:10, padding:"7px 12px",
+                  borderRadius:8, fontWeight:600,
+                  color: amtN<=(isDol?balDol:balDin) ? "#16A34A" : "#DC2626",
+                  background: amtN<=(isDol?balDol:balDin) ? "#F0FDF4" : "#FFF1F2" }}>
+                  {amtN<=(isDol?balDol:balDin)
+                    ? "✅ الرصيد كافٍ — المتاح: "+(isDol?toAr(Math.round(balDol))+" $":fmtD(balDin))
+                    : "⚠️ تجاوز الرصيد — المتاح: "+(isDol?toAr(Math.round(balDol))+" $":fmtD(balDin))}
                 </div>
-              </div>
+              )}
 
               <Lbl>التاريخ</Lbl>
-              <Inp style={{ marginBottom:10 }} type="date" value={form.date} onChange={e => set("date")(e.target.value)}/>
+              <Inp style={{ marginBottom:10 }} type="date"
+                value={form.date} onChange={e=>set("date")(e.target.value)}/>
               <Lbl>ملاحظة</Lbl>
-              <Inp style={{ marginBottom:14 }} placeholder="..." value={form.note} onChange={e => set("note")(e.target.value)}/>
+              <Inp style={{ marginBottom:14 }} placeholder="..."
+                value={form.note} onChange={e=>set("note")(e.target.value)}/>
 
-              <button onClick={save} disabled={!amtN||saving} style={{
+              <button onClick={save} disabled={
+                !amtN || saving ||
+                (tab==="withdraw" && amtN>(isDol?balDol:balDin))
+              } style={{
                 width:"100%", border:"none", borderRadius:12, padding:"13px",
                 fontSize:14, fontWeight:700, cursor:"pointer", fontFamily:"Tahoma",
-                background: amtN ? (tab==="receipt"?"#16A34A":"#DC2626") : "#E2E8F0",
-                color: amtN ? "#fff" : "#94A3B8" }}>
-                {saving ? "جاري التسجيل..." : (tab==="receipt"?"↓ تأكيد الاستلام":"↑ تأكيد المصروف")}
+                background: (amtN&&(tab==="deposit"||amtN<=(isDol?balDol:balDin)))
+                  ? (tab==="deposit"?"#16A34A":"#DC2626") : "#E2E8F0",
+                color: (amtN&&(tab==="deposit"||amtN<=(isDol?balDol:balDin)))
+                  ? "#fff" : "#94A3B8" }}>
+                {saving?"جاري التسجيل...":(tab==="deposit"?"↓ تأكيد الإيداع":"↑ تأكيد السحب")}
               </button>
             </>
           )}
         </div>
         )}
 
-        {!isActive && (tab==="receipt"||tab==="expense") && (
-          <div style={{ background:"#F1F5F9", borderRadius:12, padding:16,
-            textAlign:"center", color:"#94A3B8", marginBottom:14, border:"1px solid #E2E8F0" }}>
-            المشروع منتهي — لا يمكن إضافة حركات جديدة
-          </div>
-        )}
-
-        {/* ── دفتر القيود ── */}
-        {tab==="ledger" && (
+        {/* ── السجل ── */}
+        {tab==="history" && (
         <div>
-          {/* ملخص */}
-          <div style={{ background:"#fff", borderRadius:14, padding:14, marginBottom:14,
-            border:"1px solid #E2E8F0" }}>
-            <div style={{ fontSize:13, fontWeight:700, color:"#1E293B", marginBottom:10 }}>
-              ملخص الحساب
-            </div>
-            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:8 }}>
-              <div style={{ textAlign:"center" }}>
-                <div style={{ fontSize:10, color:"#64748B" }}>الاستلامات</div>
-                <div style={{ fontSize:14, fontWeight:700, color:"#16A34A" }}>{receipts.length}</div>
-              </div>
-              <div style={{ textAlign:"center" }}>
-                <div style={{ fontSize:10, color:"#64748B" }}>المصروفات</div>
-                <div style={{ fontSize:14, fontWeight:700, color:"#DC2626" }}>{expenses.length}</div>
-              </div>
-              <div style={{ textAlign:"center" }}>
-                <div style={{ fontSize:10, color:"#64748B" }}>إجمالي القيود</div>
-                <div style={{ fontSize:14, fontWeight:700, color:"#1E293B" }}>{projTxs.length}</div>
-              </div>
-            </div>
-          </div>
-
-          {projTxs.length === 0 ? (
+          {projTxs.length===0 ? (
             <div style={{ textAlign:"center", padding:24, color:"#94A3B8",
               background:"#fff", borderRadius:12, border:"1px solid #E2E8F0" }}>
-              ما في قيود بعد
+              ما في معاملات بعد
             </div>
           ) : projTxs.map(t => {
-            const isRec = t.type === "استلام";
-            const subTypes = isRec ? RECEIPT_TYPES : EXPENSE_TYPES;
-            const sub = subTypes.find(s => s.id === t.subType);
+            const isIn = t.type==="إيداع";
             return (
               <div key={t.id} style={{ background:"#fff", borderRadius:12,
-                padding:"12px 14px", marginBottom:8,
-                border:"1px solid " + (isRec?"#DCFCE7":"#FEE2E2"),
-                borderRight:"4px solid " + (isRec?"#16A34A":"#DC2626") }}>
-                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:6 }}>
+                padding:"13px 14px", marginBottom:8,
+                border:"1px solid "+(isIn?"#DCFCE7":"#FEE2E2"),
+                borderRight:"4px solid "+(isIn?"#16A34A":"#DC2626") }}>
+                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
                   <div>
-                    <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:3 }}>
-                      {sub && <i className={"ti "+sub.icon} style={{ fontSize:14, color:isRec?"#16A34A":"#DC2626" }} aria-hidden="true"/>}
-                      <span style={{ fontSize:12, fontWeight:700,
-                        color:isRec?"#16A34A":"#DC2626" }}>
-                        {isRec?"↓ استلام":"↑ صرف"} — {sub?.label||t.subType||""}
-                      </span>
+                    <div style={{ fontSize:12, fontWeight:700,
+                      color:isIn?"#16A34A":"#DC2626", marginBottom:3 }}>
+                      {isIn?"↓ إيداع":"↑ سحب"}
                     </div>
                     <div style={{ fontSize:11, color:"#64748B" }}>📅 {t.date}</div>
-                    {t.note && <div style={{ fontSize:12, color:"#1E293B", marginTop:3 }}>{t.note}</div>}
+                    {t.note && (
+                      <div style={{ fontSize:12, color:"#1E293B", marginTop:3 }}>{t.note}</div>
+                    )}
                   </div>
                   <div style={{ textAlign:"left" }}>
-                    <div style={{ fontSize:16, fontWeight:700, color:isRec?"#16A34A":"#DC2626" }}>
-                      {isRec?"+":"-"}{fmt(t.amount, t.currency)}
+                    <div style={{ fontSize:17, fontWeight:700,
+                      color:isIn?"#16A34A":"#DC2626" }}>
+                      {isIn?"+":"-"}{fmt(t.amount, t.currency)}
                     </div>
                     {t.currency==="دولار"&&t.amtInDinar>0&&(
                       <div style={{ fontSize:11, color:"#2563EB" }}>💱 {fmtD(t.amtInDinar)}</div>
                     )}
                   </div>
-                </div>
-                {/* القيد */}
-                <div style={{ background:"#F8FAFC", borderRadius:8, padding:"6px 10px",
-                  fontSize:11, color:"#64748B" }}>
-                  <span style={{ color:"#16A34A", fontWeight:600 }}>
-                    مدين: {isRec?"صندوق المشروع":(sub?.label||"")}
-                  </span>
-                  <span style={{ margin:"0 8px" }}>|</span>
-                  <span style={{ color:"#DC2626", fontWeight:600 }}>
-                    دائن: {isRec?(sub?.label||""):"صندوق المشروع"}
-                  </span>
                 </div>
               </div>
             );
@@ -1414,96 +1421,110 @@ function ProjectDetail({ project, fund, allFunds, onBack, onAddTx, onClose, onDe
         </div>
         )}
 
-        {/* ── إنهاء المشروع ── */}
-        {tab==="close" && (
-        <div style={{ background:"#fff", border:"1.5px solid #9333EA30",
-          borderRadius:16, padding:18, marginBottom:14 }}>
-          {!isActive ? (
-            <div style={{ textAlign:"center", padding:20 }}>
-              <i className="ti ti-check-all" style={{ fontSize:48, color:"#16A34A", display:"block", marginBottom:8 }} aria-hidden="true"/>
-              <div style={{ fontSize:16, fontWeight:700, color:"#16A34A" }}>المشروع منتهٍ</div>
-              {proj.closedAt && <div style={{ fontSize:12, color:"#64748B", marginTop:4 }}>تاريخ الإنهاء: {proj.closedAt}</div>}
-            </div>
-          ) : (
-            <>
-              <div style={{ fontSize:14, fontWeight:700, color:"#DC2626", marginBottom:12 }}>
-                🏁 إنهاء المشروع وتوزيع الأرباح
-              </div>
+        {/* ── نافذة الإنهاء ── */}
+        {showClose && (
+          <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.55)",
+            zIndex:999, display:"flex", alignItems:"center",
+            justifyContent:"center", padding:16 }}>
+            <div style={{ background:"#fff", borderRadius:20, width:"100%",
+              maxWidth:520, maxHeight:"90vh", overflow:"auto",
+              boxShadow:"0 20px 60px rgba(0,0,0,0.3)" }}>
 
-              {/* الربح */}
-              <div style={{ background:"#F0FDF4", borderRadius:12, padding:14, marginBottom:14 }}>
-                <div style={{ fontSize:11, color:"#64748B", marginBottom:4 }}>الربح الكلي للتوزيع</div>
-                <div style={{ fontSize:22, fontWeight:700, color:profitDin>=0?"#16A34A":"#DC2626" }}>
-                  {profitDin>=0?"+":"-"}{fmtD(Math.abs(profitDin))}
+              <div style={{ padding:"16px 20px", borderBottom:"1px solid #E2E8F0",
+                display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+                <div style={{ fontSize:15, fontWeight:700, color:"#DC2626" }}>
+                  🏁 إنهاء المشروع
                 </div>
-                {profitDol!==0&&<div style={{ fontSize:14, color:"#2563EB", fontWeight:600 }}>
-                  {toAr(Math.abs(Math.round(profitDol)))} $
-                </div>}
+                <button onClick={()=>setShowClose(false)} style={{
+                  background:"none", border:"none",
+                  fontSize:18, cursor:"pointer", color:"#64748B" }}>✕</button>
               </div>
 
-              <div style={{ fontSize:12, color:"#64748B", marginBottom:12 }}>
-                حدد نسبة كل صندوق من الربح (المجموع = 100%)
-              </div>
+              <div style={{ padding:"16px 20px" }}>
+                {/* الربح */}
+                <div style={{ background:"#F0FDF4", borderRadius:12,
+                  padding:14, marginBottom:16 }}>
+                  <div style={{ fontSize:11, color:"#64748B", marginBottom:4 }}>
+                    صافي الربح للتوزيع
+                  </div>
+                  <div style={{ fontSize:22, fontWeight:700,
+                    color:balDin>=0?"#16A34A":"#DC2626" }}>
+                    {balDin>=0?"+":"-"}{fmtD(Math.abs(balDin))}
+                  </div>
+                  {balDol!==0&&(
+                    <div style={{ fontSize:14, color:"#2563EB", fontWeight:600 }}>
+                      {toAr(Math.abs(Math.round(balDol)))} $
+                    </div>
+                  )}
+                </div>
 
-              {dists.map((d, i) => (
-                <div key={d.fundId} style={{ display:"flex", alignItems:"center", gap:10,
-                  marginBottom:8, background:"#F8FAFC", borderRadius:10, padding:"10px 12px" }}>
-                  <div style={{ flex:1, fontSize:13, fontWeight:600, color:"#1E293B" }}>{d.name}</div>
-                  <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+                <div style={{ fontSize:12, color:"#64748B", marginBottom:12 }}>
+                  حدد نسبة توزيع الربح على الصناديق (المجموع = 100%)
+                </div>
+
+                {dists.map((d, i) => (
+                  <div key={d.fundId} style={{ display:"flex", alignItems:"center",
+                    gap:10, marginBottom:8, background:"#F8FAFC",
+                    borderRadius:10, padding:"10px 12px" }}>
+                    <div style={{ flex:1, fontSize:13, fontWeight:600, color:"#1E293B" }}>
+                      {d.name}
+                    </div>
                     <input type="number" min="0" max="100" value={d.pct}
-                      onChange={e => {
-                        const v = [...dists];
-                        v[i] = { ...v[i], pct:Number(e.target.value) };
+                      onChange={e=>{
+                        const v=[...dists];
+                        v[i]={...v[i],pct:Number(e.target.value)};
                         setDists(v);
                       }}
-                      style={{ width:60, border:"1px solid #E2E8F0", borderRadius:8,
-                        padding:"6px 8px", fontSize:15, fontWeight:700, textAlign:"center",
+                      style={{ width:60, border:"1px solid #E2E8F0",
+                        borderRadius:8, padding:"6px 8px",
+                        fontSize:15, fontWeight:700, textAlign:"center",
                         outline:"none", fontFamily:"Tahoma" }}/>
                     <span style={{ fontSize:13, color:"#64748B" }}>%</span>
+                    <div style={{ fontSize:12, color:"#16A34A",
+                      fontWeight:600, minWidth:90, textAlign:"left" }}>
+                      {fmtD(Math.round(Math.abs(balDin)*d.pct/100))}
+                    </div>
                   </div>
-                  <div style={{ fontSize:12, color:"#16A34A", fontWeight:600, minWidth:90, textAlign:"left" }}>
-                    {fmtD(Math.round(Math.abs(profitDin) * d.pct / 100))}
-                  </div>
-                </div>
-              ))}
-
-              {/* إضافة صندوق */}
-              <select onChange={e => {
-                if (!e.target.value) return;
-                const f = allFunds.find(x => x.id === e.target.value);
-                if (f && !dists.find(d => d.fundId === f.id))
-                  setDists(prev => [...prev, { fundId:f.id, pct:0, name:f.name }]);
-                e.target.value = "";
-              }} style={{ width:"100%", border:"1px solid #E2E8F0", borderRadius:9,
-                padding:"9px 12px", fontSize:13, fontFamily:"Tahoma", color:"#64748B",
-                background:"#F8FAFC", outline:"none", marginBottom:12 }}>
-                <option value="">+ أضف صندوقاً للتوزيع</option>
-                {allFunds.filter(f => !dists.find(d => d.fundId === f.id)).map(f => (
-                  <option key={f.id} value={f.id}>{f.name}</option>
                 ))}
-              </select>
 
-              {/* مجموع النسب */}
-              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center",
-                padding:"10px 14px", borderRadius:10, marginBottom:14,
-                background:Math.round(totalPct)===100?"#F0FDF4":"#FFF1F2" }}>
-                <span style={{ fontSize:13, fontWeight:600, color:"#1E293B" }}>المجموع</span>
-                <span style={{ fontSize:18, fontWeight:700,
-                  color:Math.round(totalPct)===100?"#16A34A":"#DC2626" }}>
-                  {totalPct}%
-                </span>
+                <select onChange={e=>{
+                  if(!e.target.value) return;
+                  const f=allFunds.find(x=>x.id===e.target.value);
+                  if(f&&!dists.find(d=>d.fundId===f.id))
+                    setDists(prev=>[...prev,{fundId:f.id,pct:0,name:f.name}]);
+                  e.target.value="";
+                }} style={{ width:"100%", border:"1px solid #E2E8F0",
+                  borderRadius:9, padding:"9px 12px", fontSize:13,
+                  fontFamily:"Tahoma", color:"#64748B",
+                  background:"#F8FAFC", outline:"none", marginBottom:12 }}>
+                  <option value="">+ أضف صندوقاً للتوزيع</option>
+                  {allFunds.filter(f=>!dists.find(d=>d.fundId===f.id)).map(f=>(
+                    <option key={f.id} value={f.id}>{f.name}</option>
+                  ))}
+                </select>
+
+                <div style={{ display:"flex", justifyContent:"space-between",
+                  padding:"10px 14px", borderRadius:10, marginBottom:14,
+                  background:Math.round(totalPct)===100?"#F0FDF4":"#FFF1F2" }}>
+                  <span style={{ fontSize:13, fontWeight:600, color:"#1E293B" }}>المجموع</span>
+                  <span style={{ fontSize:18, fontWeight:700,
+                    color:Math.round(totalPct)===100?"#16A34A":"#DC2626" }}>
+                    {totalPct}%
+                  </span>
+                </div>
+
+                <button onClick={doClose}
+                  disabled={Math.round(totalPct)!==100||closing}
+                  style={{
+                    width:"100%", border:"none", borderRadius:12, padding:"14px",
+                    fontSize:15, fontWeight:700, cursor:"pointer", fontFamily:"Tahoma",
+                    background:Math.round(totalPct)===100?"#DC2626":"#E2E8F0",
+                    color:Math.round(totalPct)===100?"#fff":"#94A3B8" }}>
+                  {closing?"جاري التوزيع...":"🏁 تأكيد الإنهاء وتوزيع الأرباح"}
+                </button>
               </div>
-
-              <button onClick={doClose} disabled={Math.round(totalPct)!==100||closing} style={{
-                width:"100%", border:"none", borderRadius:12, padding:"14px",
-                fontSize:15, fontWeight:700, cursor:"pointer", fontFamily:"Tahoma",
-                background:Math.round(totalPct)===100?"#DC2626":"#E2E8F0",
-                color:Math.round(totalPct)===100?"#fff":"#94A3B8" }}>
-                {closing ? "جاري التوزيع..." : "🏁 تأكيد الإنهاء وتوزيع الأرباح"}
-              </button>
-            </>
-          )}
-        </div>
+            </div>
+          </div>
         )}
 
       </div>
