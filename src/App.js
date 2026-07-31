@@ -461,6 +461,52 @@ function SpendPage({spends, projects, onAdd, onDelete}) {
   const selType = SPEND_TYPES.find(t=>t.id===form.spendType);
   const projName = id => projects.find(p=>p.id===id)?.name||"";
 
+  // فلاتر
+  const [filterFrom, setFilterFrom] = useState("");
+  const [filterTo,   setFilterTo]   = useState("");
+  const [filterProj, setFilterProj] = useState("");
+
+  const filteredSpends = spends.filter(r=>{
+    if(filterFrom && r.date < filterFrom) return false;
+    if(filterTo   && r.date > filterTo)   return false;
+    if(filterProj && r.projectId !== filterProj) return false;
+    return true;
+  });
+
+  // تصدير Excel
+  const exportExcel = () => {
+    const ar = n => Math.round(n||0);
+    const rows = [
+      ["رقم المعاملة","التاريخ","النوع","التفاصيل","المبلغ","العملة","المبلغ بالدينار","ملاحظة"],
+      ...filteredSpends.map(r=>[
+        r.txId||"",
+        r.date||"",
+        SPEND_TYPES.find(t=>t.id===r.spendType)?.label||"",
+        r.spendType==="project"?r.projectName:
+        r.spendType==="asset"?r.toolName+" ("+r.toolBranch+")":
+        r.spendType==="workshop"?r.branch:
+        r.personName||"",
+        ar(r.amount),
+        r.currency||"دينار",
+        ar(r.amtInDinar||r.amount),
+        r.note||"",
+      ]),
+      [],
+      ["","","","الإجمالي (دينار)",
+        filteredSpends.filter(x=>x.currency==="دينار"||!x.currency).reduce((s,x)=>s+x.amount,0),"دينار","",""],
+      ["","","","الإجمالي (دولار)",
+        filteredSpends.filter(x=>x.currency==="دولار").reduce((s,x)=>s+x.amount,0),"دولار","",""],
+    ];
+    const csvContent = "\uFEFF" + rows.map(r=>r.map(c=>'"'+String(c).replace(/"/g,'""')+'"').join(",")).join("\n");
+    const blob = new Blob([csvContent],{type:"text/csv;charset=utf-8;"});
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement("a");
+    a.href = url;
+    a.download = "مصروفات_"+(filterFrom||"")+"_"+(filterTo||"")+"_"+new Date().toISOString().slice(0,10)+".csv";
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   // label لكل مصروف
   const spendLabel = r => {
     if(r.spendType==="project")  return `📁 ${r.projectName||"مشروع"}`;
@@ -632,9 +678,50 @@ function SpendPage({spends, projects, onAdd, onDelete}) {
         </div>
       )}
 
+      {/* ── فلاتر ── */}
+      <div style={{...S.card,marginBottom:8}}>
+        <div style={{fontWeight:700,fontSize:13,color:C.text,marginBottom:10}}>🔍 فلترة وتصدير</div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8}}>
+          <div>
+            <div style={{fontSize:11,color:C.muted,marginBottom:4}}>من تاريخ</div>
+            <input style={S.inp} type="date" value={filterFrom} onChange={e=>setFilterFrom(e.target.value)}/>
+          </div>
+          <div>
+            <div style={{fontSize:11,color:C.muted,marginBottom:4}}>إلى تاريخ</div>
+            <input style={S.inp} type="date" value={filterTo} onChange={e=>setFilterTo(e.target.value)}/>
+          </div>
+        </div>
+        <div style={{marginBottom:8}}>
+          <div style={{fontSize:11,color:C.muted,marginBottom:4}}>المشروع</div>
+          <select style={S.sel} value={filterProj} onChange={e=>setFilterProj(e.target.value)}>
+            <option value="">كل المشاريع</option>
+            {projects.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}
+          </select>
+        </div>
+        {/* إجمالي الفترة */}
+        {(filterFrom||filterTo||filterProj)&&(
+          <div style={{background:"rgba(153,27,27,0.06)",border:`1px solid rgba(153,27,27,0.2)`,borderRadius:10,padding:"10px 14px",marginBottom:8}}>
+            <div style={{fontSize:11,color:C.muted,marginBottom:3}}>إجمالي المصروفات في هذه الفترة</div>
+            <div style={{fontSize:20,fontWeight:900,color:C.red}}>
+              {fmtD(filteredSpends.filter(r=>r.currency==="دينار"||!r.currency).reduce((s,r)=>s+r.amount,0))}
+            </div>
+            {filteredSpends.filter(r=>r.currency==="دولار").length>0&&(
+              <div style={{fontSize:13,color:C.blue,fontWeight:700,marginTop:2}}>
+                + {toAr(filteredSpends.filter(r=>r.currency==="دولار").reduce((s,r)=>s+r.amount,0))} $
+              </div>
+            )}
+            <div style={{fontSize:11,color:C.muted,marginTop:3}}>{toAr(filteredSpends.length)} معاملة</div>
+          </div>
+        )}
+        {/* زر تصدير Excel */}
+        <button onClick={exportExcel} style={{
+          ...S.btn,background:"#166534",color:"#fff",fontSize:13,padding:"10px",
+        }}>📥 تحميل Excel</button>
+      </div>
+
       {/* القائمة */}
-      {spends.length===0?<Empty icon="📤" text="ما في مصروفات بعد"/>:
-        spends.map(r=>{
+      {filteredSpends.length===0?<Empty icon="📤" text="ما في مصروفات"/>:
+        filteredSpends.map(r=>{
           const t = SPEND_TYPES.find(x=>x.id===r.spendType);
           return (
             <div key={r.id} style={S.card}>
