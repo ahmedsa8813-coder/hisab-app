@@ -548,62 +548,103 @@ function ProjPage({proj,txs,onBack,onAdd,onDel,onClose,onDelProj}){
   };
 
   const doPrint=()=>{
-    const rows=allTxs.map(t=>{
+    let num=0;
+    const rows=[...allTxs].sort((a,b)=>(a.date||"").localeCompare(b.date||"")).map(t=>{
+      num++;
       const isIn=t.type==="إيداع",isDolT=t.currency==="دولار";
-      return"<tr>"
-        +"<td>"+t.date+"</td>"
-        +"<td style='color:"+(isDolT?"#2563EB":"#059669")+"'>"+(isDolT?"دولار":"دينار")+"</td>"
-        +"<td style='color:"+(isIn?"#16A34A":"#DC2626")+"'>"+(isIn?"↓ استلام":"↑ صرف")+"</td>"
-        +"<td>"+(t.note||"—")+"</td>"
-        +"<td style='font-weight:700;color:"+(isIn?"#16A34A":"#DC2626")+"'>"
+      const bg=num%2===0?"#F8FAFC":"#fff";
+      return"<tr style='background:"+bg+"'>"
+        +"<td style='font-weight:600'>"+num+"</td>"
+        +"<td style='color:#1E293B;font-weight:600'>"+t.date+"</td>"
+        +"<td style='color:"+(isDolT?"#2563EB":"#059669")+";font-weight:600'>"
+          +(isDolT?"🇺🇸 دولار":"🇮🇶 دينار")+"</td>"
+        +"<td style='color:"+(isIn?"#16A34A":"#DC2626")+";font-weight:700;font-size:14px'>"
+          +(isIn?"↓ استلام":"↑ صرف")+"</td>"
+        +"<td style='text-align:right;color:#475569'>"+(t.note||"—")+"</td>"
+        +"<td style='font-weight:700;font-size:14px;color:"+(isIn?"#16A34A":"#DC2626")+"'>"
           +(isIn?"+":"-")+(isDolT?f$(t.amount):fD(t.amount))+"</td>"
         +"</tr>";
     }).join("");
+    const dinRows=allTxs.filter(t=>t.currency!=="دولار");
+    const dolRows=allTxs.filter(t=>t.currency==="دولار");
+    const sumRecDin=dinRows.filter(t=>t.type==="إيداع").reduce((s,t)=>s+t.amount,0);
+    const sumSpdDin=dinRows.filter(t=>t.type!=="إيداع").reduce((s,t)=>s+t.amount,0);
+    const sumRecDol=dolRows.filter(t=>t.type==="إيداع").reduce((s,t)=>s+t.amount,0);
+    const sumSpdDol=dolRows.filter(t=>t.type!=="إيداع").reduce((s,t)=>s+t.amount,0);
     const html="<!DOCTYPE html><html dir='rtl'><head><meta charset='utf-8'/>"
-      +"<style>*{font-family:Tahoma}body{margin:28px;direction:rtl}"
-      +"h2{margin:0;color:#1E293B}p{color:#64748B;font-size:12px;margin:2px 0}"
-      +"h3{color:#D97706;margin:12px 0 6px}"
-      +"table{width:100%;border-collapse:collapse;margin-top:12px}"
-      +"th{background:#F1F5F9;padding:9px;text-align:center;font-size:12px}"
-      +"td{padding:8px;border-bottom:1px solid #eee;text-align:center;font-size:12px}"
-      +".row{display:flex;gap:14px;margin:10px 0;flex-wrap:wrap}"
-      +".box{background:#F8FAFC;border-radius:8px;padding:9px 13px;text-align:center}"
-      +".bl{font-size:10px;color:#64748B;margin-bottom:3px}"
-      +".bv{font-size:14px;font-weight:700}"
+      +"<style>"
+      +"*{font-family:Tahoma,Arial,sans-serif;box-sizing:border-box}"
+      +"body{margin:0;padding:24px;direction:rtl;color:#1E293B;background:#fff}"
+      +".header{border-bottom:3px solid #D97706;padding-bottom:14px;margin-bottom:16px}"
+      +".co-name{font-size:22px;font-weight:700;color:#1E293B;margin:0 0 3px}"
+      +".co-addr{font-size:12px;color:#64748B}"
+      +".proj-title{font-size:18px;font-weight:700;color:#D97706;margin:14px 0 6px}"
+      +".info-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px}"
+      +".info-item{background:#F8FAFC;border-radius:8px;padding:8px 12px}"
+      +".info-label{font-size:10px;color:#64748B;margin-bottom:3px}"
+      +".info-val{font-size:13px;font-weight:600;color:#1E293B}"
+      +".summary{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:20px}"
+      +".sum-box{border-radius:10px;padding:12px;text-align:center;border:1px solid #E2E8F0}"
+      +".sum-label{font-size:10px;color:#64748B;margin-bottom:5px}"
+      +".sum-val{font-size:16px;font-weight:700}"
+      +"table{width:100%;border-collapse:collapse;margin-top:4px}"
+      +"thead tr{background:#D97706}"
+      +"th{color:#fff;padding:10px 8px;font-size:12px;text-align:center}"
+      +"td{padding:9px 8px;font-size:12px;text-align:center;border-bottom:1px solid #F1F5F9}"
+      +".footer{margin-top:20px;padding-top:10px;border-top:1px solid #E2E8F0;"
+        +"font-size:10px;color:#94A3B8;display:flex;justify-content:space-between}"
+      +"@media print{body{padding:16px}}"
       +"</style></head><body>"
-      +"<h2>"+CO.name+"</h2><p>"+CO.addr+"</p>"
-      +"<hr style='margin:10px 0'/>"
-      +"<h3>📋 كشف حساب — "+p.name+"</h3>"
-      +(p.province?"<p>📍 "+p.province+"</p>":"")
-      +(p.client?"<p>👤 العميل: "+p.client+"</p>":"")
-      +(p.totalDin||p.totalDol?"<p>💰 قيمة المشروع: "
-        +(p.totalDin?fD(p.totalDin):"")
-        +(p.totalDol?" | "+f$(p.totalDol):"")+"</p>":"")
-      +"<p>الحالة: "+(p.status==="نشط"?"● نشط":"✓ منتهي")+"</p>"
-      +"<div class='row'>"
-      +"<div class='box'><div class='bl'>↓ استلام د.ع</div>"
-        +"<div class='bv' style='color:#16A34A'>"+fD(p.recDin||0)+"</div></div>"
-      +"<div class='box'><div class='bl'>↑ صرف د.ع</div>"
-        +"<div class='bv' style='color:#DC2626'>"+fD(p.spdDin||0)+"</div></div>"
-      +"<div class='box'><div class='bl'>💰 ربح د.ع</div>"
-        +"<div class='bv' style='color:#D97706'>"+fD(bDin)+"</div></div>"
-      +((p.recDol||0)+(p.spdDol||0)>0
-        ?"<div class='box'><div class='bl'>↓ استلام $</div>"
-          +"<div class='bv' style='color:#2563EB'>"+f$(p.recDol||0)+"</div></div>"
-          +"<div class='box'><div class='bl'>↑ صرف $</div>"
-          +"<div class='bv' style='color:#DC2626'>"+f$(p.spdDol||0)+"</div></div>"
-          +"<div class='box'><div class='bl'>💰 ربح $</div>"
-          +"<div class='bv' style='color:#2563EB'>"+f$(bDol)+"</div></div>":"")
+      +"<div class='header'>"
+        +"<div class='co-name'>"+CO.name+"</div>"
+        +"<div class='co-addr'>"+CO.addr+"</div>"
+      +"</div>"
+      +"<div class='proj-title'>📋 كشف حساب مشروع</div>"
+      +"<div class='info-grid'>"
+        +"<div class='info-item'><div class='info-label'>اسم المشروع</div>"
+          +"<div class='info-val'>"+p.name+"</div></div>"
+        +(p.client?"<div class='info-item'><div class='info-label'>اسم العميل</div>"
+          +"<div class='info-val'>"+p.client+"</div></div>":"")
+        +(p.province?"<div class='info-item'><div class='info-label'>المحافظة</div>"
+          +"<div class='info-val'>"+p.province+"</div></div>":"")
+        +(p.totalDin?"<div class='info-item'><div class='info-label'>قيمة المشروع دينار</div>"
+          +"<div class='info-val'>"+fD(p.totalDin)+"</div></div>":"")
+        +(p.totalDol?"<div class='info-item'><div class='info-label'>قيمة المشروع دولار</div>"
+          +"<div class='info-val'>"+f$(p.totalDol)+"</div></div>":"")
+        +"<div class='info-item'><div class='info-label'>الحالة</div>"
+          +"<div class='info-val'>"+(p.status==="نشط"?"● نشط":"✓ منتهي")+"</div></div>"
+        +"<div class='info-item'><div class='info-label'>عدد الحركات</div>"
+          +"<div class='info-val'>"+txs.length+" حركة</div></div>"
+      +"</div>"
+      +"<div class='summary'>"
+        +"<div class='sum-box' style='background:#F0FDF4'>"
+          +"<div class='sum-label'>🇮🇶 إجمالي الاستلام</div>"
+          +"<div class='sum-val' style='color:#16A34A'>"+fD(sumRecDin)+"</div>"
+          +(sumRecDol?"<div style='font-size:12px;font-weight:700;color:#2563EB;margin-top:3px'>"+f$(sumRecDol)+"</div>":"")
+        +"</div>"
+        +"<div class='sum-box' style='background:#FFF1F2'>"
+          +"<div class='sum-label'>↑ إجمالي الصرف</div>"
+          +"<div class='sum-val' style='color:#DC2626'>"+fD(sumSpdDin)+"</div>"
+          +(sumSpdDol?"<div style='font-size:12px;font-weight:700;color:#DC2626;margin-top:3px'>"+f$(sumSpdDol)+"</div>":"")
+        +"</div>"
+        +"<div class='sum-box' style='background:#FFFBEB;border-color:#D97706'>"
+          +"<div class='sum-label'>💰 صافي الربح</div>"
+          +"<div class='sum-val' style='color:#D97706'>"+fD(bDin)+"</div>"
+          +(bDol!==0?"<div style='font-size:12px;font-weight:700;color:#2563EB;margin-top:3px'>"+f$(bDol)+"</div>":"")
+        +"</div>"
       +"</div>"
       +"<table><thead><tr>"
-        +"<th>التاريخ</th><th>العملة</th><th>النوع</th><th>ملاحظة</th><th>المبلغ</th>"
-        +"</tr></thead><tbody>"+rows+"</tbody></table>"
-      +"<p style='margin-top:18px;color:#94A3B8;font-size:10px'>طُبع: "+td()+"</p>"
+        +"<th>#</th><th>التاريخ</th><th>العملة</th><th>النوع</th><th>الملاحظة / البيان</th><th>المبلغ</th>"
+      +"</tr></thead><tbody>"+rows+"</tbody></table>"
+      +"<div class='footer'>"
+        +"<span>شركة باب المشاريع — "+CO.addr+"</span>"
+        +"<span>تاريخ الطباعة: "+td()+"</span>"
+      +"</div>"
       +"</body></html>";
-    const w=window.open("","_blank","width=820,height=650");
+    const w=window.open("","_blank","width=900,height=700");
     if(!w){alert("السماح بالنوافذ المنبثقة من إعدادات المتصفح");return;}
     w.document.write(html);w.document.close();w.focus();
-    setTimeout(()=>w.print(),600);
+    setTimeout(()=>w.print(),700);
   };
 
   return(
