@@ -151,17 +151,27 @@ export default function App(){
   const getBal=id=>bals[id]||{din:0,dol:0};
 
   // ── منطق المشاريع ──
-  const addProject=async d=>addDoc(collection(db,"fund_projects"),{
-    name:d.name.trim(),province:d.province||"",client:d.client||"",
-    totalDin:Number(d.totalDin)||0,totalDol:Number(d.totalDol)||0,
-    note:d.note||"",status:"نشط",recDin:0,recDol:0,spdDin:0,spdDol:0,
-    createdAt:new Date().toISOString()});
+  const addProject=async d=>{
+    const ref=await addDoc(collection(db,"fund_projects"),{
+      name:d.name.trim(),province:d.province||"",client:d.client||"",
+      totalDin:Number(d.totalDin)||0,totalDol:Number(d.totalDol)||0,
+      note:d.note||"",status:"نشط",recDin:0,recDol:0,spdDin:0,spdDol:0,
+      createdAt:new Date().toISOString()});
+    // صندوق مستقل لكل مشروع
+    await setDoc(doc(db,"fund_balances","proj_"+ref.id),{din:0,dol:0});
+  };
 
   const addProjTx=async(proj,type,currency,amount,note,date)=>{
     const amt=Math.round(Number(amount));if(!amt)return;
     const isDol=currency==="دولار";const isRec=type==="إيداع";
     const key=isDol?(isRec?"recDol":"spdDol"):(isRec?"recDin":"spdDin");
     await setDoc(doc(db,"fund_projects",proj.id),{[key]:(proj[key]||0)+amt},{merge:true});
+    // تحديث صندوق المشروع المستقل
+    const pBal=getBal("proj_"+proj.id);
+    await setDoc(doc(db,"fund_balances","proj_"+proj.id),{
+      din:isDol?pBal.din:(isRec?pBal.din+amt:pBal.din-amt),
+      dol:isDol?(isRec?pBal.dol+amt:pBal.dol-amt):pBal.dol
+    },{merge:true});
     await addDoc(collection(db,"fund_projects_txs"),{projectId:proj.id,projectName:proj.name,
       type,currency,amount:amt,note:note||"",date:date||today(),createdAt:new Date().toISOString()});
   };
@@ -171,12 +181,19 @@ export default function App(){
     const isDol=t.currency==="دولار";const isRec=t.type==="إيداع";
     const key=isDol?(isRec?"recDol":"spdDol"):(isRec?"recDin":"spdDin");
     await setDoc(doc(db,"fund_projects",proj.id),{[key]:Math.max(0,(proj[key]||0)-t.amount)},{merge:true});
+    // عكس صندوق المشروع المستقل
+    const pBal=getBal("proj_"+proj.id);
+    await setDoc(doc(db,"fund_balances","proj_"+proj.id),{
+      din:isDol?pBal.din:(isRec?pBal.din-t.amount:pBal.din+t.amount),
+      dol:isDol?(isRec?pBal.dol-t.amount:pBal.dol+t.amount):pBal.dol
+    },{merge:true});
     await deleteDoc(doc(db,"fund_projects_txs",t.id));
   };
 
   const delProject=async id=>{
     if(!ask("حذف المشروع"))return;
     await deleteDoc(doc(db,"fund_projects",id));
+    await deleteDoc(doc(db,"fund_balances","proj_"+id));
   };
 
   const closeProject=async(proj,dDin,dDol)=>{
@@ -218,6 +235,7 @@ export default function App(){
     if(!ask("تصفية المشروع"))return;
     await setDoc(doc(db,"fund_projects",proj.id),
       {recDin:0,recDol:0,spdDin:0,spdDol:0,status:"نشط"},{merge:true});
+    await setDoc(doc(db,"fund_balances","proj_"+proj.id),{din:0,dol:0},{merge:true});
     const snap=await getDocs(query(collection(db,"fund_projects_txs"),
       where("projectId","==",proj.id)));
     for(const d of snap.docs)await deleteDoc(doc(db,"fund_projects_txs",d.id));
@@ -273,8 +291,14 @@ export default function App(){
   const resetAll=async()=>{
     const pw=window.prompt("⚠️ تصفية شاملة كاملة\nالباسورد:");
     if(!pw||pw!==PASS){if(pw!==null)alert("❌ باسورد غلط");return;}
+    // تصفير أرصدة الصناديق الثابتة
     const ids=["partners",...PARTNERS.map(p=>"partner_"+p.id)];
     for(const id of ids)await setDoc(doc(db,"fund_balances",id),{din:0,dol:0},{merge:true});
+    // تصفير كل أرصدة المشاريع المستقلة
+    const balSnap=await getDocs(collection(db,"fund_balances"));
+    for(const d of balSnap.docs){
+      if(d.id.startsWith("proj_"))await deleteDoc(doc(db,"fund_balances",d.id));
+    }
     for(const col of["fund_transactions","fund_projects","fund_projects_txs","employees"]){
       const snap=await getDocs(collection(db,col));
       for(const d of snap.docs)await deleteDoc(doc(db,col,d.id));
