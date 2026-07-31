@@ -1764,7 +1764,6 @@ function PartnersPage({ partners, balances, txs, onBack, onDeposit, onWithdraw, 
               </div>
             </button>
           );
-          );
         })}
       </div>
     </div>
