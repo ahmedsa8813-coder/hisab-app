@@ -26,6 +26,22 @@ const fD=n=>toAr(n)+" د.ع";
 const f$=n=>toAr(Math.round(Math.abs(n)))+" $";
 const ask=t=>{const p=window.prompt("🔒 "+t+"\nالباسورد:");
   if(!p)return false;if(p!==PASS){alert("❌ باسورد غلط");return false;}return true;};
+function w2(n){
+  if(!n||isNaN(n))return"";const num=Math.floor(Math.abs(Number(n)));if(!num)return"صفر";
+  const o=["","واحد","اثنان","ثلاثة","أربعة","خمسة","ستة","سبعة","ثمانية","تسعة",
+    "عشرة","أحد عشر","اثنا عشر","ثلاثة عشر","أربعة عشر","خمسة عشر",
+    "ستة عشر","سبعة عشر","ثمانية عشر","تسعة عشر"];
+  const t2=["","","عشرون","ثلاثون","أربعون","خمسون","ستون","سبعون","ثمانون","تسعون"];
+  const h=["","مئة","مئتان","ثلاثمئة","أربعمئة","خمسمئة","ستمئة","سبعمئة","ثمانمئة","تسعمئة"];
+  const g=x=>{if(!x)return"";if(x<20)return o[x];if(x<100)return t2[Math.floor(x/10)]+(x%10?" و"+o[x%10]:"");
+    return h[Math.floor(x/100)]+(x%100?" و"+g(x%100):"");};
+  const p2=[];
+  if(num>=1e9)p2.push(g(Math.floor(num/1e9))+" مليار");
+  if(num%1e9>=1e6)p2.push(g(Math.floor(num%1e9/1e6))+" مليون");
+  if(num%1e6>=1e3)p2.push(g(Math.floor(num%1e6/1e3))+" ألف");
+  if(num%1e3)p2.push(g(num%1e3));
+  return p2.join(" و");
+}
 
 const Lbl=({c})=><div style={{fontSize:12,color:"#64748B",fontWeight:600,marginBottom:5}}>{c}</div>;
 const Inp=({sx,...p})=><input style={{width:"100%",border:"1px solid #CBD5E1",borderRadius:10,
@@ -822,12 +838,12 @@ function ProjPage({proj,txs,onBack,onAdd,onDel,onClose,onDelProj}){
           </div>
         </div>
         {/* تبويبات */}
-        {act&&<div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:6,marginBottom:14}}>
-          {[["dep","↓ استلام","#16A34A"],["with","↑ صرف","#DC2626"],["hist","📋 السجل","#1E293B"]].map(([id,l,c])=>(
+        {act&&<div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:5,marginBottom:14}}>
+          {[["dep","↓ استلام","#16A34A"],["with","↑ صرف","#DC2626"],["hist","📋 السجل","#1E293B"],["rep","📊 تقرير","#7C3AED"]].map(([id,l,col])=>(
             <button key={id} onClick={()=>setTab(id)}
               style={{border:tab===id?"none":"1px solid #E2E8F0",borderRadius:10,
-                padding:"11px",cursor:"pointer",fontWeight:700,fontSize:13,
-                fontFamily:"Tahoma",background:tab===id?c:"#fff",
+                padding:"10px 4px",cursor:"pointer",fontWeight:700,fontSize:11,
+                fontFamily:"Tahoma",background:tab===id?col:"#fff",
                 color:tab===id?"#fff":"#64748B"}}>{l}</button>
           ))}
         </div>}
@@ -844,25 +860,58 @@ function ProjPage({proj,txs,onBack,onAdd,onDel,onClose,onDelProj}){
                 background:"#F8FAFC",borderRadius:8,padding:"8px 12px"}}>
                 المتاح: {isDol?f$(bDol):fD(bDin)}</div>}
               <Lbl c={"المبلغ ("+(isDol?"دولار":"دينار")+")"}/>
-              <Inp type="number" placeholder="٠" value={f.amount}
+              <Inp type="number" inputMode="decimal" placeholder="٠" value={f.amount}
                 onChange={e=>s("amount")(e.target.value)} autoFocus/>
+              {amt>0&&<div style={{fontSize:13,fontWeight:600,marginBottom:10,padding:"9px 12px",
+                borderRadius:8,background:tab==="dep"?"#F0FDF4":"#FFF1F2",
+                color:tab==="dep"?"#16A34A":"#DC2626",direction:"rtl"}}>
+                ✍️ {w2(amt)} {isDol?"دولار أمريكي":"دينار عراقي"}
+              </div>}
               {amt>0&&tab==="with"&&amt>avail&&<div style={{fontSize:12,color:"#DC2626",
                 fontWeight:600,marginBottom:10,padding:"7px 12px",background:"#FFF1F2",borderRadius:8}}>
-                ⚠️ تجاوز الرصيد</div>}
+                ⚠️ تجاوز الرصيد
+              </div>}
               <Lbl c="التاريخ"/>
               <Inp type="date" value={f.date} onChange={e=>s("date")(e.target.value)}/>
               <Lbl c="ملاحظة / البيان"/>
               <Inp placeholder="..." value={f.note} onChange={e=>s("note")(e.target.value)}/>
-              <button onClick={save} disabled={!amt||sv||(tab==="with"&&amt>avail)}
+              {/* معاينة */}
+              {amt>0&&(tab==="dep"||amt<=avail)&&(
+                <div style={{background:tab==="dep"?"#F0FDF4":"#FFF1F2",borderRadius:12,
+                  padding:"12px 14px",marginBottom:12,
+                  border:"1.5px solid "+(tab==="dep"?"#16A34A40":"#DC262640")}}>
+                  <div style={{fontSize:11,color:"#64748B",fontWeight:600,marginBottom:8}}>
+                    👁️ معاينة قبل الحفظ
+                  </div>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                    <div>
+                      <div style={{fontSize:13,fontWeight:700,
+                        color:tab==="dep"?"#16A34A":"#DC2626"}}>
+                        {tab==="dep"?"↓ استلام":"↑ صرف"}
+                        {" — "}{isDol?"🇺🇸 دولار":"🇮🇶 دينار"}
+                      </div>
+                      <div style={{fontSize:11,color:"#64748B",marginTop:2}}>📅 {f.date}</div>
+                      {f.note&&<div style={{fontSize:11,color:"#475569",marginTop:2}}>{f.note}</div>}
+                    </div>
+                    <div style={{fontSize:18,fontWeight:700,
+                      color:tab==="dep"?"#16A34A":"#DC2626"}}>
+                      {tab==="dep"?"+":"-"}{isDol?f$(amt):fD(amt)}
+                    </div>
+                  </div>
+                </div>
+              )}
+              <button onClick={save} disabled={!amt||(tab==="with"&&amt>avail)}
                 style={{width:"100%",border:"none",borderRadius:12,padding:"13px",
                   fontSize:14,fontWeight:700,cursor:"pointer",fontFamily:"Tahoma",
                   background:(amt&&(tab==="dep"||amt<=avail))?(tab==="dep"?"#16A34A":"#DC2626"):"#E2E8F0",
                   color:(amt&&(tab==="dep"||amt<=avail))?"#fff":"#94A3B8"}}>
-                {sv?"جاري...":(tab==="dep"?"↓ تأكيد الاستلام":"↑ تأكيد الصرف")}
+                {tab==="dep"?"↓ تأكيد الاستلام":"↑ تأكيد الصرف"}
               </button>
             </>}
           </div>
         )}
+        {/* تقرير */}
+        {act&&tab==="rep"&&<RepTab txs={txs} proj={p}/>}
         {/* السجل */}
         {(!act||tab==="hist")&&(
           <div>
@@ -997,6 +1046,208 @@ function ProjPage({proj,txs,onBack,onAdd,onDel,onClose,onDelProj}){
     </div>
   );
 }
+
+// ── تقرير المشروع ──
+function RepTab({txs,proj}){
+  const[fType,setFType]=useState("الكل");
+  const[fCur,setFCur]=useState("الكل");
+  const[fFrom,setFFrom]=useState("");
+  const[fTo,setFTo]=useState("");
+  const p=proj;
+
+  const filtered=txs.filter(t=>{
+    if(fType!=="الكل"&&t.type!==fType)return false;
+    if(fCur!=="الكل"&&t.currency!==fCur)return false;
+    if(fFrom&&t.date<fFrom)return false;
+    if(fTo&&t.date>fTo)return false;
+    return true;
+  }).sort((a,b)=>(a.date||"").localeCompare(b.date||""));
+
+  const totRecDin=filtered.filter(t=>t.type==="إيداع"&&t.currency!=="دولار").reduce((s,t)=>s+t.amount,0);
+  const totSpdDin=filtered.filter(t=>t.type!=="إيداع"&&t.currency!=="دولار").reduce((s,t)=>s+t.amount,0);
+  const totRecDol=filtered.filter(t=>t.type==="إيداع"&&t.currency==="دولار").reduce((s,t)=>s+t.amount,0);
+  const totSpdDol=filtered.filter(t=>t.type!=="إيداع"&&t.currency==="دولار").reduce((s,t)=>s+t.amount,0);
+
+  const doPrintRep=()=>{
+    let num=0;
+    const rows=filtered.map(t=>{
+      num++;const isIn=t.type==="إيداع",isDolT=t.currency==="دولار";
+      return"<tr style='background:"+(num%2===0?"#F8FAFC":"#fff")+"'>"
+        +"<td style='font-weight:600;text-align:center'>"+num+"</td>"
+        +"<td style='font-weight:600;color:#1E293B;text-align:center'>"+t.date+"</td>"
+        +"<td style='color:"+(isDolT?"#2563EB":"#059669")+";font-weight:600;text-align:center'>"+(isDolT?"🇺🇸 دولار":"🇮🇶 دينار")+"</td>"
+        +"<td style='color:"+(isIn?"#16A34A":"#DC2626")+";font-weight:700;text-align:center'>"+(isIn?"↓ استلام":"↑ صرف")+"</td>"
+        +"<td style='text-align:right;color:#475569;padding:8px'>"+(t.note||"—")+"</td>"
+        +"<td style='font-weight:700;color:"+(isIn?"#16A34A":"#DC2626")+";text-align:center'>"+(isIn?"+":"-")+(isDolT?f$(t.amount):fD(t.amount))+"</td>"
+        +"</tr>";
+    }).join("");
+    const filters=[]
+    if(fType!=="الكل")filters.push("النوع: "+fType);
+    if(fCur!=="الكل")filters.push("العملة: "+fCur);
+    if(fFrom)filters.push("من: "+fFrom);
+    if(fTo)filters.push("إلى: "+fTo);
+    const html="<!DOCTYPE html><html dir='rtl'><head><meta charset='utf-8'/>"
+      +"<style>*{font-family:Tahoma}body{margin:0;padding:20px;direction:rtl}"
+      +".hdr{border-bottom:3px solid #D97706;padding-bottom:10px;margin-bottom:12px}"
+      +".cn{font-size:20px;font-weight:700;color:#1E293B}"
+      +".ca{font-size:11px;color:#64748B}"
+      +".pt{font-size:16px;font-weight:700;color:#7C3AED;margin:10px 0 4px}"
+      +".fi{font-size:11px;color:#64748B;margin-bottom:12px}"
+      +".sg{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:14px}"
+      +".sb{border-radius:8px;padding:10px;text-align:center}"
+      +".sl{font-size:10px;color:#64748B;margin-bottom:3px}"
+      +".sv{font-size:14px;font-weight:700}"
+      +"table{width:100%;border-collapse:collapse}"
+      +"thead tr{background:#7C3AED}"
+      +"th{color:#fff;padding:9px 7px;font-size:11px}"
+      +"td{padding:8px 7px;font-size:11px;border-bottom:1px solid #F1F5F9}"
+      +".ft{margin-top:14px;font-size:10px;color:#94A3B8;display:flex;justify-content:space-between}"
+      +"</style></head><body>"
+      +"<div class='hdr'><div class='cn'>"+CO.name+"</div><div class='ca'>"+CO.addr+"</div></div>"
+      +"<div class='pt'>📊 تقرير حركات — "+p.name+"</div>"
+      +"<div class='fi'>"+(p.client?"👤 "+p.client+" · ":"")+(p.province?"📍 "+p.province+" · ":"")
+        +(filters.length?"🔍 "+filters.join(" | "):"كل الحركات")+"</div>"
+      +"<div class='sg'>"
+        +"<div class='sb' style='background:#F0FDF4'><div class='sl'>↓ استلام دينار</div><div class='sv' style='color:#16A34A'>"+fD(totRecDin)+"</div></div>"
+        +"<div class='sb' style='background:#FFF1F2'><div class='sl'>↑ صرف دينار</div><div class='sv' style='color:#DC2626'>"+fD(totSpdDin)+"</div></div>"
+        +"<div class='sb' style='background:#EFF6FF'><div class='sl'>↓ استلام دولار</div><div class='sv' style='color:#2563EB'>"+f$(totRecDol)+"</div></div>"
+        +"<div class='sb' style='background:#FEF2F2'><div class='sl'>↑ صرف دولار</div><div class='sv' style='color:#DC2626'>"+f$(totSpdDol)+"</div></div>"
+      +"</div>"
+      +"<div style='background:#FFFBEB;border-radius:8px;padding:10px;margin-bottom:14px;display:flex;gap:20px;align-items:center'>"
+        +"<span style='font-size:12px;font-weight:700;color:#D97706'>💰 صافي الدينار: "+fD(totRecDin-totSpdDin)+"</span>"
+        +"<span style='font-size:12px;font-weight:700;color:#2563EB'>💰 صافي الدولار: "+f$(totRecDol-totSpdDol)+"</span>"
+        +"<span style='font-size:11px;color:#64748B'>إجمالي الحركات: "+filtered.length+"</span>"
+      +"</div>"
+      +"<table><thead><tr><th>#</th><th>التاريخ</th><th>العملة</th><th>النوع</th><th>البيان / الملاحظة</th><th>المبلغ</th></tr></thead>"
+      +"<tbody>"+rows+"</tbody></table>"
+      +"<div class='ft'><span>"+CO.name+" — "+CO.addr+"</span><span>طُبع: "+td()+"</span></div>"
+      +"</body></html>";
+    const w=window.open("","_blank","width=900,height=700");
+    if(!w){alert("السماح بالنوافذ المنبثقة");return;}
+    w.document.write(html);w.document.close();w.focus();
+    setTimeout(()=>w.print(),700);
+  };
+
+  return(
+    <div style={{background:"#fff",border:"1px solid #E2E8F0",borderRadius:16,padding:18,marginBottom:14}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
+        <div style={{fontSize:14,fontWeight:700,color:"#7C3AED"}}>📊 تقرير الحركات</div>
+        <button onClick={doPrintRep} disabled={filtered.length===0}
+          style={{background:filtered.length?"#7C3AED":"#E2E8F0",border:"none",borderRadius:9,
+            padding:"8px 16px",color:filtered.length?"#fff":"#94A3B8",cursor:"pointer",
+            fontSize:13,fontFamily:"Tahoma",fontWeight:600}}>
+          🖨️ طباعة ({filtered.length})
+        </button>
+      </div>
+      {/* فلاتر */}
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:12}}>
+        <div>
+          <div style={{fontSize:11,color:"#64748B",fontWeight:600,marginBottom:4}}>النوع</div>
+          <div style={{display:"flex",gap:5}}>
+            {["الكل","إيداع","سحب"].map(v=>(
+              <button key={v} onClick={()=>setFType(v)} style={{flex:1,padding:"7px 4px",
+                borderRadius:8,cursor:"pointer",fontFamily:"Tahoma",fontSize:11,fontWeight:700,
+                border:"1.5px solid "+(fType===v?"#7C3AED":"#E2E8F0"),
+                background:fType===v?"#F5F3FF":"#fff",
+                color:fType===v?"#7C3AED":"#64748B"}}>
+                {v==="إيداع"?"↓ استلام":v==="سحب"?"↑ صرف":"الكل"}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div>
+          <div style={{fontSize:11,color:"#64748B",fontWeight:600,marginBottom:4}}>العملة</div>
+          <div style={{display:"flex",gap:5}}>
+            {["الكل","دينار","دولار"].map(v=>(
+              <button key={v} onClick={()=>setFCur(v)} style={{flex:1,padding:"7px 4px",
+                borderRadius:8,cursor:"pointer",fontFamily:"Tahoma",fontSize:11,fontWeight:700,
+                border:"1.5px solid "+(fCur===v?"#2563EB":"#E2E8F0"),
+                background:fCur===v?"#EFF6FF":"#fff",
+                color:fCur===v?"#2563EB":"#64748B"}}>
+                {v==="دينار"?"🇮🇶 د.ع":v==="دولار"?"🇺🇸 $":"الكل"}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:14}}>
+        <div>
+          <div style={{fontSize:11,color:"#64748B",fontWeight:600,marginBottom:4}}>من تاريخ</div>
+          <input type="date" value={fFrom} onChange={e=>setFFrom(e.target.value)}
+            style={{width:"100%",border:"1px solid #E2E8F0",borderRadius:8,padding:"8px 10px",
+              fontSize:13,outline:"none",fontFamily:"Tahoma",boxSizing:"border-box"}}/>
+        </div>
+        <div>
+          <div style={{fontSize:11,color:"#64748B",fontWeight:600,marginBottom:4}}>إلى تاريخ</div>
+          <input type="date" value={fTo} onChange={e=>setFTo(e.target.value)}
+            style={{width:"100%",border:"1px solid #E2E8F0",borderRadius:8,padding:"8px 10px",
+              fontSize:13,outline:"none",fontFamily:"Tahoma",boxSizing:"border-box"}}/>
+        </div>
+      </div>
+      {(fFrom||fTo||fType!=="الكل"||fCur!=="الكل")&&(
+        <button onClick={()=>{setFType("الكل");setFCur("الكل");setFFrom("");setFTo("");}}
+          style={{fontSize:11,color:"#7C3AED",background:"#F5F3FF",border:"1px solid #7C3AED20",
+            borderRadius:7,padding:"5px 12px",cursor:"pointer",fontFamily:"Tahoma",
+            fontWeight:600,marginBottom:12}}>✕ مسح الفلاتر</button>
+      )}
+      {/* ملخص */}
+      {filtered.length>0&&(
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:14}}>
+          <div style={{background:"#FFFBEB",borderRadius:10,padding:"10px",textAlign:"center",
+            border:"1px solid #D9770620"}}>
+            <div style={{fontSize:9,color:"#64748B",marginBottom:3}}>🇮🇶 صافي الدينار</div>
+            <div style={{fontSize:15,fontWeight:700,
+              color:totRecDin-totSpdDin>=0?"#D97706":"#DC2626"}}>
+              {fD(Math.abs(totRecDin-totSpdDin))}</div>
+          </div>
+          <div style={{background:"#EFF6FF",borderRadius:10,padding:"10px",textAlign:"center",
+            border:"1px solid #2563EB20"}}>
+            <div style={{fontSize:9,color:"#64748B",marginBottom:3}}>🇺🇸 صافي الدولار</div>
+            <div style={{fontSize:15,fontWeight:700,
+              color:totRecDol-totSpdDol>=0?"#2563EB":"#DC2626"}}>
+              {f$(Math.abs(totRecDol-totSpdDol))}</div>
+          </div>
+        </div>
+      )}
+      {/* الحركات */}
+      {filtered.length===0?(
+        <div style={{textAlign:"center",padding:24,color:"#94A3B8",background:"#F8FAFC",
+          borderRadius:10}}>ما في حركات تطابق الفلتر</div>
+      ):(
+        filtered.map(t=>{
+          const isIn=t.type==="إيداع",isDolT=t.currency==="دولار";
+          return(
+            <div key={t.id} style={{borderRadius:10,padding:"10px 13px",marginBottom:7,
+              border:"1px solid "+(isIn?"#DCFCE7":"#FEE2E2"),
+              borderRight:"4px solid "+(isIn?"#16A34A":"#DC2626"),
+              background:isIn?"#FAFFFE":"#FFFAFA"}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                <div>
+                  <div style={{display:"flex",gap:7,alignItems:"center",marginBottom:3}}>
+                    <span style={{fontSize:12,fontWeight:700,color:isIn?"#16A34A":"#DC2626"}}>
+                      {isIn?"↓ استلام":"↑ صرف"}
+                    </span>
+                    <span style={{fontSize:10,padding:"2px 7px",borderRadius:20,fontWeight:600,
+                      background:isDolT?"#EFF6FF":"#F0FDF4",
+                      color:isDolT?"#2563EB":"#16A34A"}}>
+                      {isDolT?"🇺🇸 دولار":"🇮🇶 دينار"}
+                    </span>
+                  </div>
+                  <div style={{fontSize:11,color:"#64748B"}}>📅 {t.date}</div>
+                  {t.note&&<div style={{fontSize:12,color:"#475569",marginTop:2}}>{t.note}</div>}
+                </div>
+                <div style={{fontSize:16,fontWeight:700,color:isIn?"#16A34A":"#DC2626"}}>
+                  {isIn?"+":"-"}{isDolT?f$(t.amount):fD(t.amount)}
+                </div>
+              </div>
+            </div>
+          );
+        })
+      )}
+    </div>
+  );
+}
+
 
 // ── صفحة الشركاء ──
 function PartsPage({partners,bals,onBack,onSel}){
