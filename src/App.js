@@ -514,14 +514,52 @@ function ContractingPage({projs,emps,bals,onBack,onSelProj,onAddProject,onDelPro
                     <DelBtn onClick={e=>{e.stopPropagation();onDelProject(p.id);}}/>
                   </div>
                 </div>
-                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6}}>
-                  <div style={{background:"#F0FDF4",borderRadius:8,padding:"6px 10px"}}>
-                    <div style={{fontSize:9,color:"#64748B"}}>↓ مستلم</div>
-                    <div style={{fontSize:12,fontWeight:700,color:"#16A34A"}}>{fD(p.recDin||0)}</div>
+                {/* صندوق الدينار */}
+                <div style={{background:"#FFFBEB",borderRadius:8,padding:"8px 10px",
+                  marginBottom:6,border:"1px solid #D9770620"}}>
+                  <div style={{fontSize:9,color:"#D97706",fontWeight:600,marginBottom:5}}>
+                    🇮🇶 الدينار العراقي
                   </div>
-                  <div style={{background:"#FFF1F2",borderRadius:8,padding:"6px 10px"}}>
-                    <div style={{fontSize:9,color:"#64748B"}}>↑ مصروف</div>
-                    <div style={{fontSize:12,fontWeight:700,color:"#DC2626"}}>{fD(p.spdDin||0)}</div>
+                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:6}}>
+                    <div style={{background:"#F0FDF4",borderRadius:7,padding:"5px 8px",textAlign:"center"}}>
+                      <div style={{fontSize:9,color:"#64748B"}}>↓ مستلم</div>
+                      <div style={{fontSize:12,fontWeight:700,color:"#16A34A"}}>{fD(p.recDin||0)}</div>
+                    </div>
+                    <div style={{background:"#FFF1F2",borderRadius:7,padding:"5px 8px",textAlign:"center"}}>
+                      <div style={{fontSize:9,color:"#64748B"}}>↑ مصروف</div>
+                      <div style={{fontSize:12,fontWeight:700,color:"#DC2626"}}>{fD(p.spdDin||0)}</div>
+                    </div>
+                    <div style={{background:(p.recDin||0)-(p.spdDin||0)>=0?"#F0FDF4":"#FFF1F2",
+                      borderRadius:7,padding:"5px 8px",textAlign:"center"}}>
+                      <div style={{fontSize:9,color:"#64748B"}}>💰 الربح</div>
+                      <div style={{fontSize:12,fontWeight:700,
+                        color:(p.recDin||0)-(p.spdDin||0)>=0?"#D97706":"#DC2626"}}>
+                        {fD(Math.abs((p.recDin||0)-(p.spdDin||0)))}</div>
+                    </div>
+                  </div>
+                </div>
+                {/* صندوق الدولار */}
+                <div style={{background:"#EFF6FF",borderRadius:8,padding:"8px 10px",
+                  border:"1px solid #2563EB20"}}>
+                  <div style={{fontSize:9,color:"#2563EB",fontWeight:600,marginBottom:5}}>
+                    🇺🇸 الدولار الأمريكي
+                  </div>
+                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:6}}>
+                    <div style={{background:"#F0FDF4",borderRadius:7,padding:"5px 8px",textAlign:"center"}}>
+                      <div style={{fontSize:9,color:"#64748B"}}>↓ مستلم</div>
+                      <div style={{fontSize:12,fontWeight:700,color:"#2563EB"}}>{f$(p.recDol||0)}</div>
+                    </div>
+                    <div style={{background:"#FEF2F2",borderRadius:7,padding:"5px 8px",textAlign:"center"}}>
+                      <div style={{fontSize:9,color:"#64748B"}}>↑ مصروف</div>
+                      <div style={{fontSize:12,fontWeight:700,color:"#DC2626"}}>{f$(p.spdDol||0)}</div>
+                    </div>
+                    <div style={{background:(p.recDol||0)-(p.spdDol||0)>=0?"#EFF6FF":"#FFF1F2",
+                      borderRadius:7,padding:"5px 8px",textAlign:"center"}}>
+                      <div style={{fontSize:9,color:"#64748B"}}>💰 الربح</div>
+                      <div style={{fontSize:12,fontWeight:700,
+                        color:(p.recDol||0)-(p.spdDol||0)>=0?"#2563EB":"#DC2626"}}>
+                        {f$(Math.abs((p.recDol||0)-(p.spdDol||0)))}</div>
+                    </div>
                   </div>
                 </div>
               </div>
