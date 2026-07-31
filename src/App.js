@@ -320,11 +320,16 @@ function PartnersPage({partners, balances, txs, onBack, onDeposit, onWithdraw, o
 
       {/* تبويبات */}
       <div style={{display:"flex",background:"#fff",borderRadius:12,padding:4,gap:4,
-        marginBottom:16,border:"1px solid #E5DDD4"}}>
-        {[["overview","📊 نظرة عامة"],["deposit","↓ إيداع وتوزيع"],["withdraw","↑ سحب شريك"]].map(([v,l])=>(
+        marginBottom:16,border:"1px solid #E5DDD4",overflowX:"auto"}}>
+        {[
+          ["overview","📊 نظرة عامة"],
+          ["deposit","↓ إيداع وتوزيع"],
+          ["withdraw","↑ سحب شريك"],
+          ["statements","📋 كشف الشريك"],
+        ].map(([v,l])=>(
           <button key={v} onClick={()=>setTab(v)} style={{
             flex:1,border:"none",borderRadius:9,padding:"10px 6px",cursor:"pointer",
-            fontWeight:700,fontSize:13,fontFamily:"Tahoma",
+            fontWeight:700,fontSize:12,fontFamily:"Tahoma",whiteSpace:"nowrap",
             background:tab===v?"#1C1410":"transparent",
             color:tab===v?"#fff":"#8A7060",
           }}>{l}</button>
@@ -486,6 +491,176 @@ function PartnersPage({partners, balances, txs, onBack, onDeposit, onWithdraw, o
             </>
           )}
         </div>
+      )}
+
+      {/* كشف الشريك */}
+      {tab==="statements"&&(
+        <>
+          {/* اختيار الشريك */}
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:16}}>
+            {partners.map(p=>(
+              <button key={p.id} onClick={()=>setSelP(p.id)} style={{
+                padding:"12px 10px",borderRadius:12,border:"1.5px solid",cursor:"pointer",
+                fontFamily:"Tahoma",textAlign:"right",
+                background:selP===p.id?p.color+"15":"transparent",
+                borderColor:selP===p.id?p.color:"#E5DDD4",
+              }}>
+                <div style={{fontWeight:700,fontSize:13,color:"#1C1410"}}>{p.name}</div>
+                <div style={{fontSize:11,color:p.color,marginTop:2}}>حصة {toAr(p.share)}%</div>
+              </button>
+            ))}
+          </div>
+
+          {/* كشف الشريك المختار */}
+          {selP&&(()=>{
+            const p       = partners.find(x=>x.id===selP);
+            const pId     = "partner_"+selP;
+            const pBal    = balances[pId]||0;
+            const allTxs  = txs.filter(t=>t.fundId===pId);
+            const deposits = allTxs.filter(t=>t.type==="إيداع");
+            const withdraws= allTxs.filter(t=>t.type==="سحب");
+            const totIn   = deposits.reduce((s,t)=>s+t.amount,0);
+            const totOut  = withdraws.reduce((s,t)=>s+t.amount,0);
+
+            const printStatement = () => {
+              const ar = n => String(Math.round(n||0)).replace(/\B(?=(\d{3})+(?!\d))/g,",");
+              let rows = "";
+              allTxs.forEach(t=>{
+                const isIn = t.type==="إيداع";
+                rows += "<tr>"
+                  +"<td style='padding:8px 12px;border-bottom:1px solid #E5DDD4'>"+t.date+"</td>"
+                  +"<td style='padding:8px 12px;border-bottom:1px solid #E5DDD4'>"+(t.isDistribution?"توزيع تلقائي":t.type)+"</td>"
+                  +"<td style='padding:8px 12px;border-bottom:1px solid #E5DDD4;color:"+(isIn?"#166534":"#991B1B")+";font-weight:700'>"+(isIn?"+":"-")+ar(t.amount)+" د.ع</td>"
+                  +"<td style='padding:8px 12px;border-bottom:1px solid #E5DDD4;font-size:12px'>"+(t.note||"—")+"</td>"
+                  +"</tr>";
+              });
+              const html = "<!DOCTYPE html><html dir='rtl' lang='ar'><head><meta charset='UTF-8'/>"
+                +"<title>كشف حساب — "+p.name+"</title>"
+                +"<style>body{font-family:Tahoma,Arial;padding:28px;direction:rtl;color:#1C1410}"
+                +".hdr{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:3px solid #1C1410;padding-bottom:14px;margin-bottom:18px}"
+                +".logo{font-size:24px;font-weight:700}.sub{font-size:12px;color:#8A7060;margin-top:3px}"
+                +".summary{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:20px}"
+                +".box{border:1px solid #E5DDD4;border-radius:8px;padding:12px;text-align:center}"
+                +".box-lbl{font-size:11px;color:#8A7060;margin-bottom:4px}"
+                +".box-val{font-size:18px;font-weight:700}"
+                +"table{width:100%;border-collapse:collapse;font-size:13px}"
+                +"th{background:#1C1410;color:#fff;padding:10px 12px;text-align:right}"
+                +"tr:nth-child(even){background:#FAF9F7}"
+                +"</style></head><body>"
+                +"<div class='hdr'><div><div class='logo'>حساب</div>"
+                +"<div class='sub'>كشف حساب شريك</div></div>"
+                +"<div style='text-align:left'><div style='font-weight:700;font-size:16px'>"+p.name+"</div>"
+                +"<div style='font-size:12px;color:#8A7060'>حصة "+p.share+"%</div></div></div>"
+                +"<div class='summary'>"
+                +"<div class='box'><div class='box-lbl'>↓ إجمالي الإيداع</div><div class='box-val' style='color:#166534'>"+ar(totIn)+" د.ع</div></div>"
+                +"<div class='box'><div class='box-lbl'>↑ إجمالي السحب</div><div class='box-val' style='color:#991B1B'>"+ar(totOut)+" د.ع</div></div>"
+                +"<div class='box' style='border-color:"+p.color+";border-width:2px'><div class='box-lbl'>الرصيد المتاح</div><div class='box-val' style='color:"+p.color+"'>"+ar(pBal)+" د.ع</div></div>"
+                +"</div>"
+                +"<table><thead><tr><th>التاريخ</th><th>النوع</th><th>المبلغ</th><th>ملاحظة</th></tr></thead>"
+                +"<tbody>"+rows+"</tbody></table>"
+                +"<div style='margin-top:20px;padding-top:12px;border-top:1px solid #E5DDD4;display:flex;justify-content:space-between;font-size:11px;color:#B4B2A9'>"
+                +"<span>نظام حساب</span><span>"+new Date().toLocaleDateString("ar-IQ")+"</span></div>"
+                +"</body></html>";
+              const w=window.open("","_blank");
+              w.document.write(html);w.document.close();
+              setTimeout(()=>w.print(),500);
+            };
+
+            return (
+              <div>
+                {/* بطاقة الملخص */}
+                <div style={{background:"#1C1410",borderRadius:18,padding:20,marginBottom:14,color:"#fff"}}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
+                    <div>
+                      <div style={{fontSize:17,fontWeight:700}}>{p.name}</div>
+                      <div style={{fontSize:11,color:"rgba(255,255,255,0.4)"}}>حصة {toAr(p.share)}%</div>
+                    </div>
+                    <button onClick={printStatement} style={{
+                      background:"rgba(255,255,255,0.1)",border:"1px solid rgba(255,255,255,0.2)",
+                      borderRadius:10,padding:"8px 14px",color:"#fff",cursor:"pointer",
+                      fontSize:13,fontFamily:"Tahoma",display:"flex",alignItems:"center",gap:6,
+                    }}>
+                      <i className="ti ti-printer" style={{fontSize:16}} aria-hidden="true"/>
+                      طباعة الكشف
+                    </button>
+                  </div>
+                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
+                    <div style={{background:"rgba(255,255,255,0.07)",borderRadius:11,padding:"11px 10px",textAlign:"center"}}>
+                      <div style={{fontSize:9,color:"rgba(255,255,255,0.4)",marginBottom:3}}>↓ إجمالي الإيداع</div>
+                      <div style={{fontSize:14,fontWeight:700,color:"#4ade80"}}>{fmtD(totIn)}</div>
+                    </div>
+                    <div style={{background:"rgba(255,255,255,0.07)",borderRadius:11,padding:"11px 10px",textAlign:"center"}}>
+                      <div style={{fontSize:9,color:"rgba(255,255,255,0.4)",marginBottom:3}}>↑ إجمالي السحب</div>
+                      <div style={{fontSize:14,fontWeight:700,color:"#f87171"}}>{fmtD(totOut)}</div>
+                    </div>
+                    <div style={{background:"rgba(255,255,255,0.12)",borderRadius:11,padding:"11px 10px",textAlign:"center"}}>
+                      <div style={{fontSize:9,color:"rgba(255,255,255,0.4)",marginBottom:3}}>الرصيد المتاح</div>
+                      <div style={{fontSize:14,fontWeight:700,color:pBal>=0?"#4ade80":"#f87171"}}>{fmtD(pBal)}</div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* السحوبات فقط */}
+                <div style={{fontSize:13,fontWeight:700,color:"#991B1B",marginBottom:10,
+                  display:"flex",alignItems:"center",gap:6}}>
+                  <div style={{width:3,height:16,background:"#991B1B",borderRadius:2}}/>
+                  السحوبات ({toAr(withdraws.length)})
+                </div>
+                {withdraws.length===0
+                  ?<div style={{textAlign:"center",padding:"20px",color:"#8A7060",
+                    background:"#fff",borderRadius:12,border:"1px solid #E5DDD4",marginBottom:14}}>
+                    ما في سحوبات بعد
+                  </div>
+                  :withdraws.map(t=>(
+                    <div key={t.id} style={{background:"#fff",border:"1px solid rgba(153,27,27,0.15)",
+                      borderRadius:12,padding:"12px 14px",marginBottom:8}}>
+                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                        <div>
+                          <div style={{fontSize:12,color:"#8A7060"}}>📅 {t.date}</div>
+                          {t.note&&<div style={{fontSize:13,color:"#1C1410",marginTop:3}}>{t.note}</div>}
+                        </div>
+                        <div style={{fontSize:17,fontWeight:700,color:"#991B1B"}}>
+                          -{fmtD(t.amount)}
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                }
+
+                {/* الإيداعات */}
+                <div style={{fontSize:13,fontWeight:700,color:"#166534",marginBottom:10,marginTop:16,
+                  display:"flex",alignItems:"center",gap:6}}>
+                  <div style={{width:3,height:16,background:"#166534",borderRadius:2}}/>
+                  الإيداعات ({toAr(deposits.length)})
+                </div>
+                {deposits.length===0
+                  ?<div style={{textAlign:"center",padding:"20px",color:"#8A7060",
+                    background:"#fff",borderRadius:12,border:"1px solid #E5DDD4"}}>
+                    ما في إيداعات بعد
+                  </div>
+                  :deposits.map(t=>(
+                    <div key={t.id} style={{background:"#fff",border:"1px solid rgba(22,101,52,0.15)",
+                      borderRadius:12,padding:"12px 14px",marginBottom:8}}>
+                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                        <div>
+                          <div style={{fontSize:12,color:"#8A7060"}}>📅 {t.date}</div>
+                          {t.isDistribution&&<span style={{fontSize:10,color:"#1E40AF",
+                            background:"rgba(30,64,175,0.08)",padding:"2px 8px",borderRadius:20,display:"inline-block",marginTop:3}}>
+                            توزيع تلقائي
+                          </span>}
+                          {t.note&&<div style={{fontSize:12,color:"#8A7060",marginTop:3}}>{t.note}</div>}
+                        </div>
+                        <div style={{fontSize:17,fontWeight:700,color:"#166534"}}>
+                          +{fmtD(t.amount)}
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                }
+              </div>
+            );
+          })()}
+        </>
       )}
 
       {/* سجل معاملات الشركاء */}
