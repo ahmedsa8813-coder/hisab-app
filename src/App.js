@@ -289,16 +289,11 @@ export default function App(){
 
   // ── تصفية شاملة ──
   const resetAll=async()=>{
-    const pw=window.prompt("⚠️ تصفية شاملة كاملة\nالباسورد:");
+    const pw=window.prompt("⚠️ تصفية شاملة\nالباسورد:");
     if(!pw||pw!==PASS){if(pw!==null)alert("❌ باسورد غلط");return;}
-    // تصفير أرصدة الصناديق الثابتة
-    const ids=["partners",...PARTNERS.map(p=>"partner_"+p.id)];
-    for(const id of ids)await setDoc(doc(db,"fund_balances",id),{din:0,dol:0},{merge:true});
-    // تصفير كل أرصدة المشاريع المستقلة
     const balSnap=await getDocs(collection(db,"fund_balances"));
-    for(const d of balSnap.docs){
-      if(d.id.startsWith("proj_"))await deleteDoc(doc(db,"fund_balances",d.id));
-    }
+    for(const d of balSnap.docs)
+      await setDoc(doc(db,"fund_balances",d.id),{din:0,dol:0});
     for(const col of["fund_transactions","fund_projects","fund_projects_txs","employees"]){
       const snap=await getDocs(collection(db,col));
       for(const d of snap.docs)await deleteDoc(doc(db,col,d.id));
