@@ -799,56 +799,168 @@ function ProjPage({proj,txs,onBack,onAddTx,onDelTx,onClose,onDel,onReset}){
         {/* السجل */}
         {(!isAct||tab==="hist")&&(
           <div>
-            {dinTxs.length>0&&<>
-              <div style={{fontSize:13,fontWeight:700,color:"#16A34A",marginBottom:8,
-                display:"flex",alignItems:"center",gap:6}}>
-                <div style={{width:3,height:14,background:"#16A34A",borderRadius:2}}/>
-                الدينار ({dinTxs.length})</div>
-              {dinTxs.map(t=>{const isIn=t.type==="إيداع";return(
-                <div key={t.id} style={{background:"#fff",borderRadius:11,padding:"11px 14px",
-                  marginBottom:7,border:"1px solid "+(isIn?"#DCFCE7":"#FEE2E2"),
+            {/* هيدر السجل + طباعة */}
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+              <div style={{fontSize:14,fontWeight:700,color:"#1E293B"}}>
+                سجل حركات المشروع ({txs.length})
+              </div>
+              {txs.length>0&&(
+                <button onClick={()=>{
+                  const allRows=[...txs].sort((a,b)=>(a.date||"").localeCompare(b.date||""))
+                    .map(t=>{
+                      const isIn=t.type==="إيداع";
+                      const isDolT=t.currency==="دولار";
+                      return "<tr>"
+                        +"<td>"+t.date+"</td>"
+                        +"<td style='color:"+(isDolT?"#2563EB":"#059669")+"'>"+(isDolT?"دولار":"دينار")+"</td>"
+                        +"<td style='color:"+(isIn?"#16A34A":"#DC2626")+"'>"+(isIn?"↓ استلام":"↑ صرف")+"</td>"
+                        +"<td>"+(t.note||"—")+"</td>"
+                        +"<td style='font-weight:700;color:"+(isIn?"#16A34A":"#DC2626")+"'>"
+                          +(isIn?"+":"-")+(isDolT?f$(t.amount):fD(t.amount))
+                        +"</td>"
+                        +"</tr>";
+                    }).join("");
+                  const html="<!DOCTYPE html><html dir='rtl'><head><meta charset='utf-8'/>"
+                    +"<style>*{font-family:Tahoma}body{margin:28px;direction:rtl}"
+                    +"h2{color:#1E293B;margin:0}h3{color:#D97706;margin:8px 0 4px}"
+                    +"p{color:#64748B;font-size:12px;margin:2px 0}"
+                    +"table{width:100%;border-collapse:collapse;margin-top:16px}"
+                    +"th{background:#F1F5F9;padding:10px 8px;text-align:center;font-size:13px}"
+                    +"td{padding:9px 8px;border-bottom:1px solid #eee;text-align:center;font-size:13px}"
+                    +"tr:hover{background:#F8FAFC}"
+                    +".sum{background:#F8FAFC;border-radius:10px;padding:14px;margin-top:18px;display:flex;gap:24px}"
+                    +".sum-item{text-align:center}"
+                    +".sum-label{font-size:11px;color:#64748B;margin-bottom:4px}"
+                    +".sum-val{font-size:16px;font-weight:700}"
+                    +"</style></head><body>"
+                    +"<h2>"+COMPANY.name+"</h2>"
+                    +"<p>"+COMPANY.address+"</p>"
+                    +"<hr style='margin:12px 0;border-color:#E2E8F0'/>"
+                    +"<h3>📋 كشف حساب مشروع — "+p.name+"</h3>"
+                    +(p.province?"<p>📍 المحافظة: "+p.province+"</p>":"")
+                    +(p.client?"<p>👤 العميل: "+p.client+"</p>":"")
+                    +(p.totalDin?"<p>💰 قيمة المشروع: "+fD(p.totalDin)+(p.totalDol?" | "+f$(p.totalDol):"")+"</p>":"")
+                    +"<p>الحالة: "+(p.status==="نشط"?"● نشط":"✓ منتهي")+"</p>"
+                    +"<div class='sum'>"
+                    +"<div class='sum-item'><div class='sum-label'>↓ استلام د.ع</div><div class='sum-val' style='color:#16A34A'>"+fD(p.recDin||0)+"</div></div>"
+                    +"<div class='sum-item'><div class='sum-label'>↑ صرف د.ع</div><div class='sum-val' style='color:#DC2626'>"+fD(p.spdDin||0)+"</div></div>"
+                    +"<div class='sum-item'><div class='sum-label'>💰 ربح د.ع</div><div class='sum-val' style='color:#D97706'>"+fD((p.recDin||0)-(p.spdDin||0))+"</div></div>"
+                    +((p.recDol||0)>0?"<div class='sum-item'><div class='sum-label'>↓ استلام $</div><div class='sum-val' style='color:#2563EB'>"+f$(p.recDol||0)+"</div></div>":"")
+                    +((p.spdDol||0)>0?"<div class='sum-item'><div class='sum-label'>↑ صرف $</div><div class='sum-val' style='color:#DC2626'>"+f$(p.spdDol||0)+"</div></div>":"")
+                    +((p.recDol||0)>0||(p.spdDol||0)>0?"<div class='sum-item'><div class='sum-label'>💰 ربح $</div><div class='sum-val' style='color:#2563EB'>"+f$((p.recDol||0)-(p.spdDol||0))+"</div></div>":"")
+                    +"</div>"
+                    +"<table><thead><tr><th>التاريخ</th><th>العملة</th><th>النوع</th><th>ملاحظة</th><th>المبلغ</th></tr></thead>"
+                    +"<tbody>"+allRows+"</tbody></table>"
+                    +"<p style='margin-top:20px;color:#94A3B8;font-size:11px'>طُبع: "+today()+"</p>"
+                    +"</body></html>";
+                  const w=window.open("","_blank","width=800,height=600");
+                  if(!w){alert("يرجى السماح بالنوافذ المنبثقة");return;}
+                  w.document.write(html);
+                  w.document.close();
+                  w.focus();
+                  setTimeout(()=>w.print(),500);
+                }} style={{background:"#D97706",border:"none",borderRadius:9,
+                  padding:"8px 16px",color:"#fff",cursor:"pointer",
+                  fontSize:13,fontFamily:"Tahoma",fontWeight:600}}>
+                  🖨️ طباعة الكشف
+                </button>
+              )}
+            </div>
+
+            {txs.length===0&&(
+              <div style={{textAlign:"center",padding:24,color:"#94A3B8",
+                background:"#fff",borderRadius:12,border:"1px solid #E2E8F0"}}>
+                ما في حركات مسجلة
+              </div>
+            )}
+
+            {[...txs].sort((a,b)=>(b.date||"").localeCompare(a.date||"")).map(t=>{
+              const isIn=t.type==="إيداع";
+              const isDolT=t.currency==="دولار";
+              return(
+                <div key={t.id} style={{background:"#fff",borderRadius:11,padding:"12px 14px",
+                  marginBottom:8,border:"1px solid #E2E8F0",
                   borderRight:"4px solid "+(isIn?"#16A34A":"#DC2626")}}>
                   <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
                     <div>
-                      <div style={{fontSize:12,fontWeight:700,color:isIn?"#16A34A":"#DC2626",marginBottom:2}}>
-                        {isIn?"↓ استلام":"↑ صرف"}</div>
+                      <div style={{display:"flex",gap:8,alignItems:"center",marginBottom:4}}>
+                        <span style={{fontSize:12,fontWeight:700,
+                          color:isIn?"#16A34A":"#DC2626"}}>
+                          {isIn?"↓ استلام":"↑ صرف"}
+                        </span>
+                        <span style={{fontSize:10,fontWeight:600,padding:"2px 8px",
+                          borderRadius:20,
+                          background:isDolT?"#EFF6FF":"#F0FDF4",
+                          color:isDolT?"#2563EB":"#16A34A"}}>
+                          {isDolT?"🇺🇸 دولار":"🇮🇶 دينار"}
+                        </span>
+                      </div>
                       <div style={{fontSize:11,color:"#64748B"}}>📅 {t.date}</div>
-                      {t.note&&<div style={{fontSize:11,color:"#1E293B",marginTop:2}}>{t.note}</div>}
+                      {t.note&&(
+                        <div style={{fontSize:12,color:"#1E293B",marginTop:3}}>{t.note}</div>
+                      )}
                     </div>
                     <div style={{textAlign:"left"}}>
-                      <div style={{fontSize:15,fontWeight:700,color:isIn?"#16A34A":"#DC2626"}}>
-                        {isIn?"+":"-"}{fD(t.amount)}</div>
+                      <div style={{fontSize:16,fontWeight:700,
+                        color:isIn?"#16A34A":"#DC2626"}}>
+                        {isIn?"+":"-"}{isDolT?f$(t.amount):fD(t.amount)}
+                      </div>
                       <DelBtn onClick={()=>onDelTx(t)}/>
                     </div>
                   </div>
-                </div>);})}
-            </>}
-            {dolTxs.length>0&&<>
-              <div style={{fontSize:13,fontWeight:700,color:"#2563EB",marginBottom:8,marginTop:14,
-                display:"flex",alignItems:"center",gap:6}}>
-                <div style={{width:3,height:14,background:"#2563EB",borderRadius:2}}/>
-                الدولار ({dolTxs.length})</div>
-              {dolTxs.map(t=>{const isIn=t.type==="إيداع";return(
-                <div key={t.id} style={{background:"#fff",borderRadius:11,padding:"11px 14px",
-                  marginBottom:7,border:"1px solid "+(isIn?"#DCFCE7":"#FEE2E2"),
-                  borderRight:"4px solid "+(isIn?"#16A34A":"#DC2626")}}>
-                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                </div>
+              );
+            })}
+
+            {txs.length>0&&(
+              <div style={{background:"#F8FAFC",borderRadius:12,padding:14,
+                marginTop:10,border:"1px solid #E2E8F0"}}>
+                <div style={{fontSize:11,color:"#64748B",fontWeight:600,marginBottom:10}}>ملخص</div>
+                <div style={{display:"grid",
+                  gridTemplateColumns:(p.recDol||0)+(p.spdDol||0)>0?"1fr 1fr":"1fr",gap:12}}>
+                  <div>
+                    <div style={{fontSize:10,color:"#16A34A",fontWeight:600,marginBottom:6}}>🇮🇶 الدينار</div>
+                    <div style={{display:"flex",justifyContent:"space-between",fontSize:12,marginBottom:3}}>
+                      <span style={{color:"#64748B"}}>↓ الاستلام</span>
+                      <span style={{fontWeight:700,color:"#16A34A"}}>{fD(p.recDin||0)}</span>
+                    </div>
+                    <div style={{display:"flex",justifyContent:"space-between",fontSize:12,marginBottom:3}}>
+                      <span style={{color:"#64748B"}}>↑ الصرف</span>
+                      <span style={{fontWeight:700,color:"#DC2626"}}>{fD(p.spdDin||0)}</span>
+                    </div>
+                    <div style={{display:"flex",justifyContent:"space-between",fontSize:13,
+                      borderTop:"1px solid #E2E8F0",paddingTop:5,marginTop:5}}>
+                      <span style={{color:"#64748B",fontWeight:600}}>💰 الربح</span>
+                      <span style={{fontWeight:700,
+                        color:(p.recDin||0)-(p.spdDin||0)>=0?"#D97706":"#DC2626"}}>
+                        {fD(Math.abs((p.recDin||0)-(p.spdDin||0)))}
+                      </span>
+                    </div>
+                  </div>
+                  {(p.recDol||0)+(p.spdDol||0)>0&&(
                     <div>
-                      <div style={{fontSize:12,fontWeight:700,color:isIn?"#16A34A":"#DC2626",marginBottom:2}}>
-                        {isIn?"↓ استلام":"↑ صرف"}</div>
-                      <div style={{fontSize:11,color:"#64748B"}}>📅 {t.date}</div>
-                      {t.note&&<div style={{fontSize:11,color:"#1E293B",marginTop:2}}>{t.note}</div>}
+                      <div style={{fontSize:10,color:"#2563EB",fontWeight:600,marginBottom:6}}>🇺🇸 الدولار</div>
+                      <div style={{display:"flex",justifyContent:"space-between",fontSize:12,marginBottom:3}}>
+                        <span style={{color:"#64748B"}}>↓ الاستلام</span>
+                        <span style={{fontWeight:700,color:"#2563EB"}}>{f$(p.recDol||0)}</span>
+                      </div>
+                      <div style={{display:"flex",justifyContent:"space-between",fontSize:12,marginBottom:3}}>
+                        <span style={{color:"#64748B"}}>↑ الصرف</span>
+                        <span style={{fontWeight:700,color:"#DC2626"}}>{f$(p.spdDol||0)}</span>
+                      </div>
+                      <div style={{display:"flex",justifyContent:"space-between",fontSize:13,
+                        borderTop:"1px solid #E2E8F0",paddingTop:5,marginTop:5}}>
+                        <span style={{color:"#64748B",fontWeight:600}}>💰 الربح</span>
+                        <span style={{fontWeight:700,
+                          color:(p.recDol||0)-(p.spdDol||0)>=0?"#2563EB":"#DC2626"}}>
+                          {f$(Math.abs((p.recDol||0)-(p.spdDol||0)))}
+                        </span>
+                      </div>
                     </div>
-                    <div style={{textAlign:"left"}}>
-                      <div style={{fontSize:15,fontWeight:700,color:isIn?"#16A34A":"#DC2626"}}>
-                        {isIn?"+":"-"}{f$(t.amount)}</div>
-                      <DelBtn onClick={()=>onDelTx(t)}/>
-                    </div>
-                  </div>
-                </div>);})}
-            </>}
-            {txs.length===0&&<div style={{textAlign:"center",padding:24,color:"#94A3B8",
-              background:"#fff",borderRadius:12,border:"1px solid #E2E8F0"}}>ما في معاملات</div>}
+                  )}
+                </div>
+              </div>
+            )}
           </div>
         )}
 
