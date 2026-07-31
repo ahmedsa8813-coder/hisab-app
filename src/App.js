@@ -96,6 +96,7 @@ export default function App(){
   const[projects,setProjects]=useState([]);
   const[projTxs,setProjTxs]=useState([]);
   const[partnerTxs,setPartnerTxs]=useState([]);
+  const[employees,setEmployees]=useState([]);
 
   useEffect(()=>{
     if(!document.querySelector("#ti-css")){
@@ -139,6 +140,17 @@ export default function App(){
         setPartnerTxs(prev=>[...prev.filter(t=>t.fundId!==pId),...rows]);}));
     return()=>us.forEach(u=>u());
   },[page]);
+
+
+  // موظفو المقاولات
+  useEffect(()=>{
+    if(selFund!=="contracting"){setEmployees([]);return;}
+    const u=onSnapshot(
+      query(collection(db,"employees"),orderBy("createdAt","desc")),
+      snap=>setEmployees(snap.docs.map(d=>({id:d.id,...d.data()})))
+    );
+    return()=>u();
+  },[selFund]);
 
   const getBal=id=>balances[id]||{din:0,dol:0};
 
@@ -218,6 +230,26 @@ export default function App(){
     await setDoc(doc(db,"fund_projects",proj.id),{status:"منتهي",closedAt:today()},{merge:true});
   };
 
+
+  // إضافة موظف
+  const addEmployee=async(data)=>{
+    await addDoc(collection(db,"employees"),{
+      name:data.name.trim(),
+      role:data.role||"",
+      salary:Number(data.salary)||0,
+      currency:data.currency||"دينار",
+      note:data.note||"",
+      fundId:"contracting",
+      createdAt:new Date().toISOString(),
+    });
+  };
+
+  // حذف موظف
+  const deleteEmployee=async id=>{
+    if(!askPass("حذف الموظف"))return;
+    await deleteDoc(doc(db,"employees",id));
+  };
+
   const resetBalance=async(fundId,label)=>{
     if(!askPass("تصفية رصيد "+label))return;
     await setDoc(doc(db,"fund_balances",fundId),{din:0,dol:0},{merge:true});
@@ -289,6 +321,15 @@ export default function App(){
 
   if(page==="fund"&&selFund){
     const fund=FUNDS.find(f=>f.id===selFund);
+    if(selFund==="contracting")
+      return<ContractingPage
+        fund={fund} balances={balances} projects={projects} employees={employees}
+        onBack={()=>{setPage("home");setSelFund(null);}}
+        onAddProject={data=>addProject(selFund,data)}
+        onOpenProject={proj=>{setSelProject(proj);setPage("project");}}
+        onAddEmployee={addEmployee}
+        onDeleteEmployee={deleteEmployee}
+        onReset={()=>resetBalance(selFund,fund?.name||"")}/>;
     return<FundPage fund={fund} balances={balances} projects={projects}
       onBack={()=>{setPage("home");setSelFund(null);}}
       onAddProject={data=>addProject(selFund,data)}
@@ -818,6 +859,17 @@ function PartnersPage({partners,balances,txs,onBack,onWithdraw,onDelete,onReset}
   const[preview,setPreview]=useState(false);
   const set=k=>v=>setForm(f=>({...f,[k]:v}));
   const reset=()=>{setForm({amount:"",note:"",date:today()});setDone(false);};
+
+  // موظفو المقاولات
+  useEffect(()=>{
+    if(selFund!=="contracting"){setEmployees([]);return;}
+    const u=onSnapshot(
+      query(collection(db,"employees"),orderBy("createdAt","desc")),
+      snap=>setEmployees(snap.docs.map(d=>({id:d.id,...d.data()})))
+    );
+    return()=>u();
+  },[selFund]);
+
   const getBal=id=>balances[id]||{din:0,dol:0};
 
   if(selP){
@@ -1019,6 +1071,371 @@ function PartnersPage({partners,balances,txs,onBack,onWithdraw,onDelete,onReset}
           );
         })}
       </div>
+    </div>
+  );
+}
+
+// ─── صفحة المقاولات ───────────────────────────────────────────
+function ContractingPage({fund,balances,projects,employees,onBack,
+  onAddProject,onOpenProject,onAddEmployee,onDeleteEmployee,onReset}){
+  const[tab,setTab]=useState("base");
+  const getBal=id=>balances[id]||{din:0,dol:0};
+  const bal=getBal("contracting");
+  const active=projects.filter(p=>p.status==="نشط");
+  const finished=projects.filter(p=>p.status==="منتهي");
+  const tRD=active.reduce((s,p)=>s+(p.recDin||0),0);
+  const tSD=active.reduce((s,p)=>s+(p.spdDin||0),0);
+  const tRL=active.reduce((s,p)=>s+(p.recDol||0),0);
+  const tSL=active.reduce((s,p)=>s+(p.spdDol||0),0);
+
+  return(
+    <div style={S.page}>
+      <div style={{...S.wrap,maxWidth:720}}>
+        <BackBtn onClick={onBack} label="رجوع للصناديق"/>
+
+        {/* هيدر */}
+        <div style={{...S.card,borderTop:"5px solid #D97706",marginBottom:14}}>
+          <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:14}}>
+            <div style={{width:48,height:48,borderRadius:13,background:"#FFFBEB",
+              display:"flex",alignItems:"center",justifyContent:"center"}}>
+              <i className="ti ti-building" style={{fontSize:26,color:"#D97706"}} aria-hidden="true"/>
+            </div>
+            <div style={{fontSize:19,fontWeight:700,color:"#1E293B"}}>المقاولات</div>
+          </div>
+          {/* رصيد الصندوق المتراكم */}
+          {(bal.din!==0||bal.dol!==0)&&(
+            <div style={{background:"#FFFBEB",borderRadius:10,padding:"10px 14px",
+              border:"1px solid #D9770620",marginBottom:12,
+              display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+              <div style={{fontSize:11,color:"#D97706",fontWeight:600}}>
+                💎 رصيد الصندوق (أرباح مغلقة)
+              </div>
+              <div style={{textAlign:"left"}}>
+                {bal.din!==0&&<div style={{fontSize:14,fontWeight:700,
+                  color:bal.din>=0?"#D97706":"#DC2626"}}>
+                  {bal.din>=0?"":"-"}{fmtD(Math.abs(bal.din))}
+                </div>}
+                {bal.dol!==0&&<div style={{fontSize:13,fontWeight:700,
+                  color:bal.dol>=0?"#2563EB":"#DC2626"}}>
+                  {bal.dol>=0?"":"-"}{fmtDol(Math.abs(bal.dol))}
+                </div>}
+              </div>
+            </div>
+          )}
+          {/* إحصاءات سريعة */}
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
+            <div style={{background:"#F0FDF4",borderRadius:10,padding:"10px",textAlign:"center"}}>
+              <div style={{fontSize:9,color:"#64748B",marginBottom:2}}>↓ مستلم</div>
+              <div style={{fontSize:13,fontWeight:700,color:"#16A34A"}}>{fmtD(tRD)}</div>
+              {tRL>0&&<div style={{fontSize:10,color:"#2563EB"}}>{fmtDol(tRL)}</div>}
+            </div>
+            <div style={{background:"#FFF1F2",borderRadius:10,padding:"10px",textAlign:"center"}}>
+              <div style={{fontSize:9,color:"#64748B",marginBottom:2}}>↑ مصروف</div>
+              <div style={{fontSize:13,fontWeight:700,color:"#DC2626"}}>{fmtD(tSD)}</div>
+              {tSL>0&&<div style={{fontSize:10,color:"#DC2626"}}>{fmtDol(tSL)}</div>}
+            </div>
+            <div style={{background:tRD-tSD>=0?"#FFFBEB":"#FFF1F2",borderRadius:10,
+              padding:"10px",textAlign:"center",
+              border:"1.5px solid "+(tRD-tSD>=0?"#D9770640":"#DC262640")}}>
+              <div style={{fontSize:9,color:"#64748B",marginBottom:2}}>💰 الربح</div>
+              <div style={{fontSize:13,fontWeight:700,
+                color:tRD-tSD>=0?"#D97706":"#DC2626"}}>
+                {tRD-tSD>=0?"":"-"}{fmtD(Math.abs(tRD-tSD))}
+              </div>
+              {tRL-tSL!==0&&<div style={{fontSize:10,fontWeight:700,
+                color:tRL-tSL>=0?"#2563EB":"#DC2626"}}>
+                {tRL-tSL>=0?"":"-"}{fmtDol(Math.abs(tRL-tSL))}
+              </div>}
+            </div>
+          </div>
+        </div>
+
+        {/* تبويبات */}
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:6,marginBottom:14}}>
+          {[["base","🏠 الأساس"],["projects","🏗️ المشاريع"],["employees","👷 الموظفون"]].map(([v,l])=>(
+            <button key={v} onClick={()=>setTab(v)} style={{
+              border:tab===v?"none":"1px solid #E2E8F0",borderRadius:10,
+              padding:"12px 6px",cursor:"pointer",fontWeight:700,
+              fontSize:13,fontFamily:"Tahoma",
+              background:tab===v?"#D97706":"#fff",
+              color:tab===v?"#fff":"#64748B"}}>
+              {l}
+            </button>
+          ))}
+        </div>
+
+        {/* ── الأساس ── */}
+        {tab==="base"&&(
+          <div>
+            <div style={{...S.card,marginBottom:12}}>
+              <div style={{fontSize:13,fontWeight:700,color:"#1E293B",marginBottom:14}}>
+                📊 ملخص المشاريع
+              </div>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:10}}>
+                <div style={{background:"#FFFBEB",borderRadius:12,padding:14,textAlign:"center",
+                  border:"1px solid #D9770620"}}>
+                  <div style={{fontSize:10,color:"#64748B",marginBottom:4}}>مشاريع نشطة</div>
+                  <div style={{fontSize:28,fontWeight:700,color:"#D97706"}}>{active.length}</div>
+                </div>
+                <div style={{background:"#F1F5F9",borderRadius:12,padding:14,textAlign:"center"}}>
+                  <div style={{fontSize:10,color:"#64748B",marginBottom:4}}>مشاريع منتهية</div>
+                  <div style={{fontSize:28,fontWeight:700,color:"#94A3B8"}}>{finished.length}</div>
+                </div>
+              </div>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+                <div style={{background:"#F0FDF4",borderRadius:12,padding:14,textAlign:"center"}}>
+                  <div style={{fontSize:10,color:"#64748B",marginBottom:4}}>إجمالي المستلم</div>
+                  <div style={{fontSize:16,fontWeight:700,color:"#16A34A"}}>{fmtD(tRD)}</div>
+                  {tRL>0&&<div style={{fontSize:13,color:"#2563EB"}}>{fmtDol(tRL)}</div>}
+                </div>
+                <div style={{background:"#FFF1F2",borderRadius:12,padding:14,textAlign:"center"}}>
+                  <div style={{fontSize:10,color:"#64748B",marginBottom:4}}>إجمالي المصروف</div>
+                  <div style={{fontSize:16,fontWeight:700,color:"#DC2626"}}>{fmtD(tSD)}</div>
+                  {tSL>0&&<div style={{fontSize:13,color:"#DC2626"}}>{fmtDol(tSL)}</div>}
+                </div>
+              </div>
+            </div>
+            <div style={{display:"flex",justifyContent:"flex-end"}}>
+              <button onClick={onReset} style={{
+                background:"transparent",border:"1px solid #FEE2E2",
+                borderRadius:9,padding:"7px 14px",color:"#DC2626",
+                cursor:"pointer",fontSize:12,fontFamily:"Tahoma",fontWeight:600}}>
+                ⚙️ تصفية رصيد الصندوق
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* ── المشاريع ── */}
+        {tab==="projects"&&(
+          <ProjectsSection
+            fund={fund} projects={projects}
+            onAddProject={onAddProject}
+            onOpenProject={onOpenProject}
+          />
+        )}
+
+        {/* ── الموظفون ── */}
+        {tab==="employees"&&(
+          <EmployeesSection
+            employees={employees}
+            onAdd={onAddEmployee}
+            onDelete={onDeleteEmployee}
+          />
+        )}
+
+      </div>
+    </div>
+  );
+}
+
+// ─── قسم المشاريع (داخل المقاولات) ───────────────────────────
+function ProjectsSection({fund,projects,onAddProject,onOpenProject}){
+  const[showForm,setShowForm]=useState(false);
+  const[form,setForm]=useState({name:"",province:"",client:"",totalDin:"",totalDol:"",note:""});
+  const[saving,setSaving]=useState(false);
+  const set=k=>v=>setForm(f=>({...f,[k]:v}));
+  const save=async()=>{
+    if(!form.name.trim()||saving)return;
+    if(!form.totalDin&&!form.totalDol){alert("أدخل قيمة المشروع");return;}
+    setSaving(true);
+    await onAddProject(form);
+    setSaving(false);
+    setForm({name:"",province:"",client:"",totalDin:"",totalDol:"",note:""});
+    setShowForm(false);
+  };
+  const active=projects.filter(p=>p.status==="نشط");
+  const finished=projects.filter(p=>p.status==="منتهي");
+  return(
+    <div>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+        <div style={{fontSize:14,fontWeight:700,color:"#1E293B"}}>
+          نشطة ({active.length})
+        </div>
+        <button onClick={()=>setShowForm(v=>!v)} style={{
+          background:showForm?"#64748B":"#D97706",border:"none",
+          borderRadius:9,padding:"8px 16px",color:"#fff",
+          cursor:"pointer",fontSize:13,fontFamily:"Tahoma",fontWeight:600}}>
+          {showForm?"✕ إلغاء":"+ مشروع جديد"}
+        </button>
+      </div>
+      {showForm&&(
+        <div style={{...S.card,marginBottom:14}}>
+          <Lbl>اسم المشروع *</Lbl>
+          <Inp placeholder="اسم المشروع..." value={form.name}
+            onChange={e=>set("name")(e.target.value)} autoFocus/>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+            <div>
+              <Lbl>المحافظة</Lbl>
+              <Inp placeholder="بغداد..." value={form.province}
+                onChange={e=>set("province")(e.target.value)} style={{marginBottom:0}}/>
+            </div>
+            <div>
+              <Lbl>اسم العميل</Lbl>
+              <Inp placeholder="صاحب المشروع..." value={form.client}
+                onChange={e=>set("client")(e.target.value)} style={{marginBottom:0}}/>
+            </div>
+          </div>
+          <div style={{height:10}}/>
+          <div style={{background:"#FFFBEB",borderRadius:12,padding:14,
+            marginBottom:10,border:"1px solid #D9770620"}}>
+            <div style={{fontSize:12,fontWeight:700,color:"#1E293B",marginBottom:10}}>
+              💰 قيمة المشروع
+            </div>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+              <div>
+                <Lbl>🇮🇶 دينار</Lbl>
+                <Inp type="number" placeholder="٠" value={form.totalDin}
+                  onChange={e=>set("totalDin")(e.target.value)} style={{marginBottom:0,textAlign:"center"}}/>
+                {Number(form.totalDin)>0&&(
+                  <div style={{fontSize:10,color:"#16A34A",marginTop:3,fontWeight:600}}>
+                    {fmtD(Number(form.totalDin))}
+                  </div>
+                )}
+              </div>
+              <div>
+                <Lbl>🇺🇸 دولار</Lbl>
+                <Inp type="number" placeholder="٠" value={form.totalDol}
+                  onChange={e=>set("totalDol")(e.target.value)} style={{marginBottom:0,textAlign:"center"}}/>
+                {Number(form.totalDol)>0&&(
+                  <div style={{fontSize:10,color:"#2563EB",marginTop:3,fontWeight:600}}>
+                    {fmtDol(Number(form.totalDol))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+          <Lbl>ملاحظة</Lbl>
+          <Inp placeholder="..." value={form.note} onChange={e=>set("note")(e.target.value)}/>
+          <button onClick={save} disabled={!form.name.trim()||saving} style={{
+            width:"100%",border:"none",borderRadius:10,padding:"13px",
+            fontSize:14,fontWeight:700,fontFamily:"Tahoma",cursor:"pointer",
+            background:form.name.trim()?"#D97706":"#E2E8F0",
+            color:form.name.trim()?"#fff":"#94A3B8"}}>
+            {saving?"جاري الإنشاء...":"✅ إنشاء المشروع"}
+          </button>
+        </div>
+      )}
+      {active.length===0&&!showForm&&(
+        <div style={{textAlign:"center",padding:32,color:"#94A3B8",
+          ...S.card,marginBottom:14}}>
+          <i className="ti ti-building-plus"
+            style={{fontSize:40,color:"#CBD5E1",display:"block",marginBottom:8}}
+            aria-hidden="true"/>
+          ما في مشاريع نشطة
+        </div>
+      )}
+      {active.map(p=><ProjCard key={p.id} proj={p} fund={{color:"#D97706",light:"#FFFBEB"}} onOpen={onOpenProject}/>)}
+      {finished.length>0&&(
+        <>
+          <div style={{fontSize:13,fontWeight:700,color:"#94A3B8",
+            marginTop:20,marginBottom:10,display:"flex",alignItems:"center",gap:6}}>
+            <div style={{width:3,height:14,background:"#CBD5E1",borderRadius:2}}/>
+            منتهية ({finished.length})
+          </div>
+          {finished.map(p=><ProjCard key={p.id} proj={p}
+            fund={{color:"#94A3B8",light:"#F1F5F9"}} onOpen={onOpenProject} finished/>)}
+        </>
+      )}
+    </div>
+  );
+}
+
+// ─── قسم الموظفين ─────────────────────────────────────────────
+function EmployeesSection({employees,onAdd,onDelete}){
+  const[showForm,setShowForm]=useState(false);
+  const[form,setForm]=useState({name:"",role:"",salary:"",currency:"دينار",note:""});
+  const[saving,setSaving]=useState(false);
+  const set=k=>v=>setForm(f=>({...f,[k]:v}));
+  const save=async()=>{
+    if(!form.name.trim()||saving)return;
+    setSaving(true);
+    await onAdd(form);
+    setSaving(false);
+    setForm({name:"",role:"",salary:"",currency:"دينار",note:""});
+    setShowForm(false);
+  };
+  return(
+    <div>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+        <div style={{fontSize:14,fontWeight:700,color:"#1E293B"}}>
+          الموظفون ({employees.length})
+        </div>
+        <button onClick={()=>setShowForm(v=>!v)} style={{
+          background:showForm?"#64748B":"#D97706",border:"none",
+          borderRadius:9,padding:"8px 16px",color:"#fff",
+          cursor:"pointer",fontSize:13,fontFamily:"Tahoma",fontWeight:600}}>
+          {showForm?"✕ إلغاء":"+ موظف جديد"}
+        </button>
+      </div>
+
+      {showForm&&(
+        <div style={{...S.card,marginBottom:14}}>
+          <Lbl>اسم الموظف *</Lbl>
+          <Inp placeholder="الاسم الكامل..." value={form.name}
+            onChange={e=>set("name")(e.target.value)} autoFocus/>
+          <Lbl>المنصب / الدور</Lbl>
+          <Inp placeholder="مهندس، مقاول، عامل..." value={form.role}
+            onChange={e=>set("role")(e.target.value)}/>
+          <Lbl>الراتب</Lbl>
+          <div style={{display:"grid",gridTemplateColumns:"1fr auto",gap:8,marginBottom:10}}>
+            <Inp type="number" placeholder="٠" value={form.salary}
+              onChange={e=>set("salary")(e.target.value)} style={{marginBottom:0}}/>
+            <CurrBtn value={form.currency} onChange={v=>set("currency")(v)}/>
+          </div>
+          {Number(form.salary)>0&&(
+            <div style={{fontSize:12,color:"#D97706",fontWeight:600,marginBottom:10,
+              padding:"7px 12px",background:"#FFFBEB",borderRadius:8}}>
+              ✍️ {numToWords(Number(form.salary))} {form.currency==="دولار"?"دولار":"دينار"}
+            </div>
+          )}
+          <Lbl>ملاحظة</Lbl>
+          <Inp placeholder="..." value={form.note} onChange={e=>set("note")(e.target.value)}/>
+          <button onClick={save} disabled={!form.name.trim()||saving} style={{
+            width:"100%",border:"none",borderRadius:10,padding:"13px",
+            fontSize:14,fontWeight:700,fontFamily:"Tahoma",cursor:"pointer",
+            background:form.name.trim()?"#D97706":"#E2E8F0",
+            color:form.name.trim()?"#fff":"#94A3B8"}}>
+            {saving?"جاري الإضافة...":"✅ إضافة الموظف"}
+          </button>
+        </div>
+      )}
+
+      {employees.length===0&&!showForm&&(
+        <div style={{textAlign:"center",padding:32,color:"#94A3B8",...S.card}}>
+          <i className="ti ti-users"
+            style={{fontSize:40,color:"#CBD5E1",display:"block",marginBottom:8}}
+            aria-hidden="true"/>
+          ما في موظفين مضافين بعد
+        </div>
+      )}
+
+      {employees.map(e=>(
+        <div key={e.id} style={{...S.card,marginBottom:10,
+          borderRight:"4px solid #D97706",padding:"14px 16px"}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
+            <div>
+              <div style={{fontSize:15,fontWeight:700,color:"#1E293B",marginBottom:3}}>
+                👷 {e.name}
+              </div>
+              {e.role&&(
+                <div style={{fontSize:12,color:"#64748B",marginBottom:4}}>
+                  💼 {e.role}
+                </div>
+              )}
+              {e.salary>0&&(
+                <div style={{fontSize:13,fontWeight:700,color:"#D97706"}}>
+                  💰 {e.currency==="دولار"?fmtDol(e.salary):fmtD(e.salary)} / شهر
+                </div>
+              )}
+              {e.note&&(
+                <div style={{fontSize:11,color:"#94A3B8",marginTop:4}}>{e.note}</div>
+              )}
+            </div>
+            <DelBtn onClick={()=>onDelete(e.id)}/>
+          </div>
+        </div>
+      ))}
     </div>
   );
 }
