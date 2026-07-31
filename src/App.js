@@ -650,13 +650,20 @@ function ProjPage({proj,txs,onBack,onAdd,onDel,onClose,onDelProj}){
   // تحديث فوري في الواجهة
   const optimistic=(k,v)=>setP(prev=>({...prev,[k]:v}));
 
-  const save=async()=>{
+  const save=()=>{
     if(!amt||sv)return;
     if(tab==="with"&&amt>avail){alert("الرصيد غير كافٍ");return;}
-    setSv(true);
-    await onAdd(p,tab==="dep"?"إيداع":"سحب",cur,f.amount,f.note,f.date,optimistic);
-    setSv(false);setOk(true);
-    setTimeout(()=>{setOk(false);setF({amount:"",note:"",date:td()});},1200);
+    // تحديث الواجهة فوراً
+    const type=tab==="dep"?"إيداع":"سحب";
+    const isDol=cur==="دولار",isRec=tab==="dep";
+    const k=isDol?(isRec?"recDol":"spdDol"):(isRec?"recDin":"spdDin");
+    optimistic(k,(p[k]||0)+amt);
+    setOk(true);
+    const savedAmt=f.amount,savedNote=f.note,savedDate=f.date;
+    setF({amount:"",note:"",date:td()});
+    setTimeout(()=>setOk(false),1200);
+    // Firebase في الخلفية بدون انتظار
+    onAdd(p,type,cur,savedAmt,savedNote,savedDate);
   };
 
   const doClose=async()=>{
