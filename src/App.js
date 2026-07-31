@@ -562,7 +562,6 @@ export default function App() {
 
 // ─── قائمة الصناديق ─────────────────────────────────────────
 function FundsList({ funds, balances, onSelect }) {
-  const total = funds.reduce((s, f) => s + ((balances[f.id]||{}).din||0), 0);
 
   return (
     <div style={{
@@ -579,15 +578,14 @@ function FundsList({ funds, balances, onSelect }) {
           boxShadow:"0 1px 4px rgba(0,0,0,0.04)",
         }}>
           <div style={{ display:"flex", alignItems:"center", gap:14 }}>
-            <div style={{fontSize:18,fontWeight:700,color:"#1E293B"}}>{COMPANY.name}</div>
             <div>
-              <div style={{ fontSize:18, fontWeight:700, color:"#1E293B" }}>الصناديق المالية</div>
+              <div style={{ fontSize:18, fontWeight:700, color:"#1E293B" }}>{COMPANY.name}</div>
               <div style={{ fontSize:12, color:"#64748B", marginTop:2 }}>{COMPANY.address}</div>
             </div>
           </div>
           <div style={{ textAlign:"left" }}>
-            <div style={{ fontSize:11, color:"#64748B", marginBottom:2 }}>إجمالي الأرصدة</div>
-            <div style={{ fontSize:22, fontWeight:700, color:"#2563EB" }}>{fmtD(total)}</div>
+            <div style={{ fontSize:11, color:"#64748B", marginBottom:2 }}>الصناديق المالية</div>
+            <div style={{ fontSize:15, fontWeight:700, color:"#1E293B" }}>{funds.length} صندوق</div>
           </div>
         </div>
 
