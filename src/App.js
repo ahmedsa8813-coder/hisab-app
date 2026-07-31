@@ -149,7 +149,7 @@ export default function App() {
     if (!selProject) return;
     const fresh = projects.find((p) => p.id === selProject.id);
     if (fresh && JSON.stringify(fresh) !== JSON.stringify(selProject)) setSelProject(fresh);
-  }, [projects]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [projects, selProject]);
 
   /* حركات الشركاء */
   useEffect(() => {
