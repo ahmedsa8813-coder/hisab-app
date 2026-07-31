@@ -141,6 +141,13 @@ export default function App(){
     return()=>u();
   },[page]);
 
+  // تحديث تلقائي للمشروع المفتوح من Firebase
+  useEffect(()=>{
+    if(!selProj)return;
+    const updated=projs.find(p=>p.id===selProj.id);
+    if(updated)setSelProj(updated);
+  },[projs]);
+
   const getBal=id=>bals[id]||{din:0,dol:0};
 
   // ── منطق المشاريع ──
