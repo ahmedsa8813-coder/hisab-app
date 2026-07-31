@@ -346,18 +346,37 @@ function SpendPage({spends, projects, onAdd, onDelete}) {
     personName:"",
     amount:"", currency:"دينار", exchRate:"",
     note:"", date:today(),
+    imageBase64:"", // الصورة إجبارية
   });
-  const [saving, setSaving] = useState(false);
-  const [done,   setDone]   = useState(false);
+  const [saving,    setSaving]    = useState(false);
+  const [done,      setDone]      = useState(false);
+  const [imgPreview,setImgPreview]= useState("");
 
   const set  = k => v => setForm(f=>({...f,[k]:v}));
   const amtN = Number(form.amount)||0;
-  const valid = amtN>0 && form.date && (
+  const valid = amtN>0 && form.date && form.imageBase64 && (
     form.spendType==="project"  ? !!form.projectId :
     form.spendType==="asset"    ? !!form.toolName  :
     form.spendType==="workshop" ? !!form.branch     :
     !!form.personName
   );
+
+  // تحويل الصورة لـ base64
+  const handleImage = e => {
+    const file = e.target.files[0];
+    if(!file) return;
+    const reader = new FileReader();
+    reader.onload = ev => {
+      setImgPreview(ev.target.result);
+      setForm(f=>({...f,imageBase64:ev.target.result}));
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const resetForm = () => {
+    setForm({spendType:"project",projectId:"",branch:"مقاولات",toolName:"",toolQty:"1",toolBranch:"مقاولات",personName:"",amount:"",currency:"دينار",exchRate:"",note:"",date:today(),imageBase64:""});
+    setImgPreview("");
+  };
 
   const save = async () => {
     if(!valid||saving) return;
@@ -372,29 +391,22 @@ function SpendPage({spends, projects, onAdd, onDelete}) {
       exchRate:  form.currency==="دولار"?Number(form.exchRate)||0:0,
       amtInDinar,
       amtWords:  numToWords(amtN)+" "+(form.currency==="دولار"?"دولار":"دينار"),
-      // مشروع
       projectId:   form.spendType==="project"?form.projectId:"",
       projectName: form.spendType==="project"?(proj?.name||""):"",
-      // عدة
       toolName:    form.spendType==="asset"?form.toolName:"",
       toolQty:     form.spendType==="asset"?Number(form.toolQty)||1:0,
       toolBranch:  form.spendType==="asset"?form.toolBranch:"",
-      // ورشة
       branch:      form.spendType==="workshop"?form.branch:"",
-      // شخصي
       personName:  form.spendType==="personal"?form.personName:"",
       note:        form.note,
       date:        form.date,
+      imageBase64: form.imageBase64,
       txId:        genTxId(),
       createdAt:   new Date().toISOString(),
     });
     setSaving(false);
     setDone(true);
-    setTimeout(()=>{
-      setDone(false);
-      setForm({spendType:"project",projectId:"",branch:"مقاولات",toolName:"",toolQty:"1",toolBranch:"مقاولات",personName:"",amount:"",currency:"دينار",exchRate:"",note:"",date:today()});
-      setShow(false);
-    },1600);
+    setTimeout(()=>{ setDone(false); resetForm(); setShow(false); },1600);
   };
 
   const total = spends.filter(s=>s.currency==="دينار"||!s.currency).reduce((s,r)=>s+r.amount,0);
@@ -536,6 +548,33 @@ function SpendPage({spends, projects, onAdd, onDelete}) {
               <Lbl>ملاحظة (اختياري)</Lbl>
               <input style={{...S.inp,marginBottom:18}} placeholder="..." value={form.note} onChange={e=>set("note")(e.target.value)}/>
 
+              {/* الصورة — إجبارية */}
+              <Lbl>صورة الوثيقة / الفاتورة <span style={{color:C.red}}>*</span></Lbl>
+              {imgPreview?(
+                <div style={{marginBottom:14,position:"relative"}}>
+                  <img src={imgPreview} alt="الوثيقة" style={{width:"100%",maxHeight:220,objectFit:"cover",borderRadius:10,border:`1px solid ${C.border}`}}/>
+                  <button onClick={()=>{setImgPreview("");set("imageBase64")("");}} style={{
+                    position:"absolute",top:6,left:6,background:"rgba(0,0,0,0.6)",
+                    color:"#fff",border:"none",borderRadius:20,width:28,height:28,
+                    cursor:"pointer",fontSize:14,display:"flex",alignItems:"center",justifyContent:"center",
+                  }}>✕</button>
+                </div>
+              ):(
+                <label style={{
+                  display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",
+                  gap:8,padding:"24px 16px",marginBottom:14,
+                  border:`2px dashed ${C.border}`,borderRadius:10,cursor:"pointer",
+                  background:"rgba(153,27,27,0.03)",
+                }}>
+                  <i className="ti ti-camera" style={{fontSize:32,color:C.muted}} aria-hidden="true"/>
+                  <div style={{fontSize:13,color:C.muted,textAlign:"center"}}>
+                    اضغط لرفع صورة الفاتورة أو الوثيقة
+                  </div>
+                  <div style={{fontSize:11,color:C.red,fontWeight:600}}>مطلوب</div>
+                  <input type="file" accept="image/*" onChange={handleImage} style={{display:"none"}}/>
+                </label>
+              )}
+
               <button onClick={save} disabled={!valid||saving} style={{
                 ...S.btn,background:valid?(selType?.col||C.red):C.border,
                 color:valid?"#fff":C.muted,fontSize:16,
@@ -572,6 +611,14 @@ function SpendPage({spends, projects, onAdd, onDelete}) {
                   {t&&<div style={{fontSize:9,color:t.col,textAlign:"center",marginTop:3,fontWeight:700}}>{t.icon} {t.label}</div>}
                 </div>
               </div>
+              {r.imageBase64&&(
+                <div style={{marginTop:8}}>
+                  <img src={r.imageBase64} alt="وثيقة"
+                    style={{width:"100%",maxHeight:160,objectFit:"cover",borderRadius:8,border:`1px solid ${C.border}`,cursor:"pointer"}}
+                    onClick={()=>window.open(r.imageBase64)}
+                  />
+                </div>
+              )}
               <button onClick={()=>{if(window.confirm("تحذف؟"))onDelete(r.id);}}
                 style={{background:"transparent",border:"none",color:C.red,
                   fontSize:12,cursor:"pointer",padding:"4px 0",fontWeight:600}}>
