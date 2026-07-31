@@ -41,13 +41,11 @@ const PARTNERS = [
 ];
 
 // ─── مساعدات ────────────────────────────────────────────────
-const toAr  = n => String(n).replace(/\d/g, d => "٠١٢٣٤٥٦٧٨٩"[d]);
+const toAr  = n => String(Math.round(Math.abs(n)||0)).replace(/\B(?=(\d{3})+(?!\d))/g,",");
 const today = () => new Date().toISOString().split("T")[0];
-const fmtD  = n => toAr(Math.abs(Math.round(n||0)).toLocaleString("ar-IQ")) + " د.ع";
-const fmt   = (n, cur) => cur === "دولار"
-  ? toAr(Math.abs(Math.round(n||0))) + " $"
-  : fmtD(n);
-const arNum = n => String(Math.round(n||0)).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+const fmtD  = n => toAr(n) + " د.ع";
+const fmt   = (n, cur) => cur === "دولار" ? toAr(n) + " $" : fmtD(n);
+const arNum = n => toAr(n);
 
 function numToWords(n) {
   if (!n || isNaN(n)) return "";
