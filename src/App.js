@@ -238,20 +238,25 @@ export default function App() {
       createdAt: new Date().toISOString(),
     });
 
-    // ٣. وزّع على الشركاء الأربعة
+    // ٣. وزّع على الشركاء الأربعة (دينار + دولار)
     for (const p of PARTNERS) {
-      const share  = Math.round(amtInDin * p.share / 100);
-      const pId    = "partner_" + p.id;
-      const pBal   = getBal(pId);
-      const pNew   = pBal.din + share;
+      const shareDin = Math.round(amtInDin * p.share / 100);
+      const shareDol = isDol ? Math.round(amt * p.share / 100) : 0;
+      const pId      = "partner_" + p.id;
+      const pBal     = getBal(pId);
+      const pNewDin  = pBal.din + shareDin;
+      const pNewDol  = pBal.dol + shareDol;
       await setDoc(doc(db, "fund_balances", pId),
-        { din: pNew, dol: pBal.dol }, { merge: true });
+        { din: pNewDin, dol: pNewDol }, { merge: true });
       await addDoc(collection(db, "fund_transactions"), {
         fundId: pId, fundName: p.name,
-        type: "إيداع", amount: share, currency: "دينار", exchRate: 0, amtInDinar: share,
+        type: "إيداع",
+        amount: isDol ? shareDol : shareDin,
+        currency, exchRate: Number(exchRate)||0,
+        amtInDinar: shareDin,
         note: "حصة " + p.share + "% من أرباح " + (fromFund?.name || "") + (note ? " — " + note : ""),
         date: date || today(),
-        balAfterDin: pNew, balAfterDol: pBal.dol,
+        balAfterDin: pNewDin, balAfterDol: pNewDol,
         isDistribution: true,
         createdAt: new Date().toISOString(),
       });
@@ -294,26 +299,41 @@ export default function App() {
 
 
   // ── سحب شريك ────────────────────────────────────────────
-  const withdrawPartner = async (partnerId, amount, note, date) => {
-    const amt   = Math.round(Number(amount));
-    const pId   = "partner_" + partnerId;
-    const pBal  = getBal(pId);
-    const avail = pBal.din;
-    if (amt > avail) {
-      alert("لا يمكن السحب — الرصيد غير كافٍ\nالمتاح: " + fmtD(avail));
+  const withdrawPartner = async (partnerId, amount, currency, exchRate, note, date) => {
+    const amt    = Math.round(Number(amount));
+    const isDol  = currency === "دولار";
+    const pId    = "partner_" + partnerId;
+    const pBal   = getBal(pId);
+    const amtDin = isDol ? amt * (Number(exchRate) || 0) : amt;
+
+    // تحقق من الرصيد الكافي
+    if (isDol && amt > pBal.dol) {
+      alert("لا يمكن السحب — رصيد الدولار غير كافٍ\nالمتاح: " + toAr(Math.round(pBal.dol)) + " $");
       return false;
     }
-    const pNew    = pBal.din - amt;
-    const mainBal = getBal("partners");
-    const mainNew = mainBal.din - amt;
-    await setDoc(doc(db,"fund_balances",pId),        { din:pNew,    dol:pBal.din   }, { merge:true });
-    await setDoc(doc(db,"fund_balances","partners"), { din:mainNew, dol:mainBal.dol }, { merge:true });
+    if (!isDol && amt > pBal.din) {
+      alert("لا يمكن السحب — رصيد الدينار غير كافٍ\nالمتاح: " + fmtD(pBal.din));
+      return false;
+    }
+
+    const pNewDin  = pBal.din - amtDin;
+    const pNewDol  = isDol ? pBal.dol - amt : pBal.dol;
+    const mainBal  = getBal("partners");
+    const mNewDin  = mainBal.din - amtDin;
+    const mNewDol  = isDol ? mainBal.dol - amt : mainBal.dol;
+
+    await setDoc(doc(db,"fund_balances",pId),
+      { din: pNewDin, dol: pNewDol }, { merge:true });
+    await setDoc(doc(db,"fund_balances","partners"),
+      { din: mNewDin, dol: mNewDol }, { merge:true });
     await addDoc(collection(db,"fund_transactions"), {
-      fundId:pId, fundName:PARTNERS.find(p=>p.id===partnerId)?.name||"",
-      type:"سحب", amount:amt, currency:"دينار", exchRate:0, amtInDinar:amt,
-      note:note||"", date:date||today(),
-      balAfterDin:pNew, balAfterDol:pBal.dol,
-      createdAt:new Date().toISOString(),
+      fundId: pId,
+      fundName: PARTNERS.find(p=>p.id===partnerId)?.name || "",
+      type: "سحب", amount: amt, currency,
+      exchRate: Number(exchRate)||0, amtInDinar: amtDin,
+      note: note||"", date: date||today(),
+      balAfterDin: pNewDin, balAfterDol: pNewDol,
+      createdAt: new Date().toISOString(),
     });
     return true;
   };
@@ -777,10 +797,13 @@ function PartnersPage({ partners, balances, txs, onBack, onDeposit, onWithdraw, 
     setTimeout(resetForm, 1600);
   };
 
+  const [wCurrency, setWCurrency] = useState("دينار");
+  const [wExchRate, setWExchRate] = useState("");
+
   const handleWithdraw = async () => {
     if (!form.amount || Number(form.amount) <= 0) return;
     setSaving(true);
-    const ok = await onWithdraw(selP.id, form.amount, form.note, form.date);
+    const ok = await onWithdraw(selP.id, form.amount, wCurrency, wExchRate, form.note, form.date);
     setSaving(false);
     if (ok) { setDone(true); setTimeout(resetForm, 1600); }
   };
@@ -789,13 +812,17 @@ function PartnersPage({ partners, balances, txs, onBack, onDeposit, onWithdraw, 
   if (selP) {
     const p        = selP;
     const pId      = "partner_" + p.id;
-    const pBal     = balances[pId] || 0;
-    const avail    = pBal;
+    const pBal     = balances[pId] || { din:0, dol:0 };
+    const availDin = pBal.din || 0;
+    const availDol = pBal.dol || 0;
+    const wAmtN    = Number(form.amount) || 0;
+    const isDolW   = wCurrency === "دولار";
+    const avail    = isDolW ? availDol : availDin;
     const allTxs   = txs.filter(t => t.fundId === pId).sort((a, b) => b.date.localeCompare(a.date));
     const deposits  = allTxs.filter(t => t.type === "إيداع");
     const withdraws = allTxs.filter(t => t.type === "سحب");
-    const totIn    = deposits.reduce((s, t) => s + (t.amtInDinar || t.amount), 0);
-    const totOut   = withdraws.reduce((s, t) => s + (t.amtInDinar || t.amount), 0);
+    const totInDin  = deposits.reduce((s, t) => s + (t.amtInDinar || t.amount), 0);
+    const totOutDin = withdraws.reduce((s, t) => s + (t.amtInDinar || t.amount), 0);
 
     const buildHtml = () => {
       let rows = "";
@@ -901,24 +928,32 @@ function PartnersPage({ partners, balances, txs, onBack, onDeposit, onWithdraw, 
               </button>
             </div>
 
-            {/* الأرقام */}
+            {/* الأرقام — دينار + دولار */}
             <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:10 }}>
               <div style={{ background:"#F0FDF4", borderRadius:12, padding:"12px", textAlign:"center" }}>
-                <div style={{ fontSize:10, color:"#64748B", marginBottom:4 }}>↓ إيداع</div>
-                <div style={{ fontSize:16, fontWeight:700, color:"#16A34A" }}>{fmtD(totIn)}</div>
+                <div style={{ fontSize:10, color:"#64748B", marginBottom:4 }}>↓ إيداع (دينار)</div>
+                <div style={{ fontSize:14, fontWeight:700, color:"#16A34A" }}>{fmtD(totInDin)}</div>
               </div>
               <div style={{ background:"#FFF1F2", borderRadius:12, padding:"12px", textAlign:"center" }}>
-                <div style={{ fontSize:10, color:"#64748B", marginBottom:4 }}>↑ سحب</div>
-                <div style={{ fontSize:16, fontWeight:700, color:"#DC2626" }}>{fmtD(totOut)}</div>
+                <div style={{ fontSize:10, color:"#64748B", marginBottom:4 }}>↑ سحب (دينار)</div>
+                <div style={{ fontSize:14, fontWeight:700, color:"#DC2626" }}>{fmtD(totOutDin)}</div>
               </div>
-              <div style={{
-                background:p.light, borderRadius:12, padding:"12px", textAlign:"center",
-                border:"1.5px solid " + p.color + "40",
-              }}>
-                <div style={{ fontSize:10, color:"#64748B", marginBottom:4 }}>الرصيد</div>
-                <div style={{ fontSize:16, fontWeight:700, color: avail >= 0 ? p.color : "#DC2626" }}>{fmtD(avail)}</div>
+              <div style={{ background:p.light, borderRadius:12, padding:"12px", textAlign:"center",
+                border:"1.5px solid " + p.color + "40" }}>
+                <div style={{ fontSize:10, color:"#64748B", marginBottom:4 }}>الرصيد المتاح</div>
+                <div style={{ fontSize:14, fontWeight:700, color:availDin>=0?p.color:"#DC2626" }}>{fmtD(availDin)}</div>
               </div>
             </div>
+            {/* رصيد الدولار */}
+            {availDol !== 0 && (
+              <div style={{ marginTop:10, background:"#EFF6FF", borderRadius:12,
+                padding:"12px 14px", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+                <div style={{ fontSize:12, color:"#2563EB", fontWeight:600 }}>🇺🇸 رصيد الدولار</div>
+                <div style={{ fontSize:18, fontWeight:700, color:"#2563EB" }}>
+                  {toAr(Math.round(Math.abs(availDol)))} $
+                </div>
+              </div>
+            )}
           </div>
 
           {/* نموذج السحب */}
@@ -934,51 +969,67 @@ function PartnersPage({ partners, balances, txs, onBack, onDeposit, onWithdraw, 
               </div>
             ) : (
               <>
+                {/* العملة */}
+                <Lbl>العملة</Lbl>
+                <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, marginBottom:12 }}>
+                  {["دينار","دولار"].map(c => (
+                    <button key={c} onClick={() => setWCurrency(c)} style={{
+                      padding:"10px", borderRadius:10, cursor:"pointer",
+                      fontFamily:"Tahoma", fontSize:13, fontWeight:700,
+                      border:"1.5px solid " + (wCurrency===c ? p.color : "#E2E8F0"),
+                      background: wCurrency===c ? p.light : "transparent",
+                      color: wCurrency===c ? p.color : "#64748B",
+                    }}>
+                      {c === "دينار" ? "🇮🇶 دينار" : "🇺🇸 دولار"}
+                      <div style={{ fontSize:10, marginTop:2, color:"#64748B" }}>
+                        متاح: {c==="دينار" ? fmtD(availDin) : toAr(Math.round(availDol))+" $"}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+
                 <Lbl>المبلغ</Lbl>
-                <Inp
-                  style={{ fontSize:22, fontWeight:700, textAlign:"center", marginBottom:8 }}
+                <Inp style={{ fontSize:22, fontWeight:700, textAlign:"center", marginBottom:8 }}
                   type="number" placeholder="٠"
-                  value={form.amount} onChange={e => set("amount")(e.target.value)}
-                  autoFocus
-                />
-                {Number(form.amount) > 0 && (
+                  value={form.amount} onChange={e => set("amount")(e.target.value)} autoFocus/>
+
+                {isDolW && (
                   <>
-                    <div style={{
-                      fontSize:13, color:p.color, fontWeight:600,
-                      marginBottom:8, padding:"8px 12px",
-                      background:p.light, borderRadius:8,
-                      border:"1px solid " + p.color + "30",
-                    }}>
-                      ✍️ {numToWords(Number(form.amount))} دينار
+                    <Lbl>سعر الصرف (للاحتساب)</Lbl>
+                    <Inp style={{ marginBottom:8 }} type="number" placeholder="مثال: 1480"
+                      value={wExchRate} onChange={e => setWExchRate(e.target.value)}/>
+                  </>
+                )}
+
+                {wAmtN > 0 && (
+                  <>
+                    <div style={{ fontSize:13, color:p.color, fontWeight:600,
+                      marginBottom:8, padding:"8px 12px", background:p.light,
+                      borderRadius:8, border:"1px solid " + p.color + "30" }}>
+                      ✍️ {numToWords(wAmtN)} {isDolW ? "دولار" : "دينار"}
                     </div>
-                    <div style={{
-                      fontSize:12, marginBottom:10, padding:"7px 12px",
+                    <div style={{ fontSize:12, marginBottom:10, padding:"7px 12px",
                       borderRadius:8, fontWeight:600,
-                      color: Number(form.amount) <= avail ? "#16A34A" : "#DC2626",
-                      background: Number(form.amount) <= avail ? "#F0FDF4" : "#FFF1F2",
-                    }}>
-                      {Number(form.amount) <= avail
+                      color: wAmtN <= avail ? "#16A34A" : "#DC2626",
+                      background: wAmtN <= avail ? "#F0FDF4" : "#FFF1F2" }}>
+                      {wAmtN <= avail
                         ? "✅ الرصيد كافٍ"
-                        : "⚠️ تجاوز الرصيد — المتاح: " + fmtD(avail)}
+                        : "⚠️ تجاوز الرصيد — المتاح: " + (isDolW ? toAr(Math.round(availDol))+" $" : fmtD(availDin))}
                     </div>
                   </>
                 )}
+
                 <Lbl>التاريخ</Lbl>
                 <Inp style={{ marginBottom:10 }} type="date" value={form.date} onChange={e => set("date")(e.target.value)}/>
                 <Lbl>ملاحظة</Lbl>
                 <Inp style={{ marginBottom:14 }} placeholder="سبب السحب..." value={form.note} onChange={e => set("note")(e.target.value)}/>
-                <button
-                  onClick={handleWithdraw}
-                  disabled={!form.amount || saving || Number(form.amount) > avail}
-                  style={{
-                    width:"100%", border:"none", borderRadius:12, padding:"13px",
-                    fontSize:15, fontWeight:700, cursor:"pointer", fontFamily:"Tahoma",
-                    background: Number(form.amount) > 0 && Number(form.amount) <= avail ? p.color : "#E2E8F0",
-                    color:      Number(form.amount) > 0 && Number(form.amount) <= avail ? "#fff" : "#94A3B8",
-                  }}
-                >
-                  {saving ? "جاري السحب..." : "↑ تأكيد السحب"}
-                </button>
+                <button onClick={handleWithdraw}
+                  disabled={!form.amount || saving || wAmtN > avail} style={{
+                  width:"100%", border:"none", borderRadius:12, padding:"13px",
+                  fontSize:15, fontWeight:700, cursor:"pointer", fontFamily:"Tahoma",
+                  background: wAmtN > 0 && wAmtN <= avail ? p.color : "#E2E8F0",
+                  color: wAmtN > 0 && wAmtN <= avail ? "#fff" : "#94A3B8",
+                }}>{saving ? "جاري السحب..." : "↑ تأكيد السحب"}</button>
               </>
             )}
           </div>
@@ -1153,10 +1204,12 @@ function PartnersPage({ partners, balances, txs, onBack, onDeposit, onWithdraw, 
         </div>
         {partners.map(p => {
           const pId    = "partner_" + p.id;
-          const pBal   = balances[pId] || 0;
-          const totOut = txs.filter(t => t.fundId === pId && t.type === "سحب").reduce((s, t) => s + t.amount, 0);
-          const totIn  = txs.filter(t => t.fundId === pId && t.type === "إيداع").reduce((s, t) => s + t.amount, 0);
-          const wCount = txs.filter(t => t.fundId === pId && t.type === "سحب").length;
+          const pBal   = balances[pId] || { din:0, dol:0 };
+          const pDin   = pBal.din || 0;
+          const pDol   = pBal.dol || 0;
+          const totOut = txs.filter(t => t.fundId===pId && t.type==="سحب").reduce((s,t)=>s+(t.amtInDinar||t.amount),0);
+          const totIn  = txs.filter(t => t.fundId===pId && t.type==="إيداع").reduce((s,t)=>s+(t.amtInDinar||t.amount),0);
+          const wCount = txs.filter(t => t.fundId===pId && t.type==="سحب").length;
           return (
             <button key={p.id}
               onClick={() => { setSelP(p); resetForm(); }}
@@ -1168,24 +1221,26 @@ function PartnersPage({ partners, balances, txs, onBack, onDeposit, onWithdraw, 
                 boxShadow:"0 1px 4px rgba(0,0,0,0.04)",
                 transition:"box-shadow 0.15s, transform 0.12s",
               }}
-              onMouseEnter={e => { e.currentTarget.style.boxShadow = "0 4px 14px rgba(0,0,0,0.08)"; e.currentTarget.style.transform = "translateY(-1px)"; }}
-              onMouseLeave={e => { e.currentTarget.style.boxShadow = "0 1px 4px rgba(0,0,0,0.04)"; e.currentTarget.style.transform = "none"; }}
+              onMouseEnter={e => { e.currentTarget.style.boxShadow="0 4px 14px rgba(0,0,0,0.08)"; e.currentTarget.style.transform="translateY(-1px)"; }}
+              onMouseLeave={e => { e.currentTarget.style.boxShadow="0 1px 4px rgba(0,0,0,0.04)"; e.currentTarget.style.transform="none"; }}
             >
               <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:12 }}>
                 <div style={{ display:"flex", alignItems:"center", gap:12 }}>
-                  <div style={{ width:44, height:44, borderRadius:13, background:p.light, display:"flex", alignItems:"center", justifyContent:"center" }}>
+                  <div style={{ width:44, height:44, borderRadius:13, background:p.light,
+                    display:"flex", alignItems:"center", justifyContent:"center" }}>
                     <i className="ti ti-user" style={{ fontSize:22, color:p.color }} aria-hidden="true"/>
                   </div>
                   <div>
                     <div style={{ fontSize:16, fontWeight:700, color:"#1E293B" }}>{p.name}</div>
                     <div style={{ fontSize:12, color:"#64748B", marginTop:2 }}>
-                      حصة {toAr(p.share)}% · {toAr(wCount)} سحبة
+                      حصة {p.share}% · {wCount} سحبة
                     </div>
                   </div>
                 </div>
                 <div style={{ textAlign:"left" }}>
-                  <div style={{ fontSize:20, fontWeight:700, color: pBal >= 0 ? p.color : "#DC2626" }}>{fmtD(pBal)}</div>
-                  <div style={{ fontSize:11, color:"#64748B", marginTop:2 }}>{pBal >= 0 ? "متاح للسحب" : "رصيد سالب"}</div>
+                  <div style={{ fontSize:18, fontWeight:700, color:pDin>=0?p.color:"#DC2626" }}>{fmtD(pDin)}</div>
+                  {pDol!==0&&<div style={{ fontSize:13, fontWeight:700, color:"#2563EB" }}>{toAr(Math.round(Math.abs(pDol)))} $</div>}
+                  <div style={{ fontSize:11, color:"#64748B", marginTop:2 }}>{pDin>=0?"متاح للسحب":"سالب"}</div>
                 </div>
               </div>
               <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
@@ -1199,6 +1254,7 @@ function PartnersPage({ partners, balances, txs, onBack, onDeposit, onWithdraw, 
                 </div>
               </div>
             </button>
+          );
           );
         })}
       </div>
