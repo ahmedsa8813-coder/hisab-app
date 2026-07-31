@@ -678,6 +678,7 @@ function SpendPage({spends, projects, onAdd, onDelete}) {
                   fontSize:12,cursor:"pointer",padding:"6px 0",fontWeight:600,
                 }}>🗑️ حذف</button>
               </div>
+            </div>
           );
         })
       }
