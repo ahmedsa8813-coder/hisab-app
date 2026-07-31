@@ -357,6 +357,45 @@ export default function App() {
     await setDoc(doc(db,"fund_balances",fundId),{din:0,dol:0},{merge:true});
   };
 
+  // ── تصفية شاملة لكل البيانات (وضع التجربة) ──────────────────
+  const resetAll = async ()=>{
+    const pw=window.prompt("⚠️ تصفية شاملة لكل البيانات\nهذا يحذف كل المشاريع والمعاملات والأرصدة\n\nأدخل الباسورد:");
+    if (pw===null) return;
+    if (pw!==PASS){alert("❌ باسورد غلط");return;}
+    const confirm2=window.prompt("⚠️ تأكيد أخير — اكتب كلمة \"تصفية\" للمتابعة:");
+    if (confirm2!=="تصفية"){alert("إلغاء — لم يتم التصفية");return;}
+
+    // تصفير كل الأرصدة
+    const allIds=[
+      ...FUNDS.map(f=>f.id),
+      "partners",
+      ...PARTNERS.map(p=>"partner_"+p.id),
+    ];
+    for (const id of allIds) {
+      await setDoc(doc(db,"fund_balances",id),{din:0,dol:0},{merge:true});
+    }
+
+    // حذف كل المعاملات
+    const txSnap=await new Promise(res=>{
+      const u=onSnapshot(collection(db,"fund_transactions"),snap=>{u();res(snap);});
+    });
+    for (const d of txSnap.docs) await deleteDoc(doc(db,"fund_transactions",d.id));
+
+    // حذف كل المشاريع
+    const pjSnap=await new Promise(res=>{
+      const u=onSnapshot(collection(db,"fund_projects"),snap=>{u();res(snap);});
+    });
+    for (const d of pjSnap.docs) await deleteDoc(doc(db,"fund_projects",d.id));
+
+    // حذف كل حركات المشاريع
+    const ptSnap=await new Promise(res=>{
+      const u=onSnapshot(collection(db,"fund_projects_txs"),snap=>{u();res(snap);});
+    });
+    for (const d of ptSnap.docs) await deleteDoc(doc(db,"fund_projects_txs",d.id));
+
+    alert("✅ تمت التصفية الشاملة — كل البيانات صُفِّرت");
+  };
+
   // ── حذف معاملة شريك ─────────────────────────────────────────
   const deletePartnerTx = async tx=>{
     if (!askPass("حذف المعاملة")) return;
@@ -448,10 +487,11 @@ export default function App() {
       if (id==="partners") setPage("partners");
       else {setSelFund(id);setPage("fund");}
     }}
+    onResetAll={resetAll}
   />;
 }
 // ─── قائمة الصناديق ───────────────────────────────────────────
-function FundsList({funds,balances,onSelect}) {
+function FundsList({funds,balances,onSelect,onResetAll}) {
   return (
     <div style={{minHeight:"100vh",background:"#F1F5F9",
       fontFamily:"Tahoma",direction:"rtl"}}>
@@ -460,11 +500,21 @@ function FundsList({funds,balances,onSelect}) {
         <div style={{background:"#fff",borderRadius:16,padding:"18px 22px",
           marginBottom:22,border:"1px solid #E2E8F0",
           boxShadow:"0 1px 4px rgba(0,0,0,0.04)"}}>
-          <div style={{fontSize:21,fontWeight:700,color:"#1E293B"}}>
-            {COMPANY.name}
-          </div>
-          <div style={{fontSize:12,color:"#64748B",marginTop:3}}>
-            {COMPANY.address}
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+            <div>
+              <div style={{fontSize:21,fontWeight:700,color:"#1E293B"}}>
+                {COMPANY.name}
+              </div>
+              <div style={{fontSize:12,color:"#64748B",marginTop:3}}>
+                {COMPANY.address}
+              </div>
+            </div>
+            <button onClick={onResetAll} style={{
+              background:"#FFF1F2",border:"1px solid #FEE2E2",
+              borderRadius:10,padding:"8px 14px",color:"#DC2626",
+              cursor:"pointer",fontSize:12,fontFamily:"Tahoma",fontWeight:700}}>
+              ⚠️ تصفية شاملة
+            </button>
           </div>
         </div>
 
