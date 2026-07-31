@@ -144,13 +144,12 @@ export default function App() {
     }
   }, []);
 
-  // Firebase listeners
+  // Firebase listeners — عند الفتح نجلب الأرصدة فقط
   useEffect(() => {
-    const unsubs = [];
-    const timer  = setTimeout(() => setLoading(false), 6000);
+    const timer = setTimeout(() => setLoading(false), 4000);
 
-    // أرصدة الصناديق — خفيف دائماً
-    unsubs.push(onSnapshot(collection(db, "fund_balances"), snap => {
+    // الأرصدة فقط — خفيف جداً (أقل من 20 سجل)
+    const unsub = onSnapshot(collection(db, "fund_balances"), snap => {
       const b = {};
       snap.docs.forEach(d => {
         const data = d.data();
@@ -158,22 +157,63 @@ export default function App() {
       });
       setBalances(b);
       setLoading(false);
-    }, () => setLoading(false)));
+    }, () => setLoading(false));
 
-    // آخر 500 معاملة فقط
-    unsubs.push(onSnapshot(
-      query(collection(db, "fund_transactions"), orderBy("createdAt", "desc")),
-      snap => setTxs(snap.docs.map(d => ({ id: d.id, ...d.data() })))
-    ));
-
-    // المشاريع
-    unsubs.push(onSnapshot(
-      query(collection(db, "fund_projects"), orderBy("createdAt", "desc")),
-      snap => setProjects(snap.docs.map(d => ({ id: d.id, ...d.data() })))
-    ));
-
-    return () => { unsubs.forEach(u => u()); clearTimeout(timer); };
+    return () => { unsub(); clearTimeout(timer); };
   }, []);
+
+  // المعاملات — تُجلب فقط عند فتح صندوق معين
+  useEffect(() => {
+    if (!selFund && page !== "fund") return;
+    const fundId = selFund;
+    if (!fundId) return;
+    const unsub = onSnapshot(
+      query(
+        collection(db, "fund_transactions"),
+        where("fundId", "==", fundId),
+        orderBy("createdAt", "desc")
+      ),
+      snap => setTxs(snap.docs.map(d => ({ id: d.id, ...d.data() })))
+    );
+    return () => unsub();
+  }, [selFund, page]);
+
+  // معاملات الشركاء — تُجلب عند فتح صفحة الشركاء
+  useEffect(() => {
+    if (page !== "partners") return;
+    const partnerIds = ["partners", ...PARTNERS.map(p => "partner_" + p.id)];
+    const unsubs = partnerIds.map(pId =>
+      onSnapshot(
+        query(
+          collection(db, "fund_transactions"),
+          where("fundId", "==", pId),
+          orderBy("createdAt", "desc")
+        ),
+        snap => {
+          const newTxs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+          setTxs(prev => {
+            const filtered = prev.filter(t => t.fundId !== pId);
+            return [...filtered, ...newTxs];
+          });
+        }
+      )
+    );
+    return () => unsubs.forEach(u => u());
+  }, [page]);
+
+  // المشاريع — تُجلب عند فتح صندوق
+  useEffect(() => {
+    if (!selFund) return;
+    const unsub = onSnapshot(
+      query(
+        collection(db, "fund_projects"),
+        where("fundId", "==", selFund),
+        orderBy("createdAt", "desc")
+      ),
+      snap => setProjects(snap.docs.map(d => ({ id: d.id, ...d.data() })))
+    );
+    return () => unsub();
+  }, [selFund]);
 
   // مساعد: رصيد صندوق
   const getBal = (fundId) => balances[fundId] || { din: 0, dol: 0 };
