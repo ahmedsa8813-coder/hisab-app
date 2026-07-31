@@ -3,7 +3,7 @@ import { initializeApp } from "firebase/app";
 import {
   initializeFirestore, persistentLocalCache, persistentMultipleTabManager,
   collection, doc, addDoc, setDoc, deleteDoc, getDocs,
-  onSnapshot, query, where, orderBy,
+  onSnapshot, query, where,
 } from "firebase/firestore";
 
 /* ============================================================
@@ -51,6 +51,8 @@ const toAr = (n) => {
   return r;
 };
 const today = () => new Date().toISOString().split("T")[0];
+/* ترتيب من الأحدث للأقدم — نرتّب بالكود بدل orderBy حتى ما نحتاج فهرس Firestore */
+const byNewest = (a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || ""));
 const fmtDin = (n) => toAr(n) + " د.ع";
 const fmtDol = (n) => toAr(n) + " $";
 const askPass = (label) => {
@@ -125,11 +127,12 @@ export default function App() {
     return () => { u(); clearTimeout(t); };
   }, []);
 
-  /* مشاريع المقاولات */
+  /* مشاريع المقاولات — بدون orderBy (نرتّب بالكود) حتى ما نحتاج فهرس مركّب */
   useEffect(() => {
     const u = onSnapshot(
-      query(collection(db, "projects"), where("fundId", "==", "contracting"), orderBy("createdAt", "desc")),
-      (snap) => setProjects(snap.docs.map((d) => ({ id: d.id, ...d.data() })))
+      query(collection(db, "projects"), where("fundId", "==", "contracting")),
+      (snap) => setProjects(snap.docs.map((d) => ({ id: d.id, ...d.data() })).sort(byNewest)),
+      (err) => console.error("projects listener:", err)
     );
     return () => u();
   }, []);
@@ -138,8 +141,9 @@ export default function App() {
   useEffect(() => {
     if (!selProject) { setProjTxs([]); return; }
     const u = onSnapshot(
-      query(collection(db, "project_txs"), where("projectId", "==", selProject.id), orderBy("createdAt", "desc")),
-      (snap) => setProjTxs(snap.docs.map((d) => ({ id: d.id, ...d.data() })))
+      query(collection(db, "project_txs"), where("projectId", "==", selProject.id)),
+      (snap) => setProjTxs(snap.docs.map((d) => ({ id: d.id, ...d.data() })).sort(byNewest)),
+      (err) => console.error("project_txs listener:", err)
     );
     return () => u();
   }, [selProject?.id]);
@@ -156,11 +160,12 @@ export default function App() {
     if (page !== "partners") { setPartnerTxs([]); return; }
     const ids = ["partners", ...PARTNERS.map((p) => "partner_" + p.id)];
     const us = ids.map((pId) => onSnapshot(
-      query(collection(db, "fund_transactions"), where("fundId", "==", pId), orderBy("createdAt", "desc")),
+      query(collection(db, "fund_transactions"), where("fundId", "==", pId)),
       (snap) => {
         const rows = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-        setPartnerTxs((prev) => [...prev.filter((t) => t.fundId !== pId), ...rows]);
-      }
+        setPartnerTxs((prev) => [...prev.filter((t) => t.fundId !== pId), ...rows].sort(byNewest));
+      },
+      (err) => console.error("fund_transactions listener:", err)
     ));
     return () => us.forEach((u) => u());
   }, [page]);
