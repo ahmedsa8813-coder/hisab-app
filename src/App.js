@@ -854,7 +854,7 @@ function FundDetail({fund, balance, txs, onBack, onAdd, onDelete}) {
               <div style={{textAlign:"left"}}>
                 <div style={{fontSize:18,fontWeight:700,color:t.type==="إيداع"?"#16A34A":"#DC2626"}}>
                   {t.type==="إيداع"?"+":"-"}{t.currency==="دولار"
-                    ? (String(Math.round(t.amount||0)).replace(/\B(?=(\d{3})+(?!\d))/g,",")+' $')
+                    ? (toAr(Math.round(t.amount||0))+' $')
                     : fmtD(t.amount)}
                 </div>
                 {t.currency==="دولار"&&t.amtInDinar>0&&(
