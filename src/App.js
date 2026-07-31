@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { initializeApp } from "firebase/app";
 import {
   initializeFirestore, persistentLocalCache, persistentMultipleTabManager,
-  collection, doc, addDoc, setDoc, deleteDoc,
+  collection, doc, addDoc, setDoc, deleteDoc, getDocs,
   onSnapshot, query, where, orderBy,
 } from "firebase/firestore";
 
@@ -280,6 +280,28 @@ export default function App() {
     await deleteDoc(doc(db, "fund_transactions", tx.id));
   };
 
+  /* ---------- تصفية شاملة (مسح كل البيانات) ---------- */
+  const resetAll = async () => {
+    const pw = window.prompt("⚠️ تصفية شاملة — سيتم مسح كل المشاريع والحركات والأرصدة!\nأدخل الباسورد:");
+    if (pw === null) return;
+    if (pw !== PASS) { window.alert("❌ باسورد غلط"); return; }
+    const c2 = window.prompt('للتأكيد اكتب كلمة: تصفية');
+    if (c2 !== "تصفية") { window.alert("تم الإلغاء"); return; }
+    try {
+      /* تصفير الأرصدة */
+      const ids = ["contracting", "partners", ...PARTNERS.map((p) => "partner_" + p.id)];
+      for (const id of ids) await setDoc(doc(db, "fund_balances", id), { din: 0, dol: 0 }, { merge: true });
+      /* حذف كل الوثائق من المجموعات */
+      for (const col of ["projects", "project_txs", "fund_transactions"]) {
+        const snap = await getDocs(collection(db, col));
+        for (const d of snap.docs) await deleteDoc(doc(db, col, d.id));
+      }
+      window.alert("✅ تمت التصفية الشاملة — كل البيانات انمسحت");
+    } catch (e) {
+      window.alert("صار خطأ أثناء التصفية: " + e.message);
+    }
+  };
+
   if (loading) return (
     <div style={{ ...S.page, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 12 }}>
       <div style={{ fontSize: 46 }}>🏗️</div>
@@ -307,19 +329,26 @@ export default function App() {
     onOpenProject={(p) => { setSelProject(p); setPage("project"); }} />;
 
   return <Home funds={FUNDS} balances={balances}
-    onSelect={(id) => setPage(id === "partners" ? "partners" : "contracting")} />;
+    onSelect={(id) => setPage(id === "partners" ? "partners" : "contracting")}
+    onResetAll={resetAll} />;
 }
 
 /* ============================================================
    الصفحة الرئيسية — الصندوقان
    ============================================================ */
-function Home({ funds, balances, onSelect }) {
+function Home({ funds, balances, onSelect, onResetAll }) {
   return (
     <div style={S.page}>
       <div style={S.wrap}>
-        <div style={{ ...S.card, padding: "18px 22px", marginBottom: 20 }}>
-          <div style={{ fontSize: 21, fontWeight: 700, color: "#1E293B" }}>برنامج الحسابات</div>
-          <div style={{ fontSize: 12, color: "#64748B", marginTop: 3 }}>صندوق المقاولات وصندوق الشركاء</div>
+        <div style={{ ...S.card, padding: "18px 22px", marginBottom: 20, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
+          <div>
+            <div style={{ fontSize: 21, fontWeight: 700, color: "#1E293B" }}>برنامج الحسابات</div>
+            <div style={{ fontSize: 12, color: "#64748B", marginTop: 3 }}>صندوق المقاولات وصندوق الشركاء</div>
+          </div>
+          <button onClick={onResetAll} title="مسح كل البيانات"
+            style={{ ...S.btn("#FFF1F2"), color: "#DC2626", border: "1px solid #FEE2E2", fontSize: 12, whiteSpace: "nowrap" }}>
+            ⚠️ تصفية شاملة
+          </button>
         </div>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(220px,1fr))", gap: 14 }}>
           {funds.map((f) => {
