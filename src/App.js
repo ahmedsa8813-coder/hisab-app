@@ -354,7 +354,7 @@ export default function App() {
 
   // ── حذف معاملة ──────────────────────────────────────────
   const deleteTx = async tx => {
-    if (!window.confirm("تحذف هذه المعاملة؟")) return;
+    if (!askPass("حذف المعاملة")) return;
     const cur   = getBal(tx.fundId);
     const isDol = tx.currency === "دولار";
     const amtD  = tx.amtInDinar || tx.amount;
@@ -470,12 +470,12 @@ export default function App() {
 
   // ── حذف مشروع ───────────────────────────────────────────
   const deleteProject = async id => {
-    if (!window.confirm("تحذف هذا المشروع؟")) return;
+    if (!askPass("حذف المشروع")) return;
     await deleteDoc(doc(db,"fund_projects",id));
   };
 
   const deleteProjectTx = async (t) => {
-    if (!window.confirm("تحذف هذه المعاملة؟")) return;
+    if (!askPass("حذف المعاملة")) return;
     const isDol = t.currency==="دولار";
     const isRec = t.type==="إيداع";
     const field = isDol?(isRec?"recDol":"spdDol"):(isRec?"recDin":"spdDin");
@@ -489,7 +489,7 @@ export default function App() {
 
   // ── تصفية رصيد صندوق (تصفير) ────────────────────────────
   const resetBalance = async (fundId, label) => {
-    if (!window.confirm("تصفير رصيد " + label + " نهائياً؟\nهذا يصفر الرصيد الحالي بدون حذف المعاملات السابقة.")) return;
+    if (!askPass("تصفية رصيد " + label)) return;
     await setDoc(doc(db,"fund_balances",fundId), { din:0, dol:0 }, { merge:true });
     await addDoc(collection(db,"fund_transactions"), {
       fundId, fundName: label,
@@ -1342,7 +1342,7 @@ function ProjectDetail({ project, fund, allFunds, onBack, onAddTx, onClose, onDe
           <BackBtn onClick={onBack} label={"رجوع لـ "+(fund?.name||"الصندوق")}/>
           {!isActive&&(
             <button onClick={()=>{
-              if(window.confirm("تحذف المشروع نهائياً؟")) onDeleteProject&&onDeleteProject(proj.id);
+              if(askPass("حذف المشروع نهائياً")) onDeleteProject&&onDeleteProject(proj.id);
             }} style={{
               background:"transparent",border:"1px solid #FEE2E2",borderRadius:10,
               padding:"8px 14px",color:"#DC2626",cursor:"pointer",
