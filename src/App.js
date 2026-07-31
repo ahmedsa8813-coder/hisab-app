@@ -479,13 +479,25 @@ export default function App() {
     const isDol = t.currency==="دولار";
     const isRec = t.type==="إيداع";
     const field = isDol?(isRec?"recDol":"spdDol"):(isRec?"recDin":"spdDin");
-    // اجلب بيانات المشروع الحالية
     const proj = projects.find(p=>p.id===t.projectId);
     if (proj) {
       await setDoc(doc(db,"fund_projects",proj.id),
         { [field]:Math.max(0,(proj[field]||0)-t.amount) }, { merge:true });
     }
     await deleteDoc(doc(db,"fund_projects_txs",t.id));
+  };
+
+  // ── تصفية رصيد صندوق (تصفير) ────────────────────────────
+  const resetBalance = async (fundId, label) => {
+    if (!window.confirm("تصفير رصيد " + label + " نهائياً؟\nهذا يصفر الرصيد الحالي بدون حذف المعاملات السابقة.")) return;
+    await setDoc(doc(db,"fund_balances",fundId), { din:0, dol:0 }, { merge:true });
+    await addDoc(collection(db,"fund_transactions"), {
+      fundId, fundName: label,
+      type:"تصفية", currency:"دينار", amount:0, amtInDinar:0, exchRate:0,
+      note:"تصفية الرصيد — رصيد سابق",
+      date:today(), balAfterDin:0, balAfterDol:0,
+      isReset:true, createdAt:new Date().toISOString(),
+    });
   };
 
   // ── شاشة التحميل ────────────────────────────────────────
@@ -505,6 +517,7 @@ export default function App() {
       onDeposit={depositToPartners}
       onWithdraw={withdrawPartner}
       onDelete={deleteTx}
+      onReset={(id,label)=>resetBalance(id,label)}
     />;
 
   if (page==="project" && selProject)
@@ -533,6 +546,7 @@ export default function App() {
       onDelete={deleteTx}
       onAddProject={(name,client,tDin,tDol,note)=>addProject(selFund,name,client,tDin,tDol,note)}
       onOpenProject={proj=>{ setSelProject(proj); setPage("project"); }}
+      onReset={()=>resetBalance(selFund, fund?.name||selFund)}
     />;
   }
 
@@ -644,7 +658,7 @@ function FundsList({ funds, balances, onSelect }) {
 }
 
 // ─── تفاصيل صندوق ───────────────────────────────────────────
-function FundDetail({ fund, balDin=0, balDol=0, txs, projects=[], onBack, onAdd, onTransfer, onDelete, onAddProject, onOpenProject }) {
+function FundDetail({ fund, balDin=0, balDol=0, txs, projects=[], onBack, onAdd, onTransfer, onDelete, onAddProject, onOpenProject, onReset }) {
   const [form,     setForm]    = useState({ type:"إيداع", amount:"", currency:"دينار", exchRate:"", note:"", date:today() });
   const [trForm,   setTrForm]  = useState({ amount:"", currency:"دينار", exchRate:"", note:"", date:today() });
   const [tab,      setTab]     = useState("tx");    // tx | transfer
@@ -734,7 +748,7 @@ function FundDetail({ fund, balDin=0, balDol=0, txs, projects=[], onBack, onAdd,
         {/* تبويبات */}
         <div style={{ display:"flex", background:"#fff", borderRadius:12, padding:4, gap:4,
           marginBottom:14, border:"1px solid #E2E8F0" }}>
-          {[["tx","💰 معاملة"],["transfer","🔄 أرباح"],["projects","🏗️ مشاريع"]].map(([v,l]) => (
+          {[["tx","💰 معاملة"],["transfer","🔄 أرباح"],["projects","🏗️ مشاريع"],["reset","🔄 تصفية"]].map(([v,l]) => (
             <button key={v} onClick={() => setTab(v)} style={{
               flex:1, border:"none", borderRadius:9, padding:"10px 8px",
               cursor:"pointer", fontWeight:700, fontSize:13, fontFamily:"Tahoma",
@@ -881,6 +895,39 @@ function FundDetail({ fund, balDin=0, balDol=0, txs, projects=[], onBack, onAdd,
             onAddProject={onAddProject}
             onOpenProject={onOpenProject}
           />
+        )}
+
+        {/* تصفية الرصيد */}
+        {tab === "reset" && (
+          <div style={{ background:"#fff", border:"1.5px solid #FEE2E2",
+            borderRadius:16, padding:24, marginBottom:14, textAlign:"center" }}>
+            <i className="ti ti-refresh-alert"
+              style={{ fontSize:48, color:"#DC2626", display:"block", marginBottom:12 }}
+              aria-hidden="true"/>
+            <div style={{ fontSize:16, fontWeight:700, color:"#1E293B", marginBottom:8 }}>
+              تصفية رصيد الصندوق
+            </div>
+            <div style={{ fontSize:13, color:"#64748B", marginBottom:6 }}>
+              الرصيد الحالي:
+            </div>
+            <div style={{ fontSize:20, fontWeight:700, color:"#1E293B", marginBottom:4 }}>
+              {fmtD(balDin)}
+            </div>
+            {balDol!==0&&(
+              <div style={{ fontSize:16, fontWeight:700, color:"#2563EB", marginBottom:4 }}>
+                {toAr(Math.abs(Math.round(balDol)))} $
+              </div>
+            )}
+            <div style={{ fontSize:12, color:"#94A3B8", marginBottom:20 }}>
+              سيتم تصفير الرصيد فقط — المعاملات السابقة تبقى في السجل
+            </div>
+            <button onClick={onReset} style={{
+              background:"#DC2626", border:"none", borderRadius:12,
+              padding:"13px 32px", color:"#fff", cursor:"pointer",
+              fontSize:14, fontFamily:"Tahoma", fontWeight:700 }}>
+              🔄 تصفير الرصيد الآن
+            </button>
+          </div>
         )}
 
         {/* سجل المعاملات */}
@@ -1730,7 +1777,7 @@ function ProjectDetail({ project, fund, allFunds, onBack, onAddTx, onClose, onDe
 }
 
 // ─── صفحة أرباح الشركاء ─────────────────────────────────────
-function PartnersPage({ partners, balances, txs, onBack, onDeposit, onWithdraw, onDelete }) {
+function PartnersPage({ partners, balances, txs, onBack, onDeposit, onWithdraw, onDelete, onReset }) {
   const [selP,    setSelP]   = useState(null);
   const [form,    setForm]   = useState({ amount:"", note:"", date:today() });
   const [saving,  setSaving] = useState(false);
@@ -2003,6 +2050,22 @@ function PartnersPage({ partners, balances, txs, onBack, onDeposit, onWithdraw, 
             )}
           </div>
 
+          {/* تصفية رصيد الشريك */}
+          <div style={{ background:"#fff", border:"1px solid #FEE2E2",
+            borderRadius:12, padding:"12px 16px", marginBottom:14,
+            display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+            <div>
+              <div style={{ fontSize:13, fontWeight:700, color:"#DC2626" }}>🔄 تصفية الرصيد</div>
+              <div style={{ fontSize:11, color:"#94A3B8", marginTop:2 }}>تصفير رصيد الشريك لـ صفر</div>
+            </div>
+            <button onClick={()=>onReset&&onReset("partner_"+p.id, p.name)} style={{
+              background:"#FFF1F2", border:"1px solid #FEE2E2", borderRadius:9,
+              padding:"8px 14px", color:"#DC2626", cursor:"pointer",
+              fontSize:12, fontFamily:"Tahoma", fontWeight:700 }}>
+              تصفير
+            </button>
+          </div>
+
           {/* سجل السحوبات */}
           <div style={{ fontSize:14, fontWeight:700, color:"#DC2626", marginBottom:10, display:"flex", alignItems:"center", gap:6 }}>
             <div style={{ width:3, height:16, background:"#DC2626", borderRadius:2 }}/>
@@ -2017,7 +2080,13 @@ function PartnersPage({ partners, balances, txs, onBack, onDeposit, onWithdraw, 
                     <div style={{ fontSize:13, fontWeight:700, color:"#1E293B", marginBottom:3 }}>{t.note || "سحب"}</div>
                     <div style={{ fontSize:11, color:"#64748B" }}>📅 {t.date}</div>
                   </div>
-                  <div style={{ fontSize:18, fontWeight:700, color:"#DC2626" }}>-{fmtD(t.amount)}</div>
+                  <div style={{textAlign:"left"}}>
+                    <div style={{ fontSize:18, fontWeight:700, color:"#DC2626" }}>-{fmtD(t.amount)}</div>
+                    <button onClick={()=>onDelete&&onDelete(t)} style={{
+                      background:"transparent",border:"none",color:"#DC2626",
+                      fontSize:11,cursor:"pointer",fontFamily:"Tahoma",
+                      padding:"2px 0",fontWeight:600}}>🗑️ حذف</button>
+                  </div>
                 </div>
               </div>
             ))
@@ -2040,7 +2109,13 @@ function PartnersPage({ partners, balances, txs, onBack, onDeposit, onWithdraw, 
                     <div style={{ fontSize:11, color:"#64748B" }}>📅 {t.date}</div>
                     {t.note && t.isDistribution && <div style={{ fontSize:11, color:"#64748B", marginTop:2 }}>{t.note}</div>}
                   </div>
-                  <div style={{ fontSize:18, fontWeight:700, color:"#16A34A" }}>+{fmtD(t.amount)}</div>
+                  <div style={{textAlign:"left"}}>
+                    <div style={{ fontSize:18, fontWeight:700, color:"#16A34A" }}>+{fmtD(t.amount)}</div>
+                    <button onClick={()=>onDelete&&onDelete(t)} style={{
+                      background:"transparent",border:"none",color:"#DC2626",
+                      fontSize:11,cursor:"pointer",fontFamily:"Tahoma",
+                      padding:"2px 0",fontWeight:600}}>🗑️ حذف</button>
+                  </div>
                 </div>
               </div>
             ))
