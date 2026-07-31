@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from "react";
 import { initializeApp } from "firebase/app";
 import {
-  getFirestore, collection, doc, addDoc, setDoc, deleteDoc,
+  initializeFirestore, persistentLocalCache, persistentMultipleTabManager,
+  collection, doc, addDoc, setDoc, deleteDoc,
   onSnapshot, query, where, orderBy,
 } from "firebase/firestore";
 
@@ -21,7 +22,10 @@ const firebaseConfig = {
   projectId: "YOUR_PROJECT_ID",
 };
 const app = initializeApp(firebaseConfig);
-const db = getFirestore(app);
+/* كاش محلي دائم: يعرض الكتابات فوراً من الذاكرة قبل تأكيد الخادم + يعمل بدون إنترنت */
+const db = initializeFirestore(app, {
+  localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
+});
 
 /* ---------- ثوابت ---------- */
 const FUNDS = [
@@ -138,7 +142,14 @@ export default function App() {
       (snap) => setProjTxs(snap.docs.map((d) => ({ id: d.id, ...d.data() })))
     );
     return () => u();
-  }, [selProject]);
+  }, [selProject?.id]);
+
+  /* مزامنة المشروع المفتوح مع اللقطة الحية — حتى تتحدّث أرقامه فوراً */
+  useEffect(() => {
+    if (!selProject) return;
+    const fresh = projects.find((p) => p.id === selProject.id);
+    if (fresh && JSON.stringify(fresh) !== JSON.stringify(selProject)) setSelProject(fresh);
+  }, [projects]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /* حركات الشركاء */
   useEffect(() => {
@@ -530,10 +541,15 @@ function ProjectDetail({ project, txs, onBack, onAddTx, onDeleteTx, onClose, onD
   const save = async () => {
     if (!amtN || saving) return;
     if (tab === "withdraw" && amtN > avail) { window.alert("الرصيد غير كافٍ. المتاح: " + (isDol ? fmtDol(avail) : fmtDin(avail))); return; }
+    /* تحديث تفاؤلي فوري — الأرقام تتغيّر باللحظة قبل رجوع Firebase */
+    const amt = Math.round(amtN);
+    const isRec = tab === "deposit";
+    const key = isDol ? (isRec ? "recDol" : "spdDol") : (isRec ? "recDin" : "spdDin");
+    setProj((prev) => ({ ...prev, [key]: (prev[key] || 0) + amt }));
     setSaving(true);
-    await onAddTx(proj, tab === "deposit" ? "إيداع" : "سحب", currency, form.amount, form.note, form.date);
+    await onAddTx(proj, isRec ? "إيداع" : "سحب", currency, form.amount, form.note, form.date);
     setSaving(false); setDone(true);
-    setTimeout(() => { setDone(false); setForm({ amount: "", note: "", date: today() }); }, 1300);
+    setTimeout(() => { setDone(false); setForm({ amount: "", note: "", date: today() }); }, 900);
   };
 
   const doClose = async () => {
@@ -584,13 +600,106 @@ function ProjectDetail({ project, txs, onBack, onAddTx, onDeleteTx, onClose, onD
     );
   };
 
+  /* ---------- تقرير مطبوع (يفتح نافذة طباعة / حفظ PDF) ---------- */
+  const printReport = () => {
+    const esc = (s) => String(s == null ? "" : s).replace(/[&<>"]/g, (c) =>
+      ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+    const rows = txs
+      .slice()
+      .sort((a, b) => String(a.createdAt).localeCompare(String(b.createdAt)))
+      .map((t) => {
+        const isIn = t.type === "إيداع";
+        const amt = t.currency === "دولار" ? fmtDol(t.amount) : fmtDin(t.amount);
+        return `<tr>
+          <td>${esc(t.date)}</td>
+          <td class="${isIn ? "in" : "out"}">${isIn ? "استلام" : "صرف"}</td>
+          <td>${t.currency === "دولار" ? "دولار 🇺🇸" : "دينار 🇮🇶"}</td>
+          <td class="num ${isIn ? "in" : "out"}">${isIn ? "+" : "−"} ${esc(amt)}</td>
+          <td>${esc(t.note)}</td>
+        </tr>`;
+      }).join("");
+
+    const dinBlock = `
+      <div class="acc">
+        <h3 class="din">🇮🇶 حساب الدينار</h3>
+        ${proj.totalDin > 0 ? `<p class="sub">قيمة المشروع: <b>${fmtDin(proj.totalDin)}</b></p>` : ""}
+        <table class="sum">
+          <tr><td>الاستلام</td><td class="num in">${fmtDin(proj.recDin || 0)}</td></tr>
+          <tr><td>الصرف</td><td class="num out">${fmtDin(proj.spdDin || 0)}</td></tr>
+          <tr class="net"><td>الصافي (الربح)</td><td class="num">${bDin >= 0 ? "" : "−"}${fmtDin(bDin)}</td></tr>
+        </table>
+      </div>`;
+    const hasDol = (proj.recDol || 0) > 0 || (proj.spdDol || 0) > 0 || (proj.totalDol || 0) > 0;
+    const dolBlock = hasDol ? `
+      <div class="acc">
+        <h3 class="dol">🇺🇸 حساب الدولار</h3>
+        ${proj.totalDol > 0 ? `<p class="sub">قيمة المشروع: <b>${fmtDol(proj.totalDol)}</b></p>` : ""}
+        <table class="sum">
+          <tr><td>الاستلام</td><td class="num in">${fmtDol(proj.recDol || 0)}</td></tr>
+          <tr><td>الصرف</td><td class="num out">${fmtDol(proj.spdDol || 0)}</td></tr>
+          <tr class="net"><td>الصافي (الربح)</td><td class="num">${bDol >= 0 ? "" : "−"}${fmtDol(bDol)}</td></tr>
+        </table>
+      </div>` : "";
+
+    const html = `<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="utf-8">
+      <title>تقرير المشروع — ${esc(proj.name)}</title>
+      <style>
+        *{box-sizing:border-box} body{font-family:Tahoma,Arial,sans-serif;color:#1E293B;margin:0;padding:28px;background:#fff}
+        .head{text-align:center;border-bottom:3px solid #D97706;padding-bottom:14px;margin-bottom:18px}
+        .head h1{margin:0;font-size:22px} .head .status{font-size:12px;color:#64748B;margin-top:4px}
+        .meta{display:flex;gap:18px;flex-wrap:wrap;font-size:13px;color:#475569;margin-bottom:18px}
+        .meta b{color:#1E293B}
+        .accs{display:flex;gap:16px;flex-wrap:wrap;margin-bottom:20px}
+        .acc{flex:1;min-width:240px;border:1px solid #E2E8F0;border-radius:10px;padding:14px}
+        .acc h3{margin:0 0 8px;font-size:14px} .acc h3.din{color:#16A34A} .acc h3.dol{color:#2563EB}
+        .acc .sub{font-size:12px;color:#64748B;margin:0 0 8px}
+        table.sum{width:100%;border-collapse:collapse;font-size:13px}
+        table.sum td{padding:6px 4px;border-bottom:1px solid #F1F5F9}
+        table.sum tr.net td{border-top:2px solid #E2E8F0;border-bottom:none;font-weight:700;font-size:14px}
+        h2{font-size:15px;margin:0 0 10px;border-right:4px solid #D97706;padding-right:8px}
+        table.log{width:100%;border-collapse:collapse;font-size:12px}
+        table.log th{background:#F8FAFC;text-align:right;padding:8px 6px;border-bottom:2px solid #E2E8F0;font-size:12px}
+        table.log td{padding:7px 6px;border-bottom:1px solid #F1F5F9}
+        .num{text-align:left;font-weight:700;white-space:nowrap} .in{color:#16A34A} .out{color:#DC2626}
+        .empty{color:#94A3B8;text-align:center;padding:16px;font-size:13px}
+        .foot{margin-top:26px;text-align:center;font-size:11px;color:#94A3B8;border-top:1px solid #E2E8F0;padding-top:10px}
+        @media print{body{padding:0}}
+      </style></head><body>
+      <div class="head">
+        <h1>${esc(proj.name)}</h1>
+        <div class="status">تقرير المشروع • ${isAct ? "نشط ●" : "منتهي ✓"} • تاريخ الطباعة: ${today()}</div>
+      </div>
+      <div class="meta">
+        ${proj.province ? `<div>📍 المحافظة: <b>${esc(proj.province)}</b></div>` : ""}
+        ${proj.client ? `<div>👤 العميل: <b>${esc(proj.client)}</b></div>` : ""}
+        ${proj.note ? `<div>📝 ملاحظة: <b>${esc(proj.note)}</b></div>` : ""}
+      </div>
+      <div class="accs">${dinBlock}${dolBlock}</div>
+      <h2>سجل الحركات (${txs.length})</h2>
+      ${txs.length ? `<table class="log">
+        <thead><tr><th>التاريخ</th><th>النوع</th><th>العملة</th><th>المبلغ</th><th>الملاحظة</th></tr></thead>
+        <tbody>${rows}</tbody></table>` : `<div class="empty">لا توجد حركات</div>`}
+      <div class="foot">تم إنشاء التقرير بواسطة برنامج الحسابات</div>
+      <script>window.onload=function(){window.print();}</script>
+      </body></html>`;
+
+    const w = window.open("", "_blank");
+    if (!w) { window.alert("فعّل النوافذ المنبثقة (Pop-ups) للطباعة"); return; }
+    w.document.write(html);
+    w.document.close();
+  };
+
   return (
     <div style={S.page}>
       <div style={S.wrap}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
           <BackBtn onClick={onBack} label="رجوع للمقاولات" />
-          {!isAct && <button onClick={() => { if (askPass("حذف المشروع")) onDelete(proj.id); }}
-            style={{ ...S.btn("#FFF1F2"), color: "#DC2626", border: "1px solid #FEE2E2", fontSize: 12 }}>🗑️ حذف المشروع</button>}
+          <div style={{ display: "flex", gap: 8 }}>
+            <button onClick={printReport}
+              style={{ ...S.btn("#EFF6FF"), color: "#2563EB", border: "1px solid #BFDBFE", fontSize: 12 }}>🖨️ طباعة التقرير</button>
+            {!isAct && <button onClick={() => { if (askPass("حذف المشروع")) onDelete(proj.id); }}
+              style={{ ...S.btn("#FFF1F2"), color: "#DC2626", border: "1px solid #FEE2E2", fontSize: 12 }}>🗑️ حذف المشروع</button>}
+          </div>
         </div>
 
         {/* بطاقة المشروع */}
