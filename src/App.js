@@ -185,54 +185,84 @@ export default function App() {
               ))}
             </div>
 
-            {/* الحقول */}
-            {[
-              { label: "اسم المشروع *",  key: "name",     ph: "أدخل اسم المشروع...", type: "text" },
-              { label: "اسم العميل *",   key: "client",   ph: "صاحب المشروع...",     type: "text" },
-              { label: "المحافظة *",     key: "province", ph: "بغداد، البصرة...",    type: "text" },
-              { label: "قيمة المشروع *", key: "value", ph: "٠", type: "number" },
-              { label: "مدة الإنجاز",   key: "duration", ph: "مثال: 3 أشهر",        type: "text" },
-            ].map(({ label, key, ph, type }) => (
-              <div key={key}>
-                <div style={{ fontSize: 13, color: "#64748B", fontWeight: 600, marginBottom: 6 }}>
-                  {label}
-                </div>
-                <input
-                  type={type}
-                  inputMode={type === "number" ? "decimal" : "text"}
-                  placeholder={ph}
-                  value={form[key]}
-                  onChange={e => sf(key)(e.target.value)}
-                  style={{ width: "100%", border: "1px solid #CBD5E1", borderRadius: 10,
-                    padding: "12px 14px", fontSize: 15, outline: "none", fontFamily: "Tahoma",
-                    direction: "rtl", marginBottom: 12, boxSizing: "border-box",
-                    background: "#F8FAFC", color: "#1E293B" }}
-                />
-                {key === "value" && (
-                  <div style={{ marginTop: -8, marginBottom: 10 }}>
-                    <div style={{ display: "flex", gap: 8, marginBottom: 6 }}>
-                      {["دينار","دولار"].map(cur => (
-                        <button key={cur} onClick={() => sf("currency")(cur)} style={{
-                          flex: 1, padding: "8px", borderRadius: 9, cursor: "pointer",
-                          fontFamily: "Tahoma", fontSize: 13, fontWeight: 700,
-                          border: "2px solid " + (form.currency === cur ? (cur === "دينار" ? "#16A34A" : "#2563EB") : "#E2E8F0"),
-                          background: form.currency === cur ? (cur === "دينار" ? "#F0FDF4" : "#EFF6FF") : "#fff",
-                          color: form.currency === cur ? (cur === "دينار" ? "#16A34A" : "#2563EB") : "#94A3B8"
-                        }}>
-                          {cur === "دينار" ? "🇮🇶 دينار" : "🇺🇸 دولار"}
-                        </button>
-                      ))}
-                    </div>
-                    {Number(form.value) > 0 && (
-                      <div style={{ fontSize: 12, fontWeight: 600,
-                        color: form.currency === "دينار" ? "#D97706" : "#2563EB" }}>
-                        {fNum(form.value)} {form.currency === "دينار" ? "د.ع" : "$"}
-                      </div>
-                    )}
-                  </div>
-                )}
+            {/* اسم المشروع */}
+            <div style={{ fontSize: 13, color: "#64748B", fontWeight: 600, marginBottom: 6 }}>
+              اسم المشروع *
+            </div>
+            <input autoFocus placeholder="أدخل اسم المشروع..." value={form.name}
+              onChange={e => sf("name")(e.target.value)}
+              style={{ width: "100%", border: "1px solid #CBD5E1", borderRadius: 10,
+                padding: "12px 14px", fontSize: 15, outline: "none", fontFamily: "Tahoma",
+                direction: "rtl", marginBottom: 14, boxSizing: "border-box",
+                background: "#F8FAFC", color: "#1E293B" }}/>
+
+            {/* مدة المشروع بالأيام */}
+            <div style={{ fontSize: 13, color: "#64748B", fontWeight: 600, marginBottom: 6 }}>
+              مدة المشروع بالأيام *
+            </div>
+            <input placeholder="مثال: 90" value={form.days} inputMode="numeric"
+              onChange={e => sf("days")(e.target.value.replace(/[^0-9]/g, ""))}
+              style={{ width: "100%", border: "1px solid #CBD5E1", borderRadius: 10,
+                padding: "12px 14px", fontSize: 15, outline: "none", fontFamily: "Tahoma",
+                direction: "rtl", marginBottom: 4, boxSizing: "border-box",
+                background: "#F8FAFC", color: "#1E293B",
+                MozAppearance: "textfield", WebkitAppearance: "none" }}/>
+            {Number(form.days) > 0 && (
+              <div style={{ fontSize: 12, color: "#059669", fontWeight: 600, marginBottom: 14 }}>
+                ✍️ {w2(Number(form.days))} يوم
               </div>
-            ))}
+            )}
+            {!Number(form.days) && <div style={{ marginBottom: 10 }}/>}
+
+            {/* قيمة المشروع */}
+            <div style={{ fontSize: 13, color: "#64748B", fontWeight: 600, marginBottom: 8 }}>
+              قيمة المشروع * (دينار و/أو دولار)
+            </div>
+            <div style={{ background: "#F8FAFC", borderRadius: 12, padding: 14,
+              border: "1px solid #E2E8F0", marginBottom: 14 }}>
+              <div style={{ fontSize: 12, color: "#16A34A", fontWeight: 600, marginBottom: 6 }}>
+                🇮🇶 الدينار العراقي
+              </div>
+              <input placeholder="٠" value={form.valueDin} inputMode="numeric"
+                onChange={e => sf("valueDin")(e.target.value.replace(/[^0-9]/g, ""))}
+                style={{ width: "100%", border: "1px solid #CBD5E1", borderRadius: 10,
+                  padding: "12px 14px", fontSize: 15, outline: "none", fontFamily: "Tahoma",
+                  direction: "rtl", marginBottom: 4, boxSizing: "border-box",
+                  background: "#fff", color: "#1E293B",
+                  MozAppearance: "textfield", WebkitAppearance: "none" }}/>
+              {Number(form.valueDin) > 0 && (
+                <div style={{ fontSize: 12, color: "#16A34A", fontWeight: 600, marginBottom: 12 }}>
+                  ✍️ {w2(Number(form.valueDin))} دينار — {fNum(form.valueDin)} د.ع
+                </div>
+              )}
+              {!Number(form.valueDin) && <div style={{ marginBottom: 12 }}/>}
+              <div style={{ fontSize: 12, color: "#2563EB", fontWeight: 600, marginBottom: 6 }}>
+                🇺🇸 الدولار الأمريكي
+              </div>
+              <input placeholder="٠" value={form.valueDol} inputMode="numeric"
+                onChange={e => sf("valueDol")(e.target.value.replace(/[^0-9]/g, ""))}
+                style={{ width: "100%", border: "1px solid #CBD5E1", borderRadius: 10,
+                  padding: "12px 14px", fontSize: 15, outline: "none", fontFamily: "Tahoma",
+                  direction: "rtl", marginBottom: 4, boxSizing: "border-box",
+                  background: "#fff", color: "#1E293B",
+                  MozAppearance: "textfield", WebkitAppearance: "none" }}/>
+              {Number(form.valueDol) > 0 && (
+                <div style={{ fontSize: 12, color: "#2563EB", fontWeight: 600 }}>
+                  ✍️ {w2(Number(form.valueDol))} دولار — {fNum(form.valueDol)} $
+                </div>
+              )}
+            </div>
+
+            {/* تاريخ بداية العمل */}
+            <div style={{ fontSize: 13, color: "#64748B", fontWeight: 600, marginBottom: 6 }}>
+              تاريخ بداية العمل *
+            </div>
+            <input type="date" value={form.startDate}
+              onChange={e => sf("startDate")(e.target.value)}
+              style={{ width: "100%", border: "1px solid #CBD5E1", borderRadius: 10,
+                padding: "12px 14px", fontSize: 15, outline: "none", fontFamily: "Tahoma",
+                direction: "rtl", marginBottom: 16, boxSizing: "border-box",
+                background: "#F8FAFC", color: "#1E293B" }}/>
 
             <button onClick={addProject} disabled={!valid} style={{
               width: "100%", border: "none", borderRadius: 10, padding: "13px",
@@ -241,7 +271,7 @@ export default function App() {
               background: valid ? "#D97706" : "#E2E8F0",
               color: valid ? "#fff" : "#94A3B8"
             }}>
-              "✅ حفظ المشروع"
+              ✅ حفظ المشروع
             </button>
           </div>
         )}
