@@ -2014,6 +2014,9 @@ function PartnerPage({ partner, funds, onBack, onWithdraw }) {
   const [wNote, setWNote] = useState("");
   const [saving, setSaving] = useState(false);
   const [ok, setOk] = useState(false);
+  const [showStatement, setShowStatement] = useState(false);
+  const [fromDate, setFromDate] = useState("");
+  const [toDate, setToDate] = useState("");
   const amtDin = Number(wDin) || 0;
   const amtDol = Number(wDol) || 0;
   const valid = (amtDin > 0 || amtDol > 0) && amtDin <= pf.din && amtDol <= pf.dol;
@@ -2087,6 +2090,97 @@ ${note ? `<div class="row"><span class="lbl">ملاحظة</span><span class="val
     if(!w){alert("السماح بالنوافذ المنبثقة");return;}
     w.document.write(html);w.document.close();w.focus();
     setTimeout(()=>w.print(),600);
+  };
+
+  const printStatement = () => {
+    const filtered = txs.filter(t => {
+      if (t.type !== "سحب") return false;
+      if (fromDate && t.date < fromDate) return false;
+      if (toDate && t.date > toDate) return false;
+      return true;
+    }).sort((a,b)=>(a.date||"").localeCompare(b.date||""));
+
+    if (filtered.length === 0) { alert("ما في سحوبات في هذه الفترة"); return; }
+
+    let totalDin = 0, totalDol = 0;
+    let n = 0;
+    const rows = filtered.map(t => {
+      n++;
+      totalDin += t.din || 0;
+      totalDol += t.dol || 0;
+      return `<tr style="background:${n%2===0?"#F8FAFC":"#fff"}">
+        <td>${n}</td>
+        <td>${t.date||""}</td>
+        <td style="text-align:right">${t.note||"—"}</td>
+        ${(t.din||0)>0?`<td style="color:#DC2626;font-weight:700;text-align:center">${fNum(t.din)} د.ع</td>`:"<td>—</td>"}
+        ${(t.dol||0)>0?`<td style="color:#DC2626;font-weight:700;text-align:center">${fNum(t.dol)} $</td>`:"<td>—</td>"}
+      </tr>`;
+    }).join("");
+
+    const today = new Date().toISOString().split("T")[0];
+    const period = (fromDate||"البداية") + " — " + (toDate||"اليوم");
+
+    const html = `<!DOCTYPE html><html dir="rtl"><head><meta charset="utf-8"/>
+<style>
+*{font-family:Tahoma}body{margin:24px;direction:rtl}
+.hdr{border-bottom:3px solid ${partner.color};padding-bottom:12px;margin-bottom:14px;text-align:center}
+.co{font-size:20px;font-weight:700;color:#1E293B}.ca{font-size:11px;color:#64748B}
+.title{font-size:16px;font-weight:700;color:${partner.color};margin:12px 0 4px}
+.info{font-size:11px;color:#64748B;margin-bottom:14px}
+.summary{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px}
+.sb{border-radius:9px;padding:12px;text-align:center}
+.sl{font-size:10px;color:#64748B;margin-bottom:4px}.sv{font-size:15px;font-weight:700}
+table{width:100%;border-collapse:collapse}
+thead tr{background:${partner.color}}
+th{color:#fff;padding:9px 8px;font-size:11px}
+td{padding:8px;font-size:11px;text-align:center;border-bottom:1px solid #F1F5F9}
+.ft{margin-top:14px;font-size:10px;color:#94A3B8;display:flex;justify-content:space-between;border-top:1px solid #E2E8F0;padding-top:8px}
+</style></head><body>
+<div class="hdr">
+  <div class="co">شركة باب المشاريع</div>
+  <div class="ca">بغداد — العرصات</div>
+</div>
+<div class="title">كشف سحوبات — ${partner.name}</div>
+<div class="info">
+  الحصة: ${partner.pct}% &nbsp;·&nbsp; الفترة: ${period} &nbsp;·&nbsp; عدد العمليات: ${filtered.length}
+</div>
+<div class="summary">
+  <div class="sb" style="background:#FFF1F2;border:1px solid #DC262620">
+    <div class="sl">إجمالي السحوبات دينار</div>
+    <div class="sv" style="color:#DC2626">${fNum(totalDin)} د.ع</div>
+  </div>
+  <div class="sb" style="background:#FEF2F2;border:1px solid #DC262620">
+    <div class="sl">إجمالي السحوبات دولار</div>
+    <div class="sv" style="color:#DC2626">${fNum(totalDol)} $</div>
+  </div>
+  <div class="sb" style="background:${partner.bg};border:1px solid ${partner.color}40">
+    <div class="sl">الرصيد الحالي</div>
+    <div class="sv" style="color:${partner.color}">${fNum(pf.din)} د.ع</div>
+    ${pf.dol>0?`<div style="font-size:12px;font-weight:700;color:#2563EB">${fNum(pf.dol)} $</div>`:""}
+  </div>
+</div>
+<table>
+  <thead><tr>
+    <th>#</th><th>التاريخ</th><th>البيان / الملاحظة</th><th>الدينار</th><th>الدولار</th>
+  </tr></thead>
+  <tbody>${rows}</tbody>
+  <tr style="background:#F1F5F9;font-weight:700">
+    <td colspan="2">الإجمالي</td>
+    <td></td>
+    <td style="color:#DC2626">${fNum(totalDin)} د.ع</td>
+    <td style="color:#DC2626">${fNum(totalDol)} $</td>
+  </tr>
+</table>
+<div class="ft">
+  <span>${partner.name} — شركة باب المشاريع</span>
+  <span>طُبع: ${today}</span>
+</div>
+</body></html>`;
+
+    const w = window.open("","_blank","width=900,height=700");
+    if(!w){alert("السماح بالنوافذ المنبثقة");return;}
+    w.document.write(html);w.document.close();w.focus();
+    setTimeout(()=>w.print(),700);
   };
 
   const doWithdraw = async () => {
@@ -2211,6 +2305,69 @@ ${note ? `<div class="row"><span class="lbl">ملاحظة</span><span class="val
                 )}
               </div>
             </>
+          )}
+        </div>
+
+        {/* زر كشف حساب السحوبات */}
+        <div style={{ background:"#fff", borderRadius:14, padding:"16px 20px",
+          border:"1px solid #E2E8F0", marginBottom:14 }}>
+          <div style={{ display:"flex", justifyContent:"space-between",
+            alignItems:"center", marginBottom: showStatement?14:0 }}>
+            <div style={{ fontSize:14, fontWeight:700, color:"#1E293B" }}>
+              🖨️ كشف حساب السحوبات
+            </div>
+            <button onClick={()=>setShowStatement(v=>!v)} style={{
+              background:showStatement?"#475569":partner.color, border:"none",
+              borderRadius:9, padding:"8px 16px", color:"#fff", cursor:"pointer",
+              fontSize:13, fontFamily:"Tahoma", fontWeight:700 }}>
+              {showStatement?"✕ إغلاق":"📊 فتح الكشف"}
+            </button>
+          </div>
+          {showStatement && (
+            <div>
+              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, marginBottom:12 }}>
+                <div>
+                  <div style={{ fontSize:11, color:"#64748B", fontWeight:600, marginBottom:5 }}>
+                    من تاريخ
+                  </div>
+                  <input type="date" value={fromDate} onChange={e=>setFromDate(e.target.value)}
+                    style={{ width:"100%", border:"1px solid #CBD5E1", borderRadius:9,
+                      padding:"9px 12px", fontSize:13, outline:"none", fontFamily:"Tahoma",
+                      boxSizing:"border-box", background:"#F8FAFC" }}/>
+                </div>
+                <div>
+                  <div style={{ fontSize:11, color:"#64748B", fontWeight:600, marginBottom:5 }}>
+                    إلى تاريخ
+                  </div>
+                  <input type="date" value={toDate} onChange={e=>setToDate(e.target.value)}
+                    style={{ width:"100%", border:"1px solid #CBD5E1", borderRadius:9,
+                      padding:"9px 12px", fontSize:13, outline:"none", fontFamily:"Tahoma",
+                      boxSizing:"border-box", background:"#F8FAFC" }}/>
+                </div>
+              </div>
+              {(fromDate||toDate) && (
+                <button onClick={()=>{setFromDate("");setToDate("");}}
+                  style={{ fontSize:11, color:partner.color, background:partner.bg,
+                    border:"none", borderRadius:6, padding:"5px 12px",
+                    cursor:"pointer", fontFamily:"Tahoma", fontWeight:600, marginBottom:10 }}>
+                  ✕ مسح التواريخ
+                </button>
+              )}
+              <div style={{ fontSize:12, color:"#64748B", marginBottom:12 }}>
+                سيتم طباعة{" "}
+                <strong style={{ color:"#1E293B" }}>
+                  {txs.filter(t=>t.type==="سحب"&&(!fromDate||t.date>=fromDate)&&(!toDate||t.date<=toDate)).length}
+                </strong>
+                {" "}سحبة
+                {fromDate||toDate?" في الفترة المحددة":" (كل السحوبات)"}
+              </div>
+              <button onClick={printStatement} style={{
+                width:"100%", border:"none", borderRadius:10, padding:"12px",
+                fontSize:14, fontWeight:700, fontFamily:"Tahoma",
+                background:partner.color, color:"#fff", cursor:"pointer" }}>
+                🖨️ طباعة كشف السحوبات
+              </button>
+            </div>
           )}
         </div>
 
