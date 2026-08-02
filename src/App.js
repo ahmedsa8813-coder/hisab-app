@@ -45,6 +45,12 @@ const fNum = n => {
   return r;
 };
 
+const PROVINCES = [
+  "بغداد","البصرة","نينوى","أربيل","السليمانية","دهوك","كركوك",
+  "الأنبار","صلاح الدين","ديالى","واسط","ميسان","ذي قار",
+  "المثنى","القادسية","بابل","كربلاء","النجف"
+];
+
 const TYPES = [
   { val: "إشراف",   icon: "👷", color: "#059669", bg: "#ECFDF5" },
   { val: "ديكور",   icon: "🎨", color: "#7C3AED", bg: "#F5F3FF" },
@@ -55,7 +61,7 @@ const TYPES = [
 const typeStyle = t => TYPES.find(x => x.val === t) || {};
 
 const emptyForm = {
-  type: "", name: "",
+  type: "", name: "", province: "", city: "",
   days: "",
   valueDin: "", valueDol: "",
   startDate: new Date().toISOString().split("T")[0]
@@ -81,7 +87,7 @@ export default function App() {
     );
   }, []);
 
-  const valid = form.type && form.name.trim() && form.days
+  const valid = form.type && form.name.trim() && form.province && form.days
              && (Number(form.valueDin) > 0 || Number(form.valueDol) > 0)
              && form.startDate;
 
@@ -94,6 +100,8 @@ export default function App() {
       const data = {
         type:      form.type,
         name:      form.name.trim(),
+        province:  form.province,
+        city:      form.city.trim(),
         days:      Number(form.days),
         valueDin:  Number(form.valueDin) || 0,
         valueDol:  Number(form.valueDol) || 0,
@@ -247,6 +255,31 @@ export default function App() {
             </div>
             <input autoFocus placeholder="أدخل اسم المشروع..." value={form.name}
               onChange={e => sf("name")(e.target.value)}
+              style={{ width: "100%", border: "1px solid #CBD5E1", borderRadius: 10,
+                padding: "12px 14px", fontSize: 15, outline: "none", fontFamily: "Tahoma",
+                direction: "rtl", marginBottom: 14, boxSizing: "border-box",
+                background: "#F8FAFC", color: "#1E293B" }}/>
+
+            {/* المحافظة */}
+            <div style={{ fontSize: 13, color: "#64748B", fontWeight: 600, marginBottom: 6 }}>
+              المحافظة *
+            </div>
+            <select value={form.province} onChange={e => sf("province")(e.target.value)}
+              style={{ width: "100%", border: "1px solid #CBD5E1", borderRadius: 10,
+                padding: "12px 14px", fontSize: 15, outline: "none", fontFamily: "Tahoma",
+                direction: "rtl", marginBottom: 14, boxSizing: "border-box",
+                background: "#F8FAFC", color: form.province ? "#1E293B" : "#94A3B8",
+                appearance: "none" }}>
+              <option value="">اختر المحافظة...</option>
+              {PROVINCES.map(pr => <option key={pr} value={pr}>{pr}</option>)}
+            </select>
+
+            {/* المدينة */}
+            <div style={{ fontSize: 13, color: "#64748B", fontWeight: 600, marginBottom: 6 }}>
+              المدينة
+            </div>
+            <input placeholder="اسم المنطقة أو المدينة..." value={form.city}
+              onChange={e => sf("city")(e.target.value)}
               style={{ width: "100%", border: "1px solid #CBD5E1", borderRadius: 10,
                 padding: "12px 14px", fontSize: 15, outline: "none", fontFamily: "Tahoma",
                 direction: "rtl", marginBottom: 14, boxSizing: "border-box",
@@ -647,6 +680,7 @@ function ProjectCard({ p, onOpen, onToggle, onDelete }) {
           <div style={{ display: "flex", gap: 14, marginTop: 5, flexWrap: "wrap" }}>
             {p.startDate && <span style={{ fontSize: 12, color: "#64748B" }}>📅 {p.startDate}</span>}
             {p.days > 0  && <span style={{ fontSize: 12, color: "#64748B" }}>⏱️ {p.days} يوم</span>}
+            {p.province && <span style={{ fontSize: 12, color: "#64748B" }}>📍 {p.province}{p.city?" — "+p.city:""}</span>}
           </div>
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 6, marginRight: 8 }}>
@@ -759,8 +793,17 @@ function ProjectDetail({ proj, onBack }) {
       note: form.note.trim(),
       createdAt: new Date().toISOString()
     });
-    // تحديث الميزان في المشروع
-    updateDoc(doc(db, "projects", proj.id), { balDin: newBalDin, balDol: newBalDol });
+    // تحديث المجاميع في المشروع
+    const newRecDin = isDolCur ? (proj.recDin||0) : (proj.recDin||0) + (isIn ? amt : 0);
+    const newSpdDin = isDolCur ? (proj.spdDin||0) : (proj.spdDin||0) + (isIn ? 0 : amt);
+    const newRecDol = isDolCur ? (proj.recDol||0) + (isIn ? amt : 0) : (proj.recDol||0);
+    const newSpdDol = isDolCur ? (proj.spdDol||0) + (isIn ? 0 : amt) : (proj.spdDol||0);
+    updateDoc(doc(db, "projects", proj.id), {
+      recDin: newRecDin, spdDin: newSpdDin,
+      recDol: newRecDol, spdDol: newSpdDol,
+      balDin: newRecDin - newSpdDin,
+      balDol: newRecDol - newSpdDol
+    });
     setForm({ amount: "", currency: form.currency, receiver: "", date: form.date, note: "" });
     setShow(false);
   };
@@ -1041,16 +1084,58 @@ td{padding:8px;font-size:11px;text-align:center;border-bottom:1px solid #F1F5F9}
                 direction: "rtl", marginBottom: 16, boxSizing: "border-box",
                 background: "#F8FAFC", color: "#1E293B", resize: "none" }}/>
 
-            <button onClick={addTx} disabled={!amt || !form.receiver.trim()} style={{
-              width: "100%", border: "none", borderRadius: 10, padding: "13px",
-              fontSize: 14, fontWeight: 700, fontFamily: "Tahoma",
-              cursor: amt && form.receiver.trim() ? "pointer" : "not-allowed",
-              background: amt && form.receiver.trim()
-                ? (tab === "in" ? "#16A34A" : "#DC2626") : "#E2E8F0",
-              color: amt && form.receiver.trim() ? "#fff" : "#94A3B8"
-            }}>
-              {tab === "in" ? "✅ تسجيل المبلغ المستلم" : "✅ تسجيل المبلغ المصروف"}
-            </button>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: 8 }}>
+              <button onClick={addTx} disabled={!amt || !form.receiver.trim()} style={{
+                border: "none", borderRadius: 10, padding: "13px",
+                fontSize: 14, fontWeight: 700, fontFamily: "Tahoma",
+                cursor: amt && form.receiver.trim() ? "pointer" : "not-allowed",
+                background: amt && form.receiver.trim()
+                  ? (tab === "in" ? "#16A34A" : "#DC2626") : "#E2E8F0",
+                color: amt && form.receiver.trim() ? "#fff" : "#94A3B8"
+              }}>
+                {tab === "in" ? "✅ تسجيل المبلغ المستلم" : "✅ تسجيل المبلغ المصروف"}
+              </button>
+              {amt > 0 && form.receiver.trim() && (
+                <button onClick={() => {
+                  const isDol = form.currency === "دولار";
+                  const html = `<!DOCTYPE html><html dir="rtl"><head><meta charset="utf-8"/>
+<style>*{font-family:Tahoma}body{margin:30px;direction:rtl;max-width:400px}
+.top{text-align:center;border-bottom:2px dashed #E2E8F0;padding-bottom:14px;margin-bottom:14px}
+.co{font-size:18px;font-weight:700;color:#1E293B}.ca{font-size:11px;color:#64748B;margin-top:3px}
+.title{font-size:14px;font-weight:700;color:${tab==="in"?"#16A34A":"#DC2626"};margin:14px 0 10px}
+.row{display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid #F1F5F9}
+.lbl{font-size:12px;color:#64748B}.val{font-size:12px;font-weight:700;color:#1E293B}
+.amount{font-size:22px;font-weight:700;text-align:center;margin:14px 0;
+  color:${tab==="in"?"#16A34A":"#DC2626"}}
+.footer{text-align:center;font-size:10px;color:#94A3B8;margin-top:16px;border-top:2px dashed #E2E8F0;padding-top:10px}
+</style></head><body>
+<div class="top">
+  <div class="co">شركة باب المشاريع</div>
+  <div class="ca">بغداد</div>
+</div>
+<div class="title">${tab==="in"?"🧾 إيصال استلام":"🧾 إيصال صرف"}</div>
+<div class="amount">${tab==="in"?"+":"-"}${fNum(amt)} ${isDol?"$":"د.ع"}</div>
+<div style="font-size:12px;color:#64748B;text-align:center;margin-bottom:12px">
+  ${w2(amt)} ${isDol?"دولار أمريكي":"دينار عراقي"}
+</div>
+<div class="row"><span class="lbl">المشروع</span><span class="val">${proj.name}</span></div>
+<div class="row"><span class="lbl">${tab==="in"?"المستلم":"صُرف على"}</span><span class="val">${form.receiver}</span></div>
+<div class="row"><span class="lbl">التاريخ</span><span class="val">${form.date}</span></div>
+${form.note?`<div class="row"><span class="lbl">ملاحظة</span><span class="val">${form.note}</span></div>`:""}
+<div class="footer">طُبع: ${new Date().toISOString().split("T")[0]}</div>
+</body></html>`;
+                  const w = window.open("","_blank","width=500,height=600");
+                  if(!w){alert("السماح بالنوافذ المنبثقة");return;}
+                  w.document.write(html);w.document.close();w.focus();
+                  setTimeout(()=>w.print(),600);
+                }} style={{ border: "none", borderRadius: 10, padding: "13px 14px",
+                  background: "#F0F9FF", border: "1px solid #0EA5E9",
+                  color: "#0EA5E9", cursor: "pointer", fontSize: 13,
+                  fontFamily: "Tahoma", fontWeight: 700, whiteSpace: "nowrap" }}>
+                  🖨️ إيصال
+                </button>
+              )}
+            </div>
           </div>
         )}
 
