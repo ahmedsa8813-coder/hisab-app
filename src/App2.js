@@ -61,7 +61,7 @@ const DEPT_FUNDS = [
 const ALL_FUNDS = [...MAIN_FUNDS, ...DEPT_FUNDS];
 
 // ─── التطبيق الرئيسي ─────────────────────────────────
-export default function App2() {
+export default function App2({ onBack }) {
   const [page, setPage] = useState("home"); // home | fund | employees
   const [selFund, setSelFund] = useState(null);
   const [funds, setFunds] = useState({});
@@ -110,6 +110,14 @@ export default function App2() {
     <div style={{ minHeight:"100vh", background:"#F1F5F9",
       fontFamily:"Tahoma", direction:"rtl" }}>
       <div style={{ maxWidth:540, margin:"0 auto", padding:"22px 16px" }}>
+
+        {/* رجوع */}
+        <button onClick={onBack} style={{ background:"#fff",
+          border:"1px solid #E2E8F0", borderRadius:10, padding:"8px 16px",
+          fontSize:13, color:"#475569", cursor:"pointer", marginBottom:16,
+          fontFamily:"Tahoma", display:"flex", alignItems:"center", gap:6 }}>
+          ← رجوع للقائمة الرئيسية
+        </button>
 
         {/* هيدر */}
         <div style={{ background:"linear-gradient(135deg,#1E293B,#334155)",

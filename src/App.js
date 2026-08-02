@@ -308,7 +308,7 @@ export default function App() {
     return <ProjectDetail proj={selProj} onBack={() => { setPage("projects"); setSelProj(null); }}/>;
 
   // الصفحة المالية الرئيسية — تُعرض عند page==="financial"
-  if (page === "financial2") return <App2 />;
+  if (page === "financial2") return <App2 onBack={() => setPage("financial")} />;
 
   if (page === "financial") return (
     <div style={{ minHeight:"100vh", background:"#F1F5F9",
