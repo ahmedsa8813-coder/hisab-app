@@ -1,14 +1,13 @@
 import { initializeApp } from "firebase/app";
 import { getFirestore } from "firebase/firestore";
 
-const firebaseConfig = {
-  apiKey: "AIzaSyD_h8oJKVRpzfhi47q-EAsK1Ct_mRT5CIw",
-  authDomain: "hisab-app-e4616.firebaseapp.com",
-  projectId: "hisab-app-e4616",
-  storageBucket: "hisab-app-e4616.firebasestorage.app",
-  messagingSenderId: "495760469063",
-  appId: "1:495760469063:web:c1e904a12071d1e5351562"
-};
+const app = initializeApp({
+  apiKey: "AIzaSyCBGovCJ_Bx64dOjC0UWzJsBPgXEuJaizI",
+  authDomain: "bab-projects-b7d04.firebaseapp.com",
+  projectId: "bab-projects-b7d04",
+  storageBucket: "bab-projects-b7d04.firebasestorage.app",
+  messagingSenderId: "982434748534",
+  appId: "1:982434748534:web:ca0e52ef0115ecfc346757"
+});
 
-const app = initializeApp(firebaseConfig);
 export const db = getFirestore(app);
