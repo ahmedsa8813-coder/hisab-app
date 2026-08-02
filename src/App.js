@@ -776,13 +776,6 @@ function ProjectDetail({ proj, onBack }) {
     }
     const isDolCur = form.currency === "دولار";
     const isIn = tab === "in";
-    // حساب الميزان الجديد
-    const newBalDin = isDolCur
-      ? (proj.balDin || 0)
-      : (proj.balDin || 0) + (isIn ? amt : -amt);
-    const newBalDol = isDolCur
-      ? (proj.balDol || 0) + (isIn ? amt : -amt)
-      : (proj.balDol || 0);
     // حفظ الحركة
     addDoc(collection(db, "project_txs"), {
       projectId: proj.id,
@@ -795,11 +788,15 @@ function ProjectDetail({ proj, onBack }) {
       note: form.note.trim(),
       createdAt: new Date().toISOString()
     });
-    // تحديث المجاميع في المشروع
-    const newRecDin = isDolCur ? (proj.recDin||0) : (proj.recDin||0) + (isIn ? amt : 0);
-    const newSpdDin = isDolCur ? (proj.spdDin||0) : (proj.spdDin||0) + (isIn ? 0 : amt);
-    const newRecDol = isDolCur ? (proj.recDol||0) + (isIn ? amt : 0) : (proj.recDol||0);
-    const newSpdDol = isDolCur ? (proj.spdDol||0) + (isIn ? 0 : amt) : (proj.spdDol||0);
+    // حساب المجاميع من txs الحالية (دائماً محدّثة) + الحركة الجديدة
+    const curRecDin = inTxs.filter(t=>t.currency!=="دولار").reduce((s,t)=>s+t.amount,0);
+    const curSpdDin = outTxs.filter(t=>t.currency!=="دولار").reduce((s,t)=>s+t.amount,0);
+    const curRecDol = inTxs.filter(t=>t.currency==="دولار").reduce((s,t)=>s+t.amount,0);
+    const curSpdDol = outTxs.filter(t=>t.currency==="دولار").reduce((s,t)=>s+t.amount,0);
+    const newRecDin = !isDolCur && isIn  ? curRecDin + amt : curRecDin;
+    const newSpdDin = !isDolCur && !isIn ? curSpdDin + amt : curSpdDin;
+    const newRecDol = isDolCur  && isIn  ? curRecDol + amt : curRecDol;
+    const newSpdDol = isDolCur  && !isIn ? curSpdDol + amt : curSpdDol;
     updateDoc(doc(db, "projects", proj.id), {
       recDin: newRecDin, spdDin: newSpdDin,
       recDol: newRecDol, spdDol: newSpdDol,
@@ -810,9 +807,28 @@ function ProjectDetail({ proj, onBack }) {
     setShow(false);
   };
 
-  const deleteTx = async id => {
+  const deleteTx = async (id) => {
     if (!window.confirm("حذف؟")) return;
+    const t = txs.find(x=>x.id===id);
+    if(!t)return;
     await deleteDoc(doc(db, "project_txs", id));
+    // إعادة حساب الميزان بعد الحذف
+    const isDolCur = t.currency==="دولار";
+    const isIn = t.type==="in";
+    const curRecDin = inTxs.filter(x=>x.currency!=="دولار").reduce((s,x)=>s+x.amount,0);
+    const curSpdDin = outTxs.filter(x=>x.currency!=="دولار").reduce((s,x)=>s+x.amount,0);
+    const curRecDol = inTxs.filter(x=>x.currency==="دولار").reduce((s,x)=>s+x.amount,0);
+    const curSpdDol = outTxs.filter(x=>x.currency==="دولار").reduce((s,x)=>s+x.amount,0);
+    const newRecDin = !isDolCur && isIn  ? curRecDin - t.amount : curRecDin;
+    const newSpdDin = !isDolCur && !isIn ? curSpdDin - t.amount : curSpdDin;
+    const newRecDol = isDolCur  && isIn  ? curRecDol - t.amount : curRecDol;
+    const newSpdDol = isDolCur  && !isIn ? curSpdDol - t.amount : curSpdDol;
+    updateDoc(doc(db,"projects",proj.id),{
+      recDin:Math.max(0,newRecDin), spdDin:Math.max(0,newSpdDin),
+      recDol:Math.max(0,newRecDol), spdDol:Math.max(0,newSpdDol),
+      balDin:Math.max(0,newRecDin)-Math.max(0,newSpdDin),
+      balDol:Math.max(0,newRecDol)-Math.max(0,newSpdDol)
+    });
   };
 
   const ts = typeStyle(proj.type);
@@ -820,7 +836,11 @@ function ProjectDetail({ proj, onBack }) {
   const doPrint = (filter) => {
     const f = filter || printFilter;
     const list = (f==="in"?inTxs:f==="out"?outTxs:[...inTxs,...outTxs])
-      .sort((a,b)=>(a.date||"").localeCompare(b.date||""));
+      .sort((a,b)=>{
+        const d=(a.date||"").localeCompare(b.date||"");
+        if(d!==0)return d;
+        return (a.createdAt||"").localeCompare(b.createdAt||"");
+      });
 
     // بناء الصفوف مع الميزان التراكمي لكل عملة
     const buildRows = (currency) => {
