@@ -1239,7 +1239,11 @@ function AssetsPage({ funds, onBack }) {
                   appearance:"none" }}>
                 {ASSET_FUNDS.map(f=>{
                   const b = funds[f]||{din:0,dol:0};
-                  return <option key={f} value={f}>{f} — {fNum(b.din)} د.ع</option>;
+                  return (
+                    <option key={f} value={f}>
+                      {f} — {fNum(b.din)} د.ع {b.dol>0?"| "+fNum(b.dol)+" $":""}
+                    </option>
+                  );
                 })}
               </select>
             </div>
