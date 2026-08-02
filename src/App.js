@@ -97,6 +97,9 @@ export default function App() {
     });
   }, []);
 
+  // حساب رصيد الشركاء = مجموع أرصدة الشركاء الأربعة (تلقائي)
+  // لا حاجة لـ useEffect — الرصيد يُحدّث مباشرة عند كل توزيع أو سحب
+
   useEffect(() => {
     return onSnapshot(collection(db, "projects"),
       snap => {
@@ -225,7 +228,7 @@ export default function App() {
       await setDoc(doc(db, "funds", d.fund),
         { din: cur.din + din, dol: cur.dol + dol }, { merge: true });
       distributions.push({ fund: d.fund, label: d.label, pct: d.pct, din, dol });
-      // توزيع حصص الشركاء
+      // توزيع حصص الشركاء + تحديث إجمالي شركاء
       if (d.fund === "شركاء") {
         for (const p of PARTNERS) {
           const pDin = Math.round(din * p.pct / 100);
@@ -236,6 +239,7 @@ export default function App() {
             { din: pCur.din + pDin, dol: pCur.dol + pDol }, { merge: true });
         }
       }
+      // إذا لم تكن هناك أرصدة سابقة في صناديق الشركاء، تأكد من التوزيع الصحيح
     }
     await updateDoc(doc(db, "projects", proj.id), {
       status: "done", distributions,
@@ -403,7 +407,7 @@ export default function App() {
                     <span style={{ fontSize:20 }}>👥</span>
                     <span style={{ fontSize:13, fontWeight:700, color:"#9333EA" }}>أرباح الشركاء</span>
                   </div>
-                  <div style={{ display:"flex", gap:12 }}>
+                  <div style={{ display:"flex", gap:12, alignItems:"center" }}>
                     <span style={{ fontSize:13, fontWeight:700, color:"#9333EA" }}>
                       {fNum(sf.din)} <span style={{fontSize:10}}>د.ع</span>
                     </span>
@@ -412,6 +416,26 @@ export default function App() {
                         {fNum(sf.dol)} <span style={{fontSize:10}}>$</span>
                       </span>
                     )}
+                    {/* زر توزيع الرصيد الحالي لأول مرة */}
+                    {sf.din + sf.dol > 0 && (() => {
+                      const sumDin = PARTNERS.reduce((s,p)=>s+(funds["partner_"+p.id]?.din||0),0);
+                      const sumDol = PARTNERS.reduce((s,p)=>s+(funds["partner_"+p.id]?.dol||0),0);
+                      if (Math.abs(sumDin - sf.din) < 2 && Math.abs(sumDol - sf.dol) < 2) return null;
+                      return (
+                        <button onClick={async () => {
+                          for (const p of PARTNERS) {
+                            const pDin = Math.round(sf.din * p.pct / 100);
+                            const pDol = Math.round(sf.dol * p.pct / 100);
+                            await setDoc(doc(db,"funds","partner_"+p.id),
+                              { din: pDin, dol: pDol }, { merge: true });
+                          }
+                        }} style={{ fontSize:10, color:"#9333EA", background:"#fff",
+                          border:"1px solid #9333EA", borderRadius:6, padding:"3px 8px",
+                          cursor:"pointer", fontFamily:"Tahoma", fontWeight:700 }}>
+                          🔄 توزيع
+                        </button>
+                      );
+                    })()}
                   </div>
                 </div>
                 <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
