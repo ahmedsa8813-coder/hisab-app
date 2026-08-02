@@ -99,8 +99,12 @@ export default function App2() {
       onBack={() => setPage("home")}/>;
 
   // الصفحة الرئيسية
-  const totalDin = ALL_FUNDS.reduce((s,f) => s + (funds[f.id]?.din||0), 0);
-  const totalDol = ALL_FUNDS.reduce((s,f) => s + (funds[f.id]?.dol||0), 0);
+  const fundsDin    = ALL_FUNDS.reduce((s,f) => s + (funds[f.id]?.din||0), 0);
+  const fundsDol    = ALL_FUNDS.reduce((s,f) => s + (funds[f.id]?.dol||0), 0);
+  const activeDin   = projects.filter(p=>p.status==="active").reduce((s,p)=>s+(p.balDin||0),0);
+  const activeDol   = projects.filter(p=>p.status==="active").reduce((s,p)=>s+(p.balDol||0),0);
+  const totalDin    = fundsDin + activeDin;
+  const totalDol    = fundsDol + activeDol;
 
   return (
     <div style={{ minHeight:"100vh", background:"#F1F5F9",
@@ -118,26 +122,49 @@ export default function App2() {
 
         {/* الجرد الإجمالي */}
         <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr",
-          gap:10, marginBottom:20 }}>
+          gap:10, marginBottom:12 }}>
           <div style={{ background:"linear-gradient(135deg,#D97706,#F59E0B)",
             borderRadius:14, padding:16, textAlign:"center" }}>
             <div style={{ fontSize:11, color:"#FEF3C7", marginBottom:4 }}>
-              🇮🇶 إجمالي الدينار
+              🇮🇶 جرد الدينار الكلي
             </div>
             <div style={{ fontSize:19, fontWeight:700, color:"#fff" }}>
               {fNum(totalDin)}
             </div>
-            <div style={{ fontSize:11, color:"#FEF3C7" }}>د.ع</div>
+            <div style={{ fontSize:10, color:"#FEF3C7" }}>د.ع</div>
           </div>
           <div style={{ background:"linear-gradient(135deg,#1D4ED8,#3B82F6)",
             borderRadius:14, padding:16, textAlign:"center" }}>
             <div style={{ fontSize:11, color:"#DBEAFE", marginBottom:4 }}>
-              🇺🇸 إجمالي الدولار
+              🇺🇸 جرد الدولار الكلي
             </div>
             <div style={{ fontSize:19, fontWeight:700, color:"#fff" }}>
               {fNum(totalDol)}
             </div>
-            <div style={{ fontSize:11, color:"#DBEAFE" }}>$</div>
+            <div style={{ fontSize:10, color:"#DBEAFE" }}>$</div>
+          </div>
+        </div>
+
+        {/* تفصيل الجرد */}
+        <div style={{ background:"#fff", borderRadius:12, padding:"12px 16px",
+          marginBottom:20, border:"1px solid #E2E8F0" }}>
+          <div style={{ display:"flex", justifyContent:"space-between",
+            fontSize:11, color:"#64748B", marginBottom:6 }}>
+            <span>💎 الصناديق (7)</span>
+            <div>
+              <span style={{ color:"#D97706", fontWeight:700 }}>{fNum(fundsDin)} د.ع</span>
+              <span style={{ color:"#94A3B8" }}> | </span>
+              <span style={{ color:"#2563EB", fontWeight:700 }}>{fNum(fundsDol)} $</span>
+            </div>
+          </div>
+          <div style={{ display:"flex", justifyContent:"space-between",
+            fontSize:11, color:"#64748B" }}>
+            <span>🏗️ مشاريع قيد التنفيذ ({projects.filter(p=>p.status==="active").length})</span>
+            <div>
+              <span style={{ color:"#16A34A", fontWeight:700 }}>{fNum(activeDin)} د.ع</span>
+              <span style={{ color:"#94A3B8" }}> | </span>
+              <span style={{ color:"#2563EB", fontWeight:700 }}>{fNum(activeDol)} $</span>
+            </div>
           </div>
         </div>
 
@@ -202,43 +229,6 @@ export default function App2() {
                   </div>
                 </div>
               </button>
-            );
-          })}
-        </div>
-
-        {/* ملخص المشاريع */}
-        <div style={{ background:"#fff", borderRadius:14, padding:16,
-          border:"1px solid #E2E8F0", marginBottom:14 }}>
-          <div style={{ fontSize:13, fontWeight:700, color:"#1E293B", marginBottom:12 }}>
-            📊 ملخص المشاريع
-          </div>
-          {[
-            { label:"قيد التنفيذ", status:"active", color:"#16A34A", bg:"#F0FDF4" },
-            { label:"المنتهية",    status:"done",   color:"#64748B", bg:"#F8FAFC" },
-          ].map(({label,status,color,bg})=>{
-            const list = projects.filter(p=>p.status===status);
-            const totDin = list.reduce((s,p)=>s+(p.balDin||0),0);
-            const totDol = list.reduce((s,p)=>s+(p.balDol||0),0);
-            return (
-              <div key={status} style={{ marginBottom:10 }}>
-                <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:7 }}>
-                  <span style={{ width:8, height:8, borderRadius:"50%",
-                    background:color, display:"inline-block"}}/>
-                  <span style={{ fontSize:12, fontWeight:700, color }}>
-                    {label} ({list.length} مشروع)
-                  </span>
-                </div>
-                <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
-                  <div style={{ background:bg, borderRadius:10, padding:"10px", textAlign:"center" }}>
-                    <div style={{ fontSize:9, color:"#64748B", marginBottom:3 }}>🇮🇶 الميزان</div>
-                    <div style={{ fontSize:14, fontWeight:700, color }}>{fNum(totDin)} د.ع</div>
-                  </div>
-                  <div style={{ background:"#EFF6FF", borderRadius:10, padding:"10px", textAlign:"center" }}>
-                    <div style={{ fontSize:9, color:"#64748B", marginBottom:3 }}>🇺🇸 الميزان</div>
-                    <div style={{ fontSize:14, fontWeight:700, color:"#2563EB" }}>{fNum(totDol)} $</div>
-                  </div>
-                </div>
-              </div>
             );
           })}
         </div>
