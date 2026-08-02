@@ -651,6 +651,7 @@ function ReportsPage({ funds, projects, onBack }) {
   const [projTxs,    setProjTxs]    = useState([]);
   const [fundTxs,    setFundTxs]    = useState([]);
   const [partnerTxs, setPartnerTxs] = useState([]);
+  const [assets,     setAssets]     = useState([]);
 
   useEffect(()=>{
     const u1 = onSnapshot(collection(db,"project_txs"), s=>{
@@ -662,13 +663,17 @@ function ReportsPage({ funds, projects, onBack }) {
     const u3 = onSnapshot(collection(db,"partner_txs"), s=>{
       setPartnerTxs(s.docs.map(d=>({id:d.id,...d.data()})));
     });
-    return ()=>{u1();u2();u3();};
+    const u4 = onSnapshot(collection(db,"assets"), s=>{
+      setAssets(s.docs.map(d=>({id:d.id,...d.data()})));
+    });
+    return ()=>{u1();u2();u3();u4();};
   },[]);
 
   const REPORT_TYPES = [
     {id:"projects",  label:"تقرير المشاريع",    icon:"🏗️", color:"#D97706", bg:"#FFFBEB"},
     {id:"funds",     label:"تقرير الصناديق",    icon:"💎", color:"#059669", bg:"#ECFDF5"},
     {id:"partners",  label:"تقرير الشركاء",     icon:"👥", color:"#9333EA", bg:"#FAF5FF"},
+    {id:"assets",    label:"تقرير الأصول",      icon:"📦", color:"#0891B2", bg:"#ECFEFF"},
     {id:"summary",   label:"التقرير الشامل",    icon:"📊", color:"#1D4ED8", bg:"#EFF6FF"},
   ];
 
@@ -822,6 +827,72 @@ ${HDR}
 <div class="title">👥 تقرير الشركاء</div>
 <div class="info">الفترة: ${period}</div>
 ${secHtml}
+<div class="ft"><span>شركة باب المشاريع</span><span>طُبع: ${today}</span></div>
+</body></html>`;
+
+    } else if (reportType === "assets") {
+      let list = assets;
+      if (filters.status !== "all") list = list.filter(a=>a.status===filters.status);
+      list.sort((a,b)=>(a.date||"").localeCompare(b.date||""));
+
+      const totBuyDin  = list.reduce((s,a)=>s+(a.valueDin||0),0);
+      const totBuyDol  = list.reduce((s,a)=>s+(a.valueDol||0),0);
+      const soldList   = list.filter(a=>a.status==="sold");
+      const totSellDin = soldList.reduce((s,a)=>s+(a.sellPriceDin||0),0);
+      const totProfDin = soldList.reduce((s,a)=>s+(a.profitDin||0),0);
+      const totProfDol = soldList.reduce((s,a)=>s+(a.profitDol||0),0);
+
+      const rows = list.map((a,i)=>`<tr style="background:${i%2===0?"#fff":"#F8FAFC"}">
+        <td>${i+1}</td>
+        <td style="text-align:right;font-weight:700">${a.name||""}</td>
+        <td>${a.type||""}</td>
+        <td>${a.fund||""}</td>
+        <td>${a.date||""}</td>
+        <td style="color:#D97706;font-weight:700">${fNum(a.valueDin||0)} د.ع${(a.valueDol||0)>0?" | "+fNum(a.valueDol||0)+" $":""}</td>
+        <td style="color:${a.status==="active"?"#0891B2":"#64748B"}">
+          ${a.status==="active"?"● نشط":"✓ مباع"}
+        </td>
+        ${a.status==="sold"?`
+          <td style="color:#16A34A;font-weight:700">${fNum(a.sellPriceDin||0)} د.ع</td>
+          <td style="color:${(a.profitDin||0)>=0?"#16A34A":"#DC2626"};font-weight:700">
+            ${(a.profitDin||0)>=0?"📈":""+" "}${fNum(Math.abs(a.profitDin||0))} د.ع
+          </td>
+          <td style="color:#64748B;font-size:10px">${a.sellDate||""}</td>
+        `:"<td>—</td><td>—</td><td>—</td>"}
+      </tr>`).join("");
+
+      html = `<!DOCTYPE html><html dir="rtl"><head><meta charset="utf-8"/>${STYLE}</head><body>
+${HDR}
+<div class="title">📦 تقرير الأصول الثابتة</div>
+<div class="info">
+  ${filters.status==="all"?"كل الأصول":filters.status==="active"?"النشطة":"المباعة"}
+  · ${list.length} أصل
+  ${filters.fromDate||filters.toDate?" · الفترة: "+period:""}
+</div>
+<div class="sg" style="grid-template-columns:repeat(4,1fr)">
+  <div class="sb"><div class="sl">عدد الأصول</div><div class="sv" style="color:#0891B2">${assets.filter(a=>a.status==="active").length} نشط</div></div>
+  <div class="sb"><div class="sl">إجمالي الشراء دينار</div><div class="sv" style="color:#D97706">${fNum(totBuyDin)} د.ع</div></div>
+  <div class="sb" style="background:${totProfDin>=0?"#F0FDF4":"#FFF1F2"}">
+    <div class="sl">${totProfDin>=0?"📈 ربح البيع":"📉 خسارة البيع"}</div>
+    <div class="sv" style="color:${totProfDin>=0?"#16A34A":"#DC2626"}">${fNum(Math.abs(totProfDin))} د.ع</div>
+  </div>
+  <div class="sb"><div class="sl">إجمالي الشراء دولار</div><div class="sv" style="color:#2563EB">${fNum(totBuyDol)} $</div></div>
+</div>
+<table>
+  <thead><tr>
+    <th>#</th><th style="text-align:right">اسم الأصل</th><th>النوع</th><th>الصندوق</th>
+    <th>تاريخ الشراء</th><th>قيمة الشراء</th><th>الحالة</th>
+    <th>سعر البيع</th><th>الربح/الخسارة</th><th>تاريخ البيع</th>
+  </tr></thead>
+  <tbody>${rows}</tbody>
+  <tr class="tot">
+    <td colspan="4">الإجمالي</td><td></td>
+    <td style="color:#D97706">${fNum(totBuyDin)} د.ع</td><td></td>
+    <td style="color:#16A34A">${fNum(totSellDin)} د.ع</td>
+    <td style="color:${totProfDin>=0?"#16A34A":"#DC2626"}">${fNum(Math.abs(totProfDin))} د.ع</td>
+    <td></td>
+  </tr>
+</table>
 <div class="ft"><span>شركة باب المشاريع</span><span>طُبع: ${today}</span></div>
 </body></html>`;
 
@@ -994,6 +1065,24 @@ ${HDR}
                   <option value="all">كل الصناديق</option>
                   {ALL_FUNDS.map(f=><option key={f.id} value={f.id}>{f.icon} {f.label}</option>)}
                 </select>
+              </div>
+            )}
+
+            {/* فلاتر خاصة بالأصول */}
+            {reportType === "assets" && (
+              <div>
+                <div style={{ fontSize:11, color:"#64748B", fontWeight:600, marginBottom:5 }}>الحالة</div>
+                <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:6 }}>
+                  {[{v:"all",l:"الكل"},{v:"active",l:"● النشطة"},{v:"sold",l:"✓ المباعة"}].map(({v,l})=>(
+                    <button key={v} onClick={()=>sf("status")(v)} style={{
+                      border:"1.5px solid "+(filters.status===v?"#0891B2":"#E2E8F0"),
+                      borderRadius:8, padding:"8px 6px", cursor:"pointer",
+                      fontFamily:"Tahoma", fontSize:11, fontWeight:600,
+                      background:filters.status===v?"#ECFEFF":"#fff",
+                      color:filters.status===v?"#0891B2":"#64748B"
+                    }}>{l}</button>
+                  ))}
+                </div>
               </div>
             )}
 
