@@ -157,6 +157,10 @@ export default function App() {
   };
 
   const toggleStatus = async (id, current) => {
+    const label = current === "active" ? "إنهاء المشروع" : "إعادة تفعيل المشروع";
+    const pw = window.prompt("🔒 " + label + "\nأدخل الباسورد:");
+    if (pw === null) return;
+    if (pw !== PASS) { alert("❌ باسورد غلط"); return; }
     await updateDoc(doc(db, "projects", id), {
       status: current === "active" ? "done" : "active"
     });
