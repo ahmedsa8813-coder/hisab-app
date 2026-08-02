@@ -30,7 +30,7 @@ const typeStyle = t => TYPES.find(x => x.val === t) || {};
 
 const emptyForm = {
   type: "", name: "", client: "", province: "",
-  value: "", duration: ""
+  value: "", currency: "دينار", duration: ""
 };
 
 export default function App() {
@@ -59,6 +59,7 @@ export default function App() {
       client:   form.client.trim(),
       province: form.province.trim(),
       value:    Number(form.value),
+      currency: form.currency,
       duration: form.duration.trim(),
       received: 0,
       spent:    0,
@@ -154,7 +155,7 @@ export default function App() {
               { label: "اسم المشروع *",  key: "name",     ph: "أدخل اسم المشروع...", type: "text" },
               { label: "اسم العميل *",   key: "client",   ph: "صاحب المشروع...",     type: "text" },
               { label: "المحافظة *",     key: "province", ph: "بغداد، البصرة...",    type: "text" },
-              { label: "قيمة المشروع (دينار) *", key: "value", ph: "٠", type: "number" },
+              { label: "قيمة المشروع *", key: "value", ph: "٠", type: "number" },
               { label: "مدة الإنجاز",   key: "duration", ph: "مثال: 3 أشهر",        type: "text" },
             ].map(({ label, key, ph, type }) => (
               <div key={key}>
@@ -172,10 +173,27 @@ export default function App() {
                     direction: "rtl", marginBottom: 12, boxSizing: "border-box",
                     background: "#F8FAFC", color: "#1E293B" }}
                 />
-                {key === "value" && Number(form.value) > 0 && (
-                  <div style={{ fontSize: 12, color: "#D97706", fontWeight: 600,
-                    marginTop: -8, marginBottom: 10 }}>
-                    {fNum(form.value)} د.ع
+                {key === "value" && (
+                  <div style={{ marginTop: -8, marginBottom: 10 }}>
+                    <div style={{ display: "flex", gap: 8, marginBottom: 6 }}>
+                      {["دينار","دولار"].map(cur => (
+                        <button key={cur} onClick={() => sf("currency")(cur)} style={{
+                          flex: 1, padding: "8px", borderRadius: 9, cursor: "pointer",
+                          fontFamily: "Tahoma", fontSize: 13, fontWeight: 700,
+                          border: "2px solid " + (form.currency === cur ? (cur === "دينار" ? "#16A34A" : "#2563EB") : "#E2E8F0"),
+                          background: form.currency === cur ? (cur === "دينار" ? "#F0FDF4" : "#EFF6FF") : "#fff",
+                          color: form.currency === cur ? (cur === "دينار" ? "#16A34A" : "#2563EB") : "#94A3B8"
+                        }}>
+                          {cur === "دينار" ? "🇮🇶 دينار" : "🇺🇸 دولار"}
+                        </button>
+                      ))}
+                    </div>
+                    {Number(form.value) > 0 && (
+                      <div style={{ fontSize: 12, fontWeight: 600,
+                        color: form.currency === "دينار" ? "#D97706" : "#2563EB" }}>
+                        {fNum(form.value)} {form.currency === "دينار" ? "د.ع" : "$"}
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -215,6 +233,7 @@ function ProjectCard({ p, onToggle, onDelete }) {
   const ts = typeStyle(p.type);
   const pct = p.value > 0 ? Math.min(100, Math.round((p.received || 0) / p.value * 100)) : 0;
   const sptPct = p.value > 0 ? Math.min(100, Math.round((p.spent || 0) / p.value * 100)) : 0;
+  const cur = p.currency === "دولار" ? "$" : "د.ع";
 
   return (
     <div style={{ background: "#fff", borderRadius: 14, padding: "16px 18px",
@@ -274,7 +293,7 @@ function ProjectCard({ p, onToggle, onDelete }) {
               قيمة المشروع
             </span>
             <span style={{ fontSize: 13, fontWeight: 700, color: "#1E293B" }}>
-              {fNum(p.value)} د.ع
+              {fNum(p.value)} {p.currency === "دولار" ? "$" : "د.ع"}
             </span>
           </div>
 
@@ -285,7 +304,7 @@ function ProjectCard({ p, onToggle, onDelete }) {
                 ↓ المستلم
               </span>
               <span style={{ fontSize: 11, fontWeight: 700, color: "#16A34A" }}>
-                {fNum(p.received || 0)} د.ع — {pct}%
+                {fNum(p.received || 0)} {cur} — {pct}%
               </span>
             </div>
             <div style={{ height: 8, background: "#F1F5F9", borderRadius: 99, overflow: "hidden" }}>
@@ -302,7 +321,7 @@ function ProjectCard({ p, onToggle, onDelete }) {
                 ↑ المصروف
               </span>
               <span style={{ fontSize: 11, fontWeight: 700, color: "#DC2626" }}>
-                {fNum(p.spent || 0)} د.ع — {sptPct}%
+                {fNum(p.spent || 0)} {cur} — {sptPct}%
               </span>
             </div>
             <div style={{ height: 8, background: "#F1F5F9", borderRadius: 99, overflow: "hidden" }}>
