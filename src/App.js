@@ -306,9 +306,8 @@ export default function App() {
         {(() => {
           const allFunds = [
             "رأس_المال","عام","شركاء",
-            ...TYPES.map(t=>t.val),
-            ...PARTNERS.map(p=>"partner_"+p.id)
-          ];
+            ...TYPES.map(t=>t.val)
+          ]; // 7 صناديق فقط — شركاء تشمل حصص الشركاء
           const totalDin = allFunds.reduce((s,f)=>(funds[f]?.din||0)+s, 0);
           const totalDol = allFunds.reduce((s,f)=>(funds[f]?.dol||0)+s, 0);
           return (
@@ -368,14 +367,13 @@ export default function App() {
         <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12, marginBottom:12 }}>
           {/* صندوق رأس المال */}
           {[
-            { fund:"رأس_المال", label:"رأس المال",  icon:"💼", color:"#059669", bg:"#ECFDF5" },
+            { fund:"رأس_المال", label:"رأس المال",   icon:"💼", color:"#059669", bg:"#ECFDF5" },
             { fund:"عام",       label:"الصندوق العام", icon:"🏦", color:"#D97706", bg:"#FFFBEB" },
-            { fund:"شركاء",     label:"أرباح الشركاء", icon:"👥", color:"#9333EA", bg:"#FAF5FF" },
           ].map(({ fund, label, icon, color, bg }) => {
             const f = funds[fund] || { din:0, dol:0 };
             return (
               <div key={fund} style={{ background:bg, borderRadius:14, padding:"14px 16px",
-                border:"1.5px solid "+color+"40", gridColumn: fund==="شركاء"?"span 2":"span 1" }}>
+                border:"1.5px solid "+color+"40" }}>
                 <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:10 }}>
                   <span style={{ fontSize:20 }}>{icon}</span>
                   <span style={{ fontSize:13, fontWeight:700, color }}>{label}</span>
@@ -393,6 +391,65 @@ export default function App() {
               </div>
             );
           })}
+          {/* صندوق أرباح الشركاء — بطاقة كاملة */}
+          {(() => {
+            const sf = funds["شركاء"] || { din:0, dol:0 };
+            return (
+              <div style={{ background:"#FAF5FF", borderRadius:14, padding:"14px 16px",
+                border:"1.5px solid #9333EA40", gridColumn:"span 2" }}>
+                <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between",
+                  marginBottom:10 }}>
+                  <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                    <span style={{ fontSize:20 }}>👥</span>
+                    <span style={{ fontSize:13, fontWeight:700, color:"#9333EA" }}>أرباح الشركاء</span>
+                  </div>
+                  <div style={{ display:"flex", gap:12 }}>
+                    <span style={{ fontSize:13, fontWeight:700, color:"#9333EA" }}>
+                      {fNum(sf.din)} <span style={{fontSize:10}}>د.ع</span>
+                    </span>
+                    {sf.dol > 0 && (
+                      <span style={{ fontSize:13, fontWeight:700, color:"#2563EB" }}>
+                        {fNum(sf.dol)} <span style={{fontSize:10}}>$</span>
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
+                  {PARTNERS.map(p => {
+                    const pf = funds["partner_"+p.id] || { din:0, dol:0 };
+                    return (
+                      <button key={p.id} onClick={() => setPartnerPage(p)}
+                        style={{ background:p.bg, border:"1.5px solid "+p.color+"50",
+                          borderRadius:12, padding:"12px", textAlign:"right",
+                          cursor:"pointer", fontFamily:"Tahoma" }}>
+                        <div style={{ display:"flex", justifyContent:"space-between",
+                          alignItems:"center", marginBottom:6 }}>
+                          <span style={{ fontSize:12, fontWeight:700, color:p.color,
+                            background:"#fff", borderRadius:20, padding:"2px 8px" }}>
+                            {p.pct}%
+                          </span>
+                          <span style={{ fontSize:13, fontWeight:700, color:"#1E293B" }}>
+                            {p.name}
+                          </span>
+                        </div>
+                        <div style={{ fontSize:14, fontWeight:700, color:p.color }}>
+                          {fNum(pf.din)} <span style={{fontSize:10, color:"#64748B"}}>د.ع</span>
+                        </div>
+                        {pf.dol > 0 && (
+                          <div style={{ fontSize:12, fontWeight:700, color:"#2563EB" }}>
+                            {fNum(pf.dol)} <span style={{fontSize:10, color:"#64748B"}}>$</span>
+                          </div>
+                        )}
+                        <div style={{ fontSize:10, color:"#9333EA", marginTop:5, fontWeight:600 }}>
+                          اضغط للسحب ←
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })()}
         </div>
         {/* صناديق الأقسام */}
         <div style={{ fontSize:13, fontWeight:700, color:"#64748B", marginBottom:10 }}>
