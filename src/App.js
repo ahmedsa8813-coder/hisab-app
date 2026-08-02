@@ -189,6 +189,49 @@ export default function App() {
           </div>
         </div>
 
+        {/* فلترة الطباعة */}
+        {showPrint && (
+          <div style={{ background: "#FFFBEB", borderRadius: 14, padding: 16,
+            border: "1px solid #D97706", marginBottom: 14 }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: "#D97706", marginBottom: 12 }}>
+              🖨️ اختر ما تريد طباعته
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, marginBottom: 12 }}>
+              {[
+                ["all",  "الكل معاً",        "#1E293B", "#F1F5F9"],
+                ["in",   "↓ المستلمات فقط",  "#16A34A", "#F0FDF4"],
+                ["out",  "↑ المصروفات فقط",  "#DC2626", "#FFF1F2"],
+              ].map(([v, l, color, bg]) => (
+                <button key={v} onClick={() => setPrintFilter(v)} style={{
+                  border: "2px solid " + (printFilter === v ? color : "#E2E8F0"),
+                  borderRadius: 10, padding: "12px 6px", cursor: "pointer",
+                  fontFamily: "Tahoma", fontSize: 12, fontWeight: 700,
+                  background: printFilter === v ? bg : "#fff",
+                  color: printFilter === v ? color : "#94A3B8"
+                }}>{l}</button>
+              ))}
+            </div>
+            {/* معاينة العدد */}
+            <div style={{ fontSize: 12, color: "#64748B", marginBottom: 12 }}>
+              سيتم طباعة{" "}
+              <strong style={{ color: "#1E293B" }}>
+                {printFilter === "in" ? inTxs.length
+                 : printFilter === "out" ? outTxs.length
+                 : inTxs.length + outTxs.length}
+              </strong>
+              {" "}حركة
+              {printFilter === "in" ? " (مستلمات)" : printFilter === "out" ? " (مصروفات)" : " (الكل)"}
+            </div>
+            <button onClick={() => { doPrint(printFilter); setShowPrint(false); }}
+              disabled={(printFilter === "in" ? inTxs.length : printFilter === "out" ? outTxs.length : inTxs.length + outTxs.length) === 0}
+              style={{ width: "100%", border: "none", borderRadius: 10, padding: "12px",
+                fontSize: 14, fontWeight: 700, fontFamily: "Tahoma",
+                background: "#D97706", color: "#fff", cursor: "pointer" }}>
+              🖨️ طباعة الآن
+            </button>
+          </div>
+        )}
+
         {/* تبويبات */}
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 14 }}>
           {[["active","● قيد العمل","#16A34A"],["done","✓ منتهية","#64748B"]].map(([v,l,c]) => (
@@ -733,8 +776,10 @@ function ProjectCard({ p, onOpen, onToggle, onDelete }) {
 // ─── صفحة تفاصيل المشروع ───────────────────────────────
 function ProjectDetail({ proj, onBack }) {
   const [txs, setTxs]     = useState([]);
-  const [tab, setTab]     = useState("in");  // in = مستلم، out = مصروف
+  const [tab, setTab]     = useState("in");
   const [show, setShow]   = useState(false);
+  const [printFilter, setPrintFilter] = useState("all");
+  const [showPrint, setShowPrint] = useState(false);
   const [form, setForm]   = useState({
     amount: "", currency: "دينار", receiver: "", date: new Date().toISOString().split("T")[0], note: ""
   });
@@ -815,8 +860,10 @@ function ProjectDetail({ proj, onBack }) {
 
   const ts = typeStyle(proj.type);
 
-  const doPrint = () => {
-    const allTxs = [...inTxs, ...outTxs].sort((a,b) => (a.date||"").localeCompare(b.date||""));
+  const doPrint = (filter) => {
+    const f = filter || printFilter;
+    const allTxs = (f === "in" ? inTxs : f === "out" ? outTxs : [...inTxs, ...outTxs])
+      .sort((a,b) => (a.date||"").localeCompare(b.date||""));
     let n = 0;
     const rows = allTxs.map(t => {
       n++;
@@ -846,7 +893,7 @@ td{padding:8px;font-size:11px;text-align:center;border-bottom:1px solid #F1F5F9}
 .ft{margin-top:14px;font-size:10px;color:#94A3B8;display:flex;justify-content:space-between}
 </style></head><body>
 <div class="co">شركة باب المشاريع</div><div class="ca">بغداد</div><hr/>
-<div class="pt">📋 كشف حساب — ${proj.name}</div>
+<div class="pt">📋 ${f==="in"?"كشف المستلمات":f==="out"?"كشف المصروفات":"الكشف الشامل"} — ${proj.name}</div>
 <p style="font-size:11px;color:#64748B">
   ${proj.type?" النوع: "+proj.type+" ·":""} 
   ${proj.startDate?" بداية: "+proj.startDate+" ·":""}
@@ -922,10 +969,11 @@ td{padding:8px;font-size:11px;text-align:center;border-bottom:1px solid #F1F5F9}
             <div style={{ fontSize: 13, fontWeight: 700, color: "#1E293B" }}>
               📊 الملخص المالي
             </div>
-            <button onClick={doPrint} style={{ background: "#D97706", border: "none",
+            <button onClick={() => setShowPrint(v => !v)} style={{
+              background: showPrint ? "#475569" : "#D97706", border: "none",
               borderRadius: 9, padding: "7px 14px", color: "#fff", cursor: "pointer",
               fontSize: 12, fontFamily: "Tahoma", fontWeight: 700 }}>
-              🖨️ طباعة الكشف
+              {showPrint ? "✕ إغلاق" : "🖨️ طباعة الكشف"}
             </button>
           </div>
           {/* الدينار */}
@@ -975,6 +1023,49 @@ td{padding:8px;font-size:11px;text-align:center;border-bottom:1px solid #F1F5F9}
             </div>
           </div>
         </div>
+
+        {/* فلترة الطباعة */}
+        {showPrint && (
+          <div style={{ background: "#FFFBEB", borderRadius: 14, padding: 16,
+            border: "1px solid #D97706", marginBottom: 14 }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: "#D97706", marginBottom: 12 }}>
+              🖨️ اختر ما تريد طباعته
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, marginBottom: 12 }}>
+              {[
+                ["all",  "الكل معاً",        "#1E293B", "#F1F5F9"],
+                ["in",   "↓ المستلمات فقط",  "#16A34A", "#F0FDF4"],
+                ["out",  "↑ المصروفات فقط",  "#DC2626", "#FFF1F2"],
+              ].map(([v, l, color, bg]) => (
+                <button key={v} onClick={() => setPrintFilter(v)} style={{
+                  border: "2px solid " + (printFilter === v ? color : "#E2E8F0"),
+                  borderRadius: 10, padding: "12px 6px", cursor: "pointer",
+                  fontFamily: "Tahoma", fontSize: 12, fontWeight: 700,
+                  background: printFilter === v ? bg : "#fff",
+                  color: printFilter === v ? color : "#94A3B8"
+                }}>{l}</button>
+              ))}
+            </div>
+            {/* معاينة العدد */}
+            <div style={{ fontSize: 12, color: "#64748B", marginBottom: 12 }}>
+              سيتم طباعة{" "}
+              <strong style={{ color: "#1E293B" }}>
+                {printFilter === "in" ? inTxs.length
+                 : printFilter === "out" ? outTxs.length
+                 : inTxs.length + outTxs.length}
+              </strong>
+              {" "}حركة
+              {printFilter === "in" ? " (مستلمات)" : printFilter === "out" ? " (مصروفات)" : " (الكل)"}
+            </div>
+            <button onClick={() => { doPrint(printFilter); setShowPrint(false); }}
+              disabled={(printFilter === "in" ? inTxs.length : printFilter === "out" ? outTxs.length : inTxs.length + outTxs.length) === 0}
+              style={{ width: "100%", border: "none", borderRadius: 10, padding: "12px",
+                fontSize: 14, fontWeight: 700, fontFamily: "Tahoma",
+                background: "#D97706", color: "#fff", cursor: "pointer" }}>
+              🖨️ طباعة الآن
+            </button>
+          </div>
+        )}
 
         {/* تبويبات */}
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 14 }}>
