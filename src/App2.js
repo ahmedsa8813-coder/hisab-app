@@ -1185,17 +1185,19 @@ const ASSET_TYPES = ["معدات","مركبات","عقارات","أثاث","أج
 const ASSET_FUNDS = ["عام","إشراف","ديكور","مقاولات","واجهات"];
 
 function AssetsPage({ funds, onBack }) {
-  const [assets, setAssets]     = useState([]);
-  const [tab, setTab]           = useState("active"); // active | sold
-  const [showAdd, setShowAdd]   = useState(false);
-  const [sellAsset, setSellAsset] = useState(null);
+  const [assets,      setAssets]    = useState([]);
+  const [tab,         setTab]       = useState("active");
+  const [showAdd,     setShowAdd]   = useState(false);
+  const [sellTarget,  setSellTarget]= useState(null);
+  const [sellQty,     setSellQty]   = useState("1");
+  const [sellForm,    setSellForm]  = useState({
+    priceDin:"", priceDol:"",
+    date: new Date().toISOString().split("T")[0], note:""
+  });
   const [form, setForm] = useState({
     name:"", type:"معدات", fund:"عام",
-    valueDin:"", valueDol:"", date: new Date().toISOString().split("T")[0],
-    note:"", currency:"دينار"
-  });
-  const [sellForm, setSellForm] = useState({
-    priceDin:"", priceDol:"", date: new Date().toISOString().split("T")[0], note:""
+    qty:"1", unitPriceDin:"", unitPriceDol:"",
+    date: new Date().toISOString().split("T")[0], note:""
   });
   const sf  = k => v => setForm(f=>({...f,[k]:v}));
   const ssf = k => v => setSellForm(f=>({...f,[k]:v}));
@@ -1209,363 +1211,440 @@ function AssetsPage({ funds, onBack }) {
   },[]);
 
   const addAsset = async () => {
-    const din = Number(form.valueDin)||0;
-    const dol = Number(form.valueDol)||0;
-    if (!form.name.trim() || (!din && !dol)) return;
+    const qty  = Number(form.qty)||1;
+    const uDin = Number(form.unitPriceDin)||0;
+    const uDol = Number(form.unitPriceDol)||0;
+    if (!form.name.trim()||qty<1||(!uDin&&!uDol)) return;
     const pw = window.prompt("🔒 أدخل الباسورد:");
     if (!pw) return;
     if (pw !== PASS) { alert("❌ باسورد غلط"); return; }
-
-    // خصم من الصندوق
-    const bal = funds[form.fund] || {din:0,dol:0};
-    if (din > bal.din) { alert("⛔ رصيد الدينار غير كافٍ في الصندوق\nالمتاح: "+fNum(bal.din)+" د.ع"); return; }
-    if (dol > bal.dol) { alert("⛔ رصيد الدولار غير كافٍ في الصندوق\nالمتاح: "+fNum(bal.dol)+" $"); return; }
-
-    await addDoc(collection(db,"assets"), {
-      name: form.name.trim(), type: form.type,
-      fund: form.fund, valueDin: din, valueDol: dol,
-      date: form.date, note: form.note.trim(),
-      status: "active",
-      createdAt: new Date().toISOString()
+    const totalDin = uDin*qty, totalDol = uDol*qty;
+    const bal = funds[form.fund]||{din:0,dol:0};
+    if (totalDin > bal.din) { alert("⛔ رصيد الدينار غير كافٍ — المتاح: "+fNum(bal.din)+" د.ع"); return; }
+    if (totalDol > bal.dol) { alert("⛔ رصيد الدولار غير كافٍ — المتاح: "+fNum(bal.dol)+" $"); return; }
+    await addDoc(collection(db,"assets"),{
+      name:form.name.trim(), type:form.type, fund:form.fund,
+      qty, qtyRemaining:qty, soldQty:0,
+      unitPriceDin:uDin, unitPriceDol:uDol,
+      totalDin, totalDol,
+      date:form.date, note:form.note.trim(),
+      status:"active", createdAt:new Date().toISOString()
     });
-
-    await setDoc(doc(db,"funds",form.fund),
-      { din: bal.din-din, dol: bal.dol-dol }, {merge:true});
-
-    // تسجيل حركة الصندوق
-    await addDoc(collection(db,"fund_txs"), {
-      fundId: form.fund, fundLabel: form.fund,
-      type:"صرف", din, dol,
-      note:"شراء أصل: "+form.name.trim(),
-      date: form.date, createdAt: new Date().toISOString()
+    await setDoc(doc(db,"funds",form.fund),{din:bal.din-totalDin,dol:bal.dol-totalDol},{merge:true});
+    await addDoc(collection(db,"fund_txs"),{
+      fundId:form.fund, fundLabel:form.fund, type:"صرف",
+      din:totalDin, dol:totalDol,
+      note:"شراء "+qty+"× "+form.name.trim(),
+      date:form.date, createdAt:new Date().toISOString()
     });
-
-    setForm({name:"",type:"معدات",fund:"عام",valueDin:"",valueDol:"",
-      date:new Date().toISOString().split("T")[0],note:"",currency:"دينار"});
+    setForm({name:"",type:"معدات",fund:"عام",qty:"1",unitPriceDin:"",unitPriceDol:"",
+      date:new Date().toISOString().split("T")[0],note:""});
     setShowAdd(false);
   };
 
   const doSell = async () => {
-    if (!sellAsset) return;
+    if (!sellTarget) return;
+    const a   = sellTarget;
+    const qty = Math.min(Number(sellQty)||1, a.qtyRemaining||0);
+    if (qty<1) return;
     const pDin = Number(sellForm.priceDin)||0;
     const pDol = Number(sellForm.priceDol)||0;
-    if (!pDin && !pDol) return;
+    if (!pDin&&!pDol) return;
     const pw = window.prompt("🔒 أدخل الباسورد:");
     if (!pw) return;
     if (pw !== PASS) { alert("❌ باسورد غلط"); return; }
-
-    const profitDin = pDin - (sellAsset.valueDin||0);
-    const profitDol = pDol - (sellAsset.valueDol||0);
-    const bal = funds[sellAsset.fund] || {din:0,dol:0};
-
-    // إضافة لقيمة البيع للصندوق
-    await setDoc(doc(db,"funds",sellAsset.fund),
-      { din: bal.din+pDin, dol: bal.dol+pDol }, {merge:true});
-
-    // تسجيل حركة الصندوق
-    await addDoc(collection(db,"fund_txs"), {
-      fundId: sellAsset.fund, fundLabel: sellAsset.fund,
-      type:"إيداع", din:pDin, dol:pDol,
-      note:"بيع أصل: "+sellAsset.name,
-      date: sellForm.date, createdAt: new Date().toISOString()
+    const profitDin = pDin - (a.unitPriceDin||0)*qty;
+    const profitDol = pDol - (a.unitPriceDol||0)*qty;
+    const newQty    = (a.qtyRemaining||0) - qty;
+    const bal = funds[a.fund]||{din:0,dol:0};
+    await setDoc(doc(db,"funds",a.fund),{din:bal.din+pDin,dol:bal.dol+pDol},{merge:true});
+    await addDoc(collection(db,"fund_txs"),{
+      fundId:a.fund, fundLabel:a.fund, type:"إيداع",
+      din:pDin, dol:pDol,
+      note:"بيع "+qty+"× "+a.name,
+      date:sellForm.date, createdAt:new Date().toISOString()
     });
-
-    // تحديث الأصل
-    await updateDoc(doc(db,"assets",sellAsset.id), {
-      status:"sold",
-      sellPriceDin: pDin, sellPriceDol: pDol,
-      profitDin, profitDol,
-      sellDate: sellForm.date,
-      sellNote: sellForm.note.trim()
+    await addDoc(collection(db,"asset_sales"),{
+      assetId:a.id, assetName:a.name, qty,
+      sellPriceDin:pDin, sellPriceDol:pDol,
+      unitBuyDin:a.unitPriceDin||0, unitBuyDol:a.unitPriceDol||0,
+      profitDin, profitDol, fund:a.fund,
+      date:sellForm.date, note:sellForm.note,
+      createdAt:new Date().toISOString()
     });
-
-    setSellAsset(null);
+    await updateDoc(doc(db,"assets",a.id),{
+      qtyRemaining:newQty,
+      soldQty:(a.soldQty||0)+qty,
+      status:newQty===0?"sold":"active",
+      lastSellDate:sellForm.date
+    });
+    setSellTarget(null);
+    setSellQty("1");
     setSellForm({priceDin:"",priceDol:"",date:new Date().toISOString().split("T")[0],note:""});
   };
 
-  const list = assets.filter(a => a.status===(tab==="active"?"active":"sold"));
-  const totalBuyDin   = list.reduce((s,a)=>s+(a.valueDin||0),0);
-  const totalBuyDol   = list.reduce((s,a)=>s+(a.valueDol||0),0);
-  const soldProfitDin = assets.filter(a=>a.status==="sold").reduce((s,a)=>s+(a.profitDin||0),0);
-  const soldProfitDol = assets.filter(a=>a.status==="sold").reduce((s,a)=>s+(a.profitDol||0),0);
+  const list = tab==="active"
+    ? assets.filter(a=>(a.qtyRemaining||0)>0)
+    : assets;
+  const totalActive = assets.filter(a=>(a.qtyRemaining||0)>0).reduce((s,a)=>s+(a.qtyRemaining||0),0);
+  const totalSold   = assets.reduce((s,a)=>s+(a.soldQty||0),0);
 
   return (
-    <div style={{ minHeight:"100vh", background:"#F1F5F9",
-      fontFamily:"Tahoma", direction:"rtl" }}>
-      <div style={{ maxWidth:560, margin:"0 auto", padding:"22px 16px" }}>
+    <div style={{minHeight:"100vh",background:"#F1F5F9",fontFamily:"Tahoma",direction:"rtl"}}>
+      <div style={{maxWidth:700,margin:"0 auto",padding:"22px 16px"}}>
 
-        <button onClick={onBack} style={{ background:"#fff", border:"1px solid #E2E8F0",
-          borderRadius:10, padding:"8px 16px", fontSize:13, color:"#475569",
-          cursor:"pointer", marginBottom:16, fontFamily:"Tahoma",
-          display:"flex", alignItems:"center", gap:6 }}>← رجوع</button>
+        <button onClick={onBack} style={{background:"#fff",border:"1px solid #E2E8F0",
+          borderRadius:10,padding:"8px 16px",fontSize:13,color:"#475569",cursor:"pointer",
+          marginBottom:16,fontFamily:"Tahoma",display:"flex",alignItems:"center",gap:6}}>
+          ← رجوع
+        </button>
 
         {/* هيدر */}
-        <div style={{ background:"linear-gradient(135deg,#0891B2,#06B6D4)",
-          borderRadius:16, padding:"18px 20px", marginBottom:16 }}>
-          <div style={{ fontSize:18, fontWeight:700, color:"#fff", marginBottom:6 }}>
+        <div style={{background:"linear-gradient(135deg,#0891B2,#06B6D4)",
+          borderRadius:16,padding:"20px 24px",marginBottom:16}}>
+          <div style={{fontSize:18,fontWeight:700,color:"#fff",marginBottom:12}}>
             📦 الأصول الثابتة
           </div>
-          <div style={{ display:"flex", gap:12, flexWrap:"wrap" }}>
-            <span style={{ fontSize:12, color:"#CFFAFE" }}>
-              ● {assets.filter(a=>a.status==="active").length} نشط
-            </span>
-            <span style={{ fontSize:12, color:"#CFFAFE" }}>
-              ✓ {assets.filter(a=>a.status==="sold").length} مباع
-            </span>
-            {soldProfitDin !== 0 && (
-              <span style={{ fontSize:12, color:"#CFFAFE", fontWeight:700 }}>
-                {soldProfitDin>=0?"📈":"📉"} {fNum(Math.abs(soldProfitDin))} د.ع
-              </span>
-            )}
-            {soldProfitDol !== 0 && (
-              <span style={{ fontSize:12, color:"#CFFAFE", fontWeight:700 }}>
-                {soldProfitDol>=0?"📈":"📉"} {fNum(Math.abs(soldProfitDol))} $
-              </span>
-            )}
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10}}>
+            {[
+              {l:"أنواع مختلفة",v:new Set(assets.map(a=>a.name)).size},
+              {l:"وحدات نشطة", v:totalActive},
+              {l:"وحدات مباعة",v:totalSold},
+            ].map(({l,v},i)=>(
+              <div key={i} style={{background:"rgba(255,255,255,0.15)",
+                borderRadius:10,padding:"12px",textAlign:"center"}}>
+                <div style={{fontSize:10,color:"#CFFAFE",marginBottom:4}}>{l}</div>
+                <div style={{fontSize:24,fontWeight:700,color:"#fff"}}>{v}</div>
+              </div>
+            ))}
           </div>
         </div>
 
-        {/* تبويبات */}
-        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, marginBottom:14 }}>
-          {[{v:"active",l:"● النشطة"},{v:"sold",l:"✓ المباعة"}].map(({v,l})=>(
+        {/* تبويبات + زر إضافة */}
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr auto",gap:8,marginBottom:14}}>
+          {[{v:"active",l:"● النشطة"},{v:"all",l:"📋 الكل"}].map(({v,l})=>(
             <button key={v} onClick={()=>setTab(v)} style={{
-              border:"none", borderRadius:10, padding:"12px", cursor:"pointer",
-              fontFamily:"Tahoma", fontSize:13, fontWeight:700,
-              background:tab===v?"#0891B2":"#fff",
-              color:tab===v?"#fff":"#64748B" }}>{l}</button>
+              border:"none",borderRadius:10,padding:"11px",cursor:"pointer",
+              fontFamily:"Tahoma",fontSize:13,fontWeight:700,
+              background:tab===v?"#0891B2":"#fff",color:tab===v?"#fff":"#64748B"}}>
+              {l}</button>
           ))}
-        </div>
-
-        {/* زر إضافة */}
-        {tab==="active" && (
           <button onClick={()=>setShowAdd(v=>!v)} style={{
-            width:"100%", border:"none", borderRadius:12, padding:"13px",
-            fontSize:14, fontWeight:700, fontFamily:"Tahoma", marginBottom:14,
-            background:showAdd?"#475569":"#0891B2", color:"#fff", cursor:"pointer" }}>
-            {showAdd?"✕ إلغاء":"+ إضافة أصل جديد"}
+            border:"none",borderRadius:10,padding:"11px 16px",cursor:"pointer",
+            fontFamily:"Tahoma",fontSize:13,fontWeight:700,
+            background:showAdd?"#475569":"#1E293B",color:"#fff",whiteSpace:"nowrap"}}>
+            {showAdd?"✕ إلغاء":"+ أصل جديد"}
           </button>
-        )}
+        </div>
 
         {/* فورم الإضافة */}
         {showAdd && (
-          <div style={{ background:"#fff", borderRadius:14, padding:16,
-            border:"1px solid #E2E8F0", marginBottom:14 }}>
+          <div style={{background:"#fff",borderRadius:14,padding:20,
+            border:"1px solid #E2E8F0",marginBottom:14}}>
+            <div style={{fontSize:14,fontWeight:700,color:"#1E293B",marginBottom:16}}>
+              + تسجيل أصل جديد
+            </div>
 
             {/* الاسم */}
-            <div style={{ marginBottom:12 }}>
-              <div style={{ fontSize:12, color:"#64748B", fontWeight:600, marginBottom:5 }}>
-                اسم الأصل *
-              </div>
+            <div style={{marginBottom:12}}>
+              <div style={{fontSize:12,color:"#64748B",fontWeight:600,marginBottom:5}}>اسم الأصل *</div>
               <input placeholder="مثال: مكينة حفر، كرفان، سيارة..." value={form.name}
                 onChange={e=>sf("name")(e.target.value)}
-                style={{ width:"100%", border:"1px solid #CBD5E1", borderRadius:9,
-                  padding:"11px 13px", fontSize:14, outline:"none", fontFamily:"Tahoma",
-                  direction:"rtl", boxSizing:"border-box", background:"#F8FAFC" }}/>
+                style={{width:"100%",border:"1px solid #CBD5E1",borderRadius:9,
+                  padding:"11px 13px",fontSize:14,outline:"none",fontFamily:"Tahoma",
+                  direction:"rtl",boxSizing:"border-box",background:"#F8FAFC"}}/>
             </div>
 
             {/* النوع */}
-            <div style={{ marginBottom:12 }}>
-              <div style={{ fontSize:12, color:"#64748B", fontWeight:600, marginBottom:5 }}>النوع</div>
-              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:6 }}>
+            <div style={{marginBottom:12}}>
+              <div style={{fontSize:12,color:"#64748B",fontWeight:600,marginBottom:5}}>النوع</div>
+              <div style={{display:"grid",gridTemplateColumns:"repeat(6,1fr)",gap:6}}>
                 {ASSET_TYPES.map(t=>(
                   <button key={t} onClick={()=>sf("type")(t)} style={{
                     border:"1.5px solid "+(form.type===t?"#0891B2":"#E2E8F0"),
-                    borderRadius:8, padding:"7px 4px", cursor:"pointer",
-                    fontFamily:"Tahoma", fontSize:11, fontWeight:600,
+                    borderRadius:8,padding:"7px 4px",cursor:"pointer",
+                    fontFamily:"Tahoma",fontSize:11,fontWeight:600,
                     background:form.type===t?"#ECFEFF":"#fff",
-                    color:form.type===t?"#0891B2":"#64748B" }}>{t}</button>
+                    color:form.type===t?"#0891B2":"#64748B"}}>{t}</button>
                 ))}
               </div>
             </div>
 
-            {/* الصندوق */}
-            <div style={{ marginBottom:12 }}>
-              <div style={{ fontSize:12, color:"#64748B", fontWeight:600, marginBottom:5 }}>
-                الصندوق المصدر *
+            {/* الكمية وسعر الوحدة */}
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:12,marginBottom:12}}>
+              <div>
+                <div style={{fontSize:12,color:"#0891B2",fontWeight:700,marginBottom:5}}>
+                  الكمية *
+                </div>
+                <div style={{display:"flex",alignItems:"center",gap:6}}>
+                  <button onClick={()=>sf("qty")(q=>String(Math.max(1,Number(q)-1)))}
+                    style={{width:36,height:36,borderRadius:8,border:"1px solid #E2E8F0",
+                      background:"#fff",fontSize:18,cursor:"pointer",fontFamily:"Tahoma",
+                      display:"flex",alignItems:"center",justifyContent:"center"}}>−</button>
+                  <input type="text" inputMode="numeric" value={form.qty}
+                    onChange={e=>sf("qty")(e.target.value.replace(/[^0-9]/g,"")||"1")}
+                    style={{flex:1,border:"2px solid #0891B2",borderRadius:9,
+                      padding:"8px",fontSize:20,fontWeight:700,textAlign:"center",
+                      outline:"none",fontFamily:"Tahoma",background:"#ECFEFF"}}/>
+                  <button onClick={()=>sf("qty")(q=>String(Number(q)+1))}
+                    style={{width:36,height:36,borderRadius:8,border:"1px solid #E2E8F0",
+                      background:"#fff",fontSize:18,cursor:"pointer",fontFamily:"Tahoma",
+                      display:"flex",alignItems:"center",justifyContent:"center"}}>+</button>
+                </div>
               </div>
-              <select value={form.fund} onChange={e=>sf("fund")(e.target.value)}
-                style={{ width:"100%", border:"1px solid #CBD5E1", borderRadius:9,
-                  padding:"10px 12px", fontSize:13, outline:"none", fontFamily:"Tahoma",
-                  direction:"rtl", boxSizing:"border-box", background:"#F8FAFC",
-                  appearance:"none" }}>
-                {ASSET_FUNDS.map(f=>{
-                  const b = funds[f]||{din:0,dol:0};
-                  return (
-                    <option key={f} value={f}>
-                      {f} — {fNum(b.din)} د.ع {b.dol>0?"| "+fNum(b.dol)+" $":""}
-                    </option>
-                  );
-                })}
-              </select>
-            </div>
-
-            {/* القيمة */}
-            {[{k:"valueDin",l:"قيمة الشراء دينار",c:"#D97706",sym:"د.ع"},
-              {k:"valueDol",l:"قيمة الشراء دولار",c:"#2563EB",sym:"$"}].map(({k,l,c,sym})=>(
-              <div key={k} style={{ marginBottom:10 }}>
-                <div style={{ fontSize:12, color:c, fontWeight:600, marginBottom:5 }}>{l}</div>
-                <input type="text" inputMode="numeric" placeholder="٠" value={form[k]}
-                  onChange={e=>sf(k)(e.target.value.replace(/[^0-9]/g,""))}
-                  style={{ width:"100%", border:"1px solid #CBD5E1", borderRadius:9,
-                    padding:"11px 13px", fontSize:14, outline:"none", fontFamily:"Tahoma",
-                    direction:"rtl", boxSizing:"border-box", background:"#F8FAFC" }}/>
-                {Number(form[k])>0 && (
-                  <div style={{ fontSize:11, color:c, fontWeight:600, marginTop:3 }}>
-                    ✍️ {w2(Number(form[k]))} {k==="valueDin"?"دينار عراقي":"دولار أمريكي"}
+              <div>
+                <div style={{fontSize:12,color:"#D97706",fontWeight:600,marginBottom:5}}>
+                  سعر الوحدة دينار
+                </div>
+                <input type="text" inputMode="numeric" placeholder="٠" value={form.unitPriceDin}
+                  onChange={e=>sf("unitPriceDin")(e.target.value.replace(/[^0-9]/g,""))}
+                  style={{width:"100%",border:"1px solid #CBD5E1",borderRadius:9,
+                    padding:"11px 13px",fontSize:14,outline:"none",fontFamily:"Tahoma",
+                    direction:"rtl",boxSizing:"border-box",background:"#F8FAFC"}}/>
+                {Number(form.unitPriceDin)>0 && (
+                  <div style={{fontSize:10,color:"#D97706",marginTop:3}}>
+                    ✍️ {w2(Number(form.unitPriceDin))} دينار
+                    {Number(form.qty)>1&&<span style={{color:"#64748B"}}> → إجمالي: {fNum(Number(form.unitPriceDin)*Number(form.qty))} د.ع</span>}
                   </div>
                 )}
               </div>
-            ))}
-
-            {/* التاريخ والملاحظة */}
-            <div style={{ marginBottom:10 }}>
-              <div style={{ fontSize:12, color:"#64748B", fontWeight:600, marginBottom:5 }}>
-                تاريخ الشراء
+              <div>
+                <div style={{fontSize:12,color:"#2563EB",fontWeight:600,marginBottom:5}}>
+                  سعر الوحدة دولار
+                </div>
+                <input type="text" inputMode="numeric" placeholder="٠" value={form.unitPriceDol}
+                  onChange={e=>sf("unitPriceDol")(e.target.value.replace(/[^0-9]/g,""))}
+                  style={{width:"100%",border:"1px solid #CBD5E1",borderRadius:9,
+                    padding:"11px 13px",fontSize:14,outline:"none",fontFamily:"Tahoma",
+                    direction:"rtl",boxSizing:"border-box",background:"#F8FAFC"}}/>
+                {Number(form.unitPriceDol)>0 && (
+                  <div style={{fontSize:10,color:"#2563EB",marginTop:3}}>
+                    ✍️ {w2(Number(form.unitPriceDol))} دولار
+                    {Number(form.qty)>1&&<span style={{color:"#64748B"}}> → إجمالي: {fNum(Number(form.unitPriceDol)*Number(form.qty))} $</span>}
+                  </div>
+                )}
               </div>
-              <input type="date" value={form.date} onChange={e=>sf("date")(e.target.value)}
-                style={{ width:"100%", border:"1px solid #CBD5E1", borderRadius:9,
-                  padding:"11px 13px", fontSize:14, outline:"none", fontFamily:"Tahoma",
-                  boxSizing:"border-box", background:"#F8FAFC" }}/>
             </div>
-            <div style={{ marginBottom:16 }}>
-              <div style={{ fontSize:12, color:"#64748B", fontWeight:600, marginBottom:5 }}>
-                ملاحظة
+
+            {/* ملخص الشراء */}
+            {form.name.trim() && (Number(form.unitPriceDin)||Number(form.unitPriceDol)) && (
+              <div style={{background:"#ECFEFF",borderRadius:10,padding:14,
+                marginBottom:12,border:"2px solid #0891B2"}}>
+                <div style={{fontSize:11,fontWeight:700,color:"#0891B2",marginBottom:6}}>
+                  📋 ملخص الشراء
+                </div>
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10,fontSize:12}}>
+                  <div style={{textAlign:"center"}}>
+                    <div style={{color:"#64748B",marginBottom:2}}>الأصل</div>
+                    <div style={{fontWeight:700,color:"#1E293B"}}>{form.name}</div>
+                  </div>
+                  <div style={{textAlign:"center"}}>
+                    <div style={{color:"#64748B",marginBottom:2}}>الكمية</div>
+                    <div style={{fontWeight:700,fontSize:20,color:"#0891B2"}}>{form.qty}</div>
+                  </div>
+                  <div style={{textAlign:"center"}}>
+                    <div style={{color:"#64748B",marginBottom:2}}>الإجمالي</div>
+                    {Number(form.unitPriceDin)>0&&<div style={{fontWeight:700,color:"#D97706"}}>{fNum(Number(form.unitPriceDin)*Number(form.qty))} د.ع</div>}
+                    {Number(form.unitPriceDol)>0&&<div style={{fontWeight:700,color:"#2563EB"}}>{fNum(Number(form.unitPriceDol)*Number(form.qty))} $</div>}
+                  </div>
+                </div>
               </div>
-              <input placeholder="وصف إضافي..." value={form.note}
+            )}
+
+            {/* الصندوق والتاريخ */}
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:12}}>
+              <div>
+                <div style={{fontSize:12,color:"#64748B",fontWeight:600,marginBottom:5}}>الصندوق المصدر</div>
+                <select value={form.fund} onChange={e=>sf("fund")(e.target.value)}
+                  style={{width:"100%",border:"1px solid #CBD5E1",borderRadius:9,
+                    padding:"10px 12px",fontSize:13,outline:"none",fontFamily:"Tahoma",
+                    direction:"rtl",boxSizing:"border-box",background:"#F8FAFC",appearance:"none"}}>
+                  {ASSET_FUNDS.map(f=>{
+                    const b=funds[f]||{din:0,dol:0};
+                    return <option key={f} value={f}>{f} — {fNum(b.din)} د.ع{b.dol>0?" | "+fNum(b.dol)+" $":""}</option>;
+                  })}
+                </select>
+              </div>
+              <div>
+                <div style={{fontSize:12,color:"#64748B",fontWeight:600,marginBottom:5}}>تاريخ الشراء</div>
+                <input type="date" value={form.date} onChange={e=>sf("date")(e.target.value)}
+                  style={{width:"100%",border:"1px solid #CBD5E1",borderRadius:9,
+                    padding:"10px 12px",fontSize:13,outline:"none",fontFamily:"Tahoma",
+                    boxSizing:"border-box",background:"#F8FAFC"}}/>
+              </div>
+            </div>
+            <div style={{marginBottom:14}}>
+              <div style={{fontSize:12,color:"#64748B",fontWeight:600,marginBottom:5}}>ملاحظة</div>
+              <input placeholder="مورد، موقع، أي تفصيل..." value={form.note}
                 onChange={e=>sf("note")(e.target.value)}
-                style={{ width:"100%", border:"1px solid #CBD5E1", borderRadius:9,
-                  padding:"11px 13px", fontSize:14, outline:"none", fontFamily:"Tahoma",
-                  direction:"rtl", boxSizing:"border-box", background:"#F8FAFC" }}/>
+                style={{width:"100%",border:"1px solid #CBD5E1",borderRadius:9,
+                  padding:"10px 12px",fontSize:13,outline:"none",fontFamily:"Tahoma",
+                  direction:"rtl",boxSizing:"border-box",background:"#F8FAFC"}}/>
             </div>
 
             <button onClick={addAsset}
-              disabled={!form.name.trim()||(!Number(form.valueDin)&&!Number(form.valueDol))}
-              style={{ width:"100%", border:"none", borderRadius:10, padding:"13px",
-                fontSize:14, fontWeight:700, fontFamily:"Tahoma", cursor:"pointer",
-                background:form.name.trim()&&(Number(form.valueDin)||Number(form.valueDol))
-                  ?"#0891B2":"#E2E8F0",
-                color:form.name.trim()&&(Number(form.valueDin)||Number(form.valueDol))
-                  ?"#fff":"#94A3B8" }}>
-              ✅ تسجيل الأصل وخصمه من الصندوق
+              disabled={!form.name.trim()||!Number(form.qty)||(!Number(form.unitPriceDin)&&!Number(form.unitPriceDol))}
+              style={{width:"100%",border:"none",borderRadius:10,padding:"13px",
+                fontSize:14,fontWeight:700,fontFamily:"Tahoma",cursor:"pointer",
+                background:form.name.trim()&&Number(form.qty)&&(Number(form.unitPriceDin)||Number(form.unitPriceDol))?"#0891B2":"#E2E8F0",
+                color:form.name.trim()&&Number(form.qty)&&(Number(form.unitPriceDin)||Number(form.unitPriceDol))?"#fff":"#94A3B8"}}>
+              ✅ تسجيل وخصم من الصندوق
             </button>
           </div>
         )}
 
         {/* قائمة الأصول */}
         {list.length===0 ? (
-          <div style={{ background:"#fff", borderRadius:14, padding:30,
-            textAlign:"center", color:"#94A3B8", border:"1px solid #E2E8F0" }}>
-            <div style={{ fontSize:36, marginBottom:8 }}>📦</div>
-            <div>{tab==="active"?"ما في أصول نشطة":"ما في أصول مباعة"}</div>
+          <div style={{background:"#fff",borderRadius:14,padding:30,
+            textAlign:"center",color:"#94A3B8",border:"1px solid #E2E8F0"}}>
+            <div style={{fontSize:40,marginBottom:8}}>📦</div>
+            <div>ما في أصول</div>
           </div>
         ) : list.map(a=>(
-          <div key={a.id} style={{ background:"#fff", borderRadius:14, padding:16,
-            marginBottom:10, border:"1px solid #E2E8F0",
-            borderRight:"5px solid "+(a.status==="active"?"#0891B2":"#64748B") }}>
-            <div style={{ display:"flex", justifyContent:"space-between", marginBottom:8 }}>
+          <div key={a.id} style={{background:"#fff",borderRadius:14,padding:"16px 18px",
+            marginBottom:10,border:"1px solid #E2E8F0",
+            borderRight:"5px solid "+((a.qtyRemaining||0)>0?"#0891B2":"#94A3B8")}}>
+
+            <div style={{display:"grid",gridTemplateColumns:"1fr auto",
+              gap:12,alignItems:"start",marginBottom:12}}>
               <div>
-                <div style={{ fontSize:15, fontWeight:700, color:"#1E293B" }}>{a.name}</div>
-                <div style={{ fontSize:11, color:"#64748B", marginTop:3 }}>
-                  📂 {a.type} · 🏦 {a.fund} · 📅 {a.date}
+                <div style={{fontSize:15,fontWeight:700,color:"#1E293B",marginBottom:4}}>
+                  {a.name}
                 </div>
-                {a.note && <div style={{ fontSize:11, color:"#475569", marginTop:2 }}>{a.note}</div>}
+                <div style={{fontSize:11,color:"#64748B"}}>
+                  📂 {a.type} · 🏦 {a.fund} · 📅 {a.date}
+                  {a.note&&" · "+a.note}
+                </div>
               </div>
-              {a.status==="active" && (
-                <button onClick={()=>setSellAsset(a)} style={{
-                  background:"#FFF7ED", border:"1px solid #F97316",
-                  borderRadius:8, padding:"6px 12px", cursor:"pointer",
-                  fontSize:11, fontFamily:"Tahoma", fontWeight:700, color:"#F97316",
-                  alignSelf:"flex-start" }}>
+              {(a.qtyRemaining||0)>0 && (
+                <button onClick={()=>{setSellTarget(a);setSellQty("1");}} style={{
+                  background:"#FFF7ED",border:"1.5px solid #F97316",
+                  borderRadius:9,padding:"8px 16px",cursor:"pointer",
+                  fontSize:12,fontFamily:"Tahoma",fontWeight:700,color:"#F97316"}}>
                   💰 بيع
                 </button>
               )}
             </div>
 
-            {/* القيمة */}
-            <div style={{ display:"flex", gap:10, flexWrap:"wrap" }}>
-              {(a.valueDin||0)>0 && (
-                <span style={{ background:"#FFFBEB", borderRadius:7, padding:"5px 10px",
-                  fontSize:12, fontWeight:700, color:"#D97706" }}>
-                  شراء: {fNum(a.valueDin)} د.ع
+            {/* شريط الكميات */}
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:10}}>
+              {[
+                {l:"الإجمالي",  v:a.qty||0,        c:"#1E293B", bg:"#F1F5F9"},
+                {l:"مباع",      v:a.soldQty||0,    c:"#F97316", bg:"#FFF7ED"},
+                {l:"⬛ متبقي",   v:a.qtyRemaining||0,c:(a.qtyRemaining||0)>0?"#0891B2":"#94A3B8",
+                  bg:(a.qtyRemaining||0)>0?"#ECFEFF":"#F8FAFC",
+                  border:(a.qtyRemaining||0)>0?"2px solid #0891B2":"1px solid #E2E8F0"},
+              ].map(({l,v,c,bg,border},i)=>(
+                <div key={i} style={{background:bg,borderRadius:10,padding:"10px",
+                  textAlign:"center",border:border||"1px solid transparent"}}>
+                  <div style={{fontSize:9,color:"#64748B",marginBottom:3}}>{l}</div>
+                  <div style={{fontSize:22,fontWeight:700,color:c}}>{v}</div>
+                  <div style={{fontSize:9,color:"#94A3B8"}}>وحدة</div>
+                </div>
+              ))}
+            </div>
+
+            {/* الأسعار */}
+            <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+              {(a.unitPriceDin||0)>0&&(
+                <span style={{background:"#FFFBEB",borderRadius:7,padding:"4px 10px",
+                  fontSize:11,color:"#D97706",fontWeight:700}}>
+                  {fNum(a.unitPriceDin)} د.ع / وحدة
+                  {(a.qty||0)>1&&<span style={{color:"#94A3B8",fontWeight:400}}> | إجمالي: {fNum((a.totalDin||0))} د.ع</span>}
                 </span>
               )}
-              {(a.valueDol||0)>0 && (
-                <span style={{ background:"#EFF6FF", borderRadius:7, padding:"5px 10px",
-                  fontSize:12, fontWeight:700, color:"#2563EB" }}>
-                  شراء: {fNum(a.valueDol)} $
+              {(a.unitPriceDol||0)>0&&(
+                <span style={{background:"#EFF6FF",borderRadius:7,padding:"4px 10px",
+                  fontSize:11,color:"#2563EB",fontWeight:700}}>
+                  {fNum(a.unitPriceDol)} $ / وحدة
                 </span>
               )}
-              {a.status==="sold" && (
-                <>
-                  {(a.sellPriceDin||0)>0 && (
-                    <span style={{ background:"#F0FDF4", borderRadius:7, padding:"5px 10px",
-                      fontSize:12, fontWeight:700, color:"#16A34A" }}>
-                      بيع: {fNum(a.sellPriceDin)} د.ع
-                    </span>
-                  )}
-                  {(a.profitDin||0)!==0 && (
-                    <span style={{ background:(a.profitDin||0)>=0?"#ECFDF5":"#FFF1F2",
-                      borderRadius:7, padding:"5px 10px",
-                      fontSize:12, fontWeight:700,
-                      color:(a.profitDin||0)>=0?"#16A34A":"#DC2626" }}>
-                      {(a.profitDin||0)>=0?"📈 ربح":"📉 خسارة"}: {fNum(Math.abs(a.profitDin||0))} د.ع
-                    </span>
-                  )}
-                  <span style={{ background:"#F1F5F9", borderRadius:7, padding:"5px 10px",
-                    fontSize:11, color:"#64748B" }}>
-                    تاريخ البيع: {a.sellDate}
-                  </span>
-                </>
+              {(a.qtyRemaining||0)===0&&(
+                <span style={{background:"#F1F5F9",borderRadius:7,padding:"4px 10px",
+                  fontSize:11,color:"#64748B"}}>✓ مباع بالكامل · {a.lastSellDate||""}</span>
               )}
             </div>
           </div>
         ))}
 
         {/* نافذة البيع */}
-        {sellAsset && (
-          <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.5)",
-            zIndex:999, display:"flex", alignItems:"center", justifyContent:"center", padding:16 }}>
-            <div style={{ background:"#fff", borderRadius:18, width:"100%", maxWidth:420,
-              boxShadow:"0 20px 60px rgba(0,0,0,0.25)" }}>
-              <div style={{ padding:"16px 20px", borderBottom:"1px solid #E2E8F0",
-                display:"flex", justifyContent:"space-between", alignItems:"center" }}>
-                <div style={{ fontSize:15, fontWeight:700, color:"#F97316" }}>
-                  💰 بيع — {sellAsset.name}
+        {sellTarget && (
+          <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.55)",
+            zIndex:999,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
+            <div style={{background:"#fff",borderRadius:20,width:"100%",maxWidth:460,
+              maxHeight:"90vh",overflow:"auto",boxShadow:"0 24px 80px rgba(0,0,0,0.4)"}}>
+              <div style={{padding:"18px 22px",borderBottom:"1px solid #E2E8F0",
+                display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                <div style={{fontSize:16,fontWeight:700,color:"#F97316"}}>
+                  💰 بيع — {sellTarget.name}
                 </div>
-                <button onClick={()=>setSellAsset(null)} style={{ background:"none",
-                  border:"none", fontSize:20, cursor:"pointer", color:"#64748B" }}>✕</button>
+                <button onClick={()=>setSellTarget(null)} style={{background:"none",
+                  border:"none",fontSize:20,cursor:"pointer",color:"#64748B"}}>✕</button>
               </div>
-              <div style={{ padding:"18px 20px" }}>
-                {/* القيمة الأصلية */}
-                <div style={{ background:"#FFF7ED", borderRadius:10, padding:12,
-                  marginBottom:16, fontSize:12 }}>
-                  <div style={{ fontWeight:700, color:"#F97316", marginBottom:4 }}>
-                    القيمة الأصلية:
+              <div style={{padding:"20px 22px"}}>
+
+                {/* الكميات الحالية */}
+                <div style={{background:"#F8FAFC",borderRadius:12,padding:14,marginBottom:18}}>
+                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10,textAlign:"center"}}>
+                    {[{l:"الإجمالي",v:sellTarget.qty||0,c:"#1E293B"},
+                      {l:"مباع",   v:sellTarget.soldQty||0,c:"#F97316"},
+                      {l:"متبقي",  v:sellTarget.qtyRemaining||0,c:"#16A34A"}].map(({l,v,c},i)=>(
+                      <div key={i}>
+                        <div style={{fontSize:10,color:"#64748B",marginBottom:3}}>{l}</div>
+                        <div style={{fontSize:24,fontWeight:700,color:c}}>{v}</div>
+                      </div>
+                    ))}
                   </div>
-                  {(sellAsset.valueDin||0)>0 &&
-                    <div>🇮🇶 {fNum(sellAsset.valueDin)} د.ع</div>}
-                  {(sellAsset.valueDol||0)>0 &&
-                    <div>🇺🇸 {fNum(sellAsset.valueDol)} $</div>}
+                  <div style={{marginTop:10,fontSize:11,color:"#64748B",textAlign:"center"}}>
+                    سعر الشراء: {fNum(sellTarget.unitPriceDin||0)} د.ع / وحدة
+                    {(sellTarget.unitPriceDol||0)>0&&" | "+fNum(sellTarget.unitPriceDol)+" $"}
+                  </div>
                 </div>
 
-                {[{k:"priceDin",l:"سعر البيع دينار",c:"#16A34A"},
-                  {k:"priceDol",l:"سعر البيع دولار",c:"#2563EB"}].map(({k,l,c})=>(
-                  <div key={k} style={{ marginBottom:12 }}>
-                    <div style={{ fontSize:12, color:c, fontWeight:600, marginBottom:5 }}>{l}</div>
+                {/* اختيار الكمية */}
+                <div style={{marginBottom:16}}>
+                  <div style={{fontSize:13,fontWeight:700,color:"#1E293B",marginBottom:10}}>
+                    كم وحدة تريد تبيع؟
+                  </div>
+                  <div style={{display:"flex",alignItems:"center",gap:12}}>
+                    <button onClick={()=>setSellQty(q=>String(Math.max(1,Number(q)-1)))}
+                      style={{width:48,height:48,borderRadius:12,border:"1px solid #E2E8F0",
+                        background:"#fff",fontSize:24,cursor:"pointer",fontFamily:"Tahoma"}}>−</button>
+                    <input type="text" inputMode="numeric" value={sellQty}
+                      onChange={e=>{
+                        const v=Number(e.target.value.replace(/[^0-9]/g,""))||1;
+                        setSellQty(String(Math.min(sellTarget.qtyRemaining||0,Math.max(1,v))));
+                      }}
+                      style={{flex:1,border:"2px solid #F97316",borderRadius:12,
+                        padding:"10px",fontSize:28,fontWeight:700,textAlign:"center",
+                        outline:"none",fontFamily:"Tahoma"}}/>
+                    <button onClick={()=>setSellQty(q=>String(Math.min(sellTarget.qtyRemaining||0,Number(q)+1)))}
+                      style={{width:48,height:48,borderRadius:12,border:"1px solid #E2E8F0",
+                        background:"#fff",fontSize:24,cursor:"pointer",fontFamily:"Tahoma"}}>+</button>
+                  </div>
+                  <div style={{textAlign:"center",fontSize:12,color:"#64748B",marginTop:8}}>
+                    تكلفة الشراء: {fNum((sellTarget.unitPriceDin||0)*Number(sellQty))} د.ع
+                  </div>
+                </div>
+
+                {/* سعر البيع */}
+                {[{k:"priceDin",l:"سعر البيع دينار",c:"#16A34A",buy:(sellTarget.unitPriceDin||0)*Number(sellQty)},
+                  {k:"priceDol",l:"سعر البيع دولار",c:"#2563EB",buy:(sellTarget.unitPriceDol||0)*Number(sellQty)}
+                ].map(({k,l,c,buy})=>(
+                  <div key={k} style={{marginBottom:12}}>
+                    <div style={{fontSize:12,color:c,fontWeight:600,marginBottom:5}}>{l}</div>
                     <input type="text" inputMode="numeric" placeholder="٠" value={sellForm[k]}
                       onChange={e=>ssf(k)(e.target.value.replace(/[^0-9]/g,""))}
-                      style={{ width:"100%", border:"1px solid #CBD5E1", borderRadius:9,
-                        padding:"11px 13px", fontSize:14, outline:"none", fontFamily:"Tahoma",
-                        direction:"rtl", boxSizing:"border-box", background:"#F8FAFC" }}/>
+                      style={{width:"100%",border:"1px solid #CBD5E1",borderRadius:9,
+                        padding:"11px 13px",fontSize:14,outline:"none",fontFamily:"Tahoma",
+                        direction:"rtl",boxSizing:"border-box",background:"#F8FAFC"}}/>
                     {Number(sellForm[k])>0 && (
-                      <div style={{ fontSize:11, color:c, fontWeight:600, marginTop:3 }}>
-                        ✍️ {w2(Number(sellForm[k]))} {k==="priceDin"?"دينار":"دولار"}
-                        {k==="priceDin" && sellAsset.valueDin && (
-                          <span style={{ color: Number(sellForm.priceDin)>=sellAsset.valueDin?"#16A34A":"#DC2626",
-                            marginRight:8 }}>
-                            {Number(sellForm.priceDin)>=sellAsset.valueDin?"📈":"📉"}
-                            {Number(sellForm.priceDin)>=sellAsset.valueDin?"ربح":"خسارة"}:
-                            {fNum(Math.abs(Number(sellForm.priceDin)-(sellAsset.valueDin||0)))} د.ع
+                      <div style={{fontSize:11,fontWeight:600,marginTop:4,
+                        display:"flex",justifyContent:"space-between"}}>
+                        <span style={{color:c}}>✍️ {w2(Number(sellForm[k]))} {k==="priceDin"?"دينار":"دولار"}</span>
+                        {buy>0&&(
+                          <span style={{color:Number(sellForm[k])>=buy?"#16A34A":"#DC2626",fontWeight:700}}>
+                            {Number(sellForm[k])>=buy?"📈 ربح":"📉 خسارة"}: {fNum(Math.abs(Number(sellForm[k])-buy))} {k==="priceDin"?"د.ع":"$"}
                           </span>
                         )}
                       </div>
@@ -1573,35 +1652,31 @@ function AssetsPage({ funds, onBack }) {
                   </div>
                 ))}
 
-                <div style={{ marginBottom:12 }}>
-                  <div style={{ fontSize:12, color:"#64748B", fontWeight:600, marginBottom:5 }}>
-                    تاريخ البيع
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:14}}>
+                  <div>
+                    <div style={{fontSize:12,color:"#64748B",fontWeight:600,marginBottom:5}}>التاريخ</div>
+                    <input type="date" value={sellForm.date} onChange={e=>ssf("date")(e.target.value)}
+                      style={{width:"100%",border:"1px solid #CBD5E1",borderRadius:9,
+                        padding:"10px",fontSize:13,outline:"none",fontFamily:"Tahoma",
+                        boxSizing:"border-box",background:"#F8FAFC"}}/>
                   </div>
-                  <input type="date" value={sellForm.date}
-                    onChange={e=>ssf("date")(e.target.value)}
-                    style={{ width:"100%", border:"1px solid #CBD5E1", borderRadius:9,
-                      padding:"11px 13px", fontSize:14, outline:"none", fontFamily:"Tahoma",
-                      boxSizing:"border-box", background:"#F8FAFC" }}/>
-                </div>
-                <div style={{ marginBottom:16 }}>
-                  <div style={{ fontSize:12, color:"#64748B", fontWeight:600, marginBottom:5 }}>
-                    ملاحظة
+                  <div>
+                    <div style={{fontSize:12,color:"#64748B",fontWeight:600,marginBottom:5}}>ملاحظة</div>
+                    <input placeholder="اسم المشتري..." value={sellForm.note}
+                      onChange={e=>ssf("note")(e.target.value)}
+                      style={{width:"100%",border:"1px solid #CBD5E1",borderRadius:9,
+                        padding:"10px",fontSize:13,outline:"none",fontFamily:"Tahoma",
+                        direction:"rtl",boxSizing:"border-box",background:"#F8FAFC"}}/>
                   </div>
-                  <input placeholder="اسم المشتري أو ملاحظة..." value={sellForm.note}
-                    onChange={e=>ssf("note")(e.target.value)}
-                    style={{ width:"100%", border:"1px solid #CBD5E1", borderRadius:9,
-                      padding:"11px 13px", fontSize:14, outline:"none", fontFamily:"Tahoma",
-                      direction:"rtl", boxSizing:"border-box", background:"#F8FAFC" }}/>
                 </div>
+
                 <button onClick={doSell}
                   disabled={!Number(sellForm.priceDin)&&!Number(sellForm.priceDol)}
-                  style={{ width:"100%", border:"none", borderRadius:10, padding:"13px",
-                    fontSize:14, fontWeight:700, fontFamily:"Tahoma", cursor:"pointer",
-                    background:Number(sellForm.priceDin)||Number(sellForm.priceDol)
-                      ?"#F97316":"#E2E8F0",
-                    color:Number(sellForm.priceDin)||Number(sellForm.priceDol)
-                      ?"#fff":"#94A3B8" }}>
-                  ✅ تأكيد البيع وإضافة للصندوق
+                  style={{width:"100%",border:"none",borderRadius:10,padding:"14px",
+                    fontSize:14,fontWeight:700,fontFamily:"Tahoma",cursor:"pointer",
+                    background:Number(sellForm.priceDin)||Number(sellForm.priceDol)?"#F97316":"#E2E8F0",
+                    color:Number(sellForm.priceDin)||Number(sellForm.priceDol)?"#fff":"#94A3B8"}}>
+                  ✅ تأكيد بيع {sellQty} وحدة وإضافة للصندوق
                 </button>
               </div>
             </div>
