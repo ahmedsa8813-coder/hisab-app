@@ -67,6 +67,13 @@ export default function App2({ onBack }) {
   const [funds, setFunds] = useState({});
   const [employees, setEmployees] = useState([]);
   const [projects, setProjects]   = useState([]);
+  const [assets,   setAssets]     = useState([]);
+
+  useEffect(()=>{
+    return onSnapshot(collection(db,"assets"), snap=>{
+      setAssets(snap.docs.map(d=>({id:d.id,...d.data()})));
+    });
+  },[]);
 
   useEffect(() => {
     return onSnapshot(collection(db, "projects"), snap => {
