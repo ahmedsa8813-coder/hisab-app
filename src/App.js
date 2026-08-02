@@ -10,6 +10,28 @@ const app = initializeApp({
 });
 const db = getFirestore(app);
 
+function w2(n) {
+  const x = Math.floor(Math.abs(Number(n) || 0));
+  if (!x) return "صفر";
+  const o = ["","واحد","اثنان","ثلاثة","أربعة","خمسة","ستة","سبعة","ثمانية","تسعة",
+    "عشرة","أحد عشر","اثنا عشر","ثلاثة عشر","أربعة عشر","خمسة عشر",
+    "ستة عشر","سبعة عشر","ثمانية عشر","تسعة عشر"];
+  const t2 = ["","","عشرون","ثلاثون","أربعون","خمسون","ستون","سبعون","ثمانون","تسعون"];
+  const h = ["","مئة","مئتان","ثلاثمئة","أربعمئة","خمسمئة","ستمئة","سبعمئة","ثمانمئة","تسعمئة"];
+  const g = v => {
+    if (!v) return "";
+    if (v < 20) return o[v];
+    if (v < 100) return t2[Math.floor(v/10)] + (v%10 ? " و" + o[v%10] : "");
+    return h[Math.floor(v/100)] + (v%100 ? " و" + g(v%100) : "");
+  };
+  const p = [];
+  if (x >= 1e9) p.push(g(Math.floor(x/1e9)) + " مليار");
+  if (x%1e9 >= 1e6) p.push(g(Math.floor(x%1e9/1e6)) + " مليون");
+  if (x%1e6 >= 1e3) p.push(g(Math.floor(x%1e6/1e3)) + " ألف");
+  if (x%1e3) p.push(g(x%1e3));
+  return p.join(" و");
+}
+
 const fNum = n => {
   const s = String(Math.round(Math.abs(Number(n) || 0)));
   let r = "";
@@ -21,16 +43,19 @@ const fNum = n => {
 };
 
 const TYPES = [
+  { val: "إشراف",   icon: "👷", color: "#059669", bg: "#ECFDF5" },
   { val: "ديكور",   icon: "🎨", color: "#7C3AED", bg: "#F5F3FF" },
-  { val: "واجهات",  icon: "🏢", color: "#2563EB", bg: "#EFF6FF" },
   { val: "مقاولات", icon: "🏗️", color: "#D97706", bg: "#FFFBEB" },
+  { val: "واجهات",  icon: "🏢", color: "#2563EB", bg: "#EFF6FF" },
 ];
 
 const typeStyle = t => TYPES.find(x => x.val === t) || {};
 
 const emptyForm = {
-  type: "", name: "", client: "", province: "",
-  value: "", currency: "دينار", duration: ""
+  type: "", name: "",
+  days: "",
+  valueDin: "", valueDol: "",
+  startDate: new Date().toISOString().split("T")[0]
 };
 
 export default function App() {
@@ -48,8 +73,9 @@ export default function App() {
       setProjects(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
   }, []);
 
-  const valid = form.type && form.name.trim() && form.client.trim()
-             && form.province.trim() && Number(form.value) > 0;
+  const valid = form.type && form.name.trim() && form.days
+             && (Number(form.valueDin) > 0 || Number(form.valueDol) > 0)
+             && form.startDate;
 
   const addProject = () => {
     if (!valid) return;
@@ -58,16 +84,15 @@ export default function App() {
     setShowForm(false);
     // Firebase في الخلفية
     addDoc(collection(db, "projects"), {
-      type:     form.type,
-      name:     form.name.trim(),
-      client:   form.client.trim(),
-      province: form.province.trim(),
-      value:    Number(form.value),
-      currency: form.currency,
-      duration: form.duration.trim(),
-      received: 0,
-      spent:    0,
-      status:   "active",
+      type:      form.type,
+      name:      form.name.trim(),
+      days:      Number(form.days),
+      valueDin:  Number(form.valueDin) || 0,
+      valueDol:  Number(form.valueDol) || 0,
+      startDate: form.startDate,
+      received:  0,
+      spent:     0,
+      status:    "active",
       createdAt: new Date().toISOString()
     });
   };
