@@ -13,7 +13,7 @@ const db = getFirestore(app);
 export default function App() {
   const [projects, setProjects] = useState([]);
   const [tab, setTab] = useState("active");
-  const [form, setForm] = useState({ name: "", client: "", province: "" });
+  const [form, setForm] = useState({ name: "", client: "", province: "", type: "" });
   const [showForm, setShowForm] = useState(false);
 
   useEffect(() => {
@@ -30,10 +30,11 @@ export default function App() {
       name: form.name.trim(),
       client: form.client.trim(),
       province: form.province.trim(),
+      type: form.type,
       status: "active",
       createdAt: new Date().toISOString()
     });
-    setForm({ name: "", client: "", province: "" });
+    setForm({ name: "", client: "", province: "", type: "" });
     setShowForm(false);
   };
 
@@ -107,6 +108,31 @@ export default function App() {
           <div style={{ background: "#fff", borderRadius: 14, padding: 20,
             border: "1px solid #E2E8F0", marginBottom: 16 }}>
 
+            {/* نوع المشروع */}
+            <div style={{ marginBottom: 16 }}>
+              <div style={{ fontSize: 13, color: "#64748B", fontWeight: 600, marginBottom: 10 }}>
+                نوع المشروع *
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
+                {[
+                  { val: "ديكور",     icon: "🎨", color: "#7C3AED", bg: "#F5F3FF" },
+                  { val: "واجهات",    icon: "🏢", color: "#2563EB", bg: "#EFF6FF" },
+                  { val: "مقاولات",   icon: "🏗️", color: "#D97706", bg: "#FFFBEB" },
+                ].map(({ val, icon, color, bg }) => (
+                  <button key={val} onClick={() => setForm(f => ({ ...f, type: val }))} style={{
+                    border: "2px solid " + (form.type === val ? color : "#E2E8F0"),
+                    borderRadius: 12, padding: "14px 8px", cursor: "pointer",
+                    fontFamily: "Tahoma", fontSize: 13, fontWeight: 700, textAlign: "center",
+                    background: form.type === val ? bg : "#fff",
+                    color: form.type === val ? color : "#94A3B8"
+                  }}>
+                    <div style={{ fontSize: 24, marginBottom: 6 }}>{icon}</div>
+                    {val}
+                  </button>
+                ))}
+              </div>
+            </div>
+
             {[
               { label: "اسم المشروع *", key: "name", placeholder: "أدخل اسم المشروع..." },
               { label: "اسم العميل",    key: "client",   placeholder: "صاحب المشروع..." },
@@ -129,12 +155,12 @@ export default function App() {
               </div>
             ))}
 
-            <button onClick={addProject} disabled={!form.name.trim()} style={{
+            <button onClick={addProject} disabled={!form.name.trim() || !form.type} style={{
               width: "100%", border: "none", borderRadius: 10, padding: "13px",
               fontSize: 15, fontWeight: 700, fontFamily: "Tahoma",
               cursor: form.name.trim() ? "pointer" : "not-allowed",
-              background: form.name.trim() ? "#D97706" : "#E2E8F0",
-              color: form.name.trim() ? "#fff" : "#94A3B8"
+              background: form.name.trim() && form.type ? "#D97706" : "#E2E8F0",
+              color: form.name.trim() && form.type ? "#fff" : "#94A3B8"
             }}>
               ✅ حفظ المشروع
             </button>
@@ -168,12 +194,21 @@ export default function App() {
                   {p.province && (
                     <div style={{ fontSize: 13, color: "#64748B", marginTop: 2 }}>📍 {p.province}</div>
                   )}
-                  <span style={{ fontSize: 11, fontWeight: 600, marginTop: 8,
-                    display: "inline-block", padding: "3px 10px", borderRadius: 20,
-                    background: p.status === "active" ? "#DCFCE7" : "#F1F5F9",
-                    color: p.status === "active" ? "#16A34A" : "#64748B" }}>
-                    {p.status === "active" ? "● قيد العمل" : "✓ منتهي"}
-                  </span>
+                  <div style={{ display: "flex", gap: 6, marginTop: 8, flexWrap: "wrap" }}>
+                    {p.type && (
+                      <span style={{ fontSize: 11, fontWeight: 600, padding: "3px 10px",
+                        borderRadius: 20,
+                        background: p.type === "ديكور" ? "#F5F3FF" : p.type === "واجهات" ? "#EFF6FF" : "#FFFBEB",
+                        color: p.type === "ديكور" ? "#7C3AED" : p.type === "واجهات" ? "#2563EB" : "#D97706" }}>
+                        {p.type === "ديكور" ? "🎨" : p.type === "واجهات" ? "🏢" : "🏗️"} {p.type}
+                      </span>
+                    )}
+                    <span style={{ fontSize: 11, fontWeight: 600, padding: "3px 10px", borderRadius: 20,
+                      background: p.status === "active" ? "#DCFCE7" : "#F1F5F9",
+                      color: p.status === "active" ? "#16A34A" : "#64748B" }}>
+                      {p.status === "active" ? "● قيد العمل" : "✓ منتهي"}
+                    </span>
+                  </div>
                 </div>
                 <div style={{ display: "flex", flexDirection: "column", gap: 8, alignItems: "flex-end" }}>
                   <button onClick={() => toggleStatus(p.id, p.status)} style={{
