@@ -1132,16 +1132,7 @@ function ProjectDetail({ proj, onBack }) {
   const addTx = () => {
     if (!amt || !form.receiver.trim()) return;
     const isDol = form.currency === "دولار";
-    // التحقق من عدم تجاوز قيمة المشروع للمستلمات
-    if (tab === "in") {
-      const projVal = isDol ? (proj.valueDol || 0) : (proj.valueDin || 0);
-      const curTotal = totalIn(form.currency);
-      if (projVal > 0 && curTotal + amt > projVal) {
-        const rem = projVal - curTotal;
-        alert("⚠️ تجاوز قيمة المشروع!\nالمتبقي المسموح: " + fNum(rem) + (isDol ? " $" : " د.ع"));
-        return;
-      }
-    }
+    // الاستلام: حر بدون حد أقصى
     // التحقق من عدم تجاوز المصروف للمستلم
     if (tab === "out") {
       const curIn  = totalIn(form.currency);
