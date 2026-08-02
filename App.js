@@ -6,7 +6,8 @@ import { getFirestore, collection, addDoc, onSnapshot,
 const app = initializeApp({
   apiKey: "AIzaSyD_h8oJKVRpzfhi47q-EAsK1Ct_mRT5CIw",
   authDomain: "hisab-app-e4616.firebaseapp.com",
-  projectId: "hisab-app-e4616"
+  projectId: "hisab-app-e4616",
+  storageBucket: "hisab-app-e4616.appspot.com"
 });
 const db = getFirestore(app);
 
@@ -88,7 +89,7 @@ export default function App() {
     if (!valid || saving) return;
     setSaving(true);
     try {
-      await addDoc(collection(db, "projects"), {
+      const ref = await addDoc(collection(db, "projects"), {
         type:      form.type,
         name:      form.name.trim(),
         days:      Number(form.days),
@@ -100,10 +101,15 @@ export default function App() {
         status:    "active",
         createdAt: new Date().toISOString()
       });
-      setForm(emptyForm);
-      setShowForm(false);
+      if (ref && ref.id) {
+        // تم الحفظ بنجاح
+        setForm(emptyForm);
+        setShowForm(false);
+      } else {
+        alert("لم يتم الحفظ، حاول مرة أخرى");
+      }
     } catch(e) {
-      alert("خطأ في الحفظ: " + e.message);
+      alert("خطأ في الحفظ: " + e.code + " — " + e.message);
     }
     setSaving(false);
   };
