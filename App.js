@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { initializeApp } from "firebase/app";
 import { getFirestore, collection, addDoc, onSnapshot,
-  deleteDoc, doc, updateDoc, orderBy, query, where, getDocs } from "firebase/firestore";
+  deleteDoc, doc, updateDoc, query, where, getDocs } from "firebase/firestore";
 
 const app = initializeApp({
   apiKey: "AIzaSyD_h8oJKVRpzfhi47q-EAsK1Ct_mRT5CIw",
@@ -68,10 +68,13 @@ export default function App() {
   const sf = k => v => setForm(f => ({ ...f, [k]: v }));
 
   useEffect(() => {
-    const q = query(collection(db, "projects"), orderBy("createdAt", "desc"));
-    return onSnapshot(q,
-      snap => setProjects(snap.docs.map(d => ({ id: d.id, ...d.data() }))),
-      err  => console.error("Firebase error:", err)
+    return onSnapshot(collection(db, "projects"),
+      snap => {
+        const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        list.sort((a,b) => b.createdAt?.localeCompare(a.createdAt || "") || 0);
+        setProjects(list);
+      },
+      err => alert("خطأ في قاعدة البيانات: " + err.message)
     );
   }, []);
 
@@ -399,9 +402,11 @@ function AdminPage({ onBack }) {
   const today = new Date().toISOString().split("T")[0];
 
   useEffect(() => {
-    const q = query(collection(db, "daily_tasks"), orderBy("createdAt", "desc"));
-    return onSnapshot(q, snap =>
-      setTasks(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
+    return onSnapshot(collection(db, "daily_tasks"), snap => {
+      const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      list.sort((a,b) => (b.createdAt||"").localeCompare(a.createdAt||""));
+      setTasks(list);
+    });
   }, []);
 
   const addTask = () => {
@@ -705,13 +710,14 @@ function ProjectDetail({ proj, onBack }) {
 
   // جلب الحركات
   useEffect(() => {
-    const q = query(
-      collection(db, "project_txs"),
-      where("projectId", "==", proj.id),
-      orderBy("createdAt", "desc")
+    return onSnapshot(
+      query(collection(db, "project_txs"), where("projectId","==",proj.id)),
+      snap => {
+        const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        list.sort((a,b) => b.createdAt?.localeCompare(a.createdAt || "") || 0);
+        setTxs(list);
+      }
     );
-    return onSnapshot(q, snap =>
-      setTxs(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
   }, [proj.id]);
 
   const inTxs  = txs.filter(t => t.type === "in");
