@@ -66,6 +66,13 @@ export default function App2() {
   const [selFund, setSelFund] = useState(null);
   const [funds, setFunds] = useState({});
   const [employees, setEmployees] = useState([]);
+  const [projects, setProjects]   = useState([]);
+
+  useEffect(() => {
+    return onSnapshot(collection(db, "projects"), snap => {
+      setProjects(snap.docs.map(d=>({id:d.id,...d.data()})));
+    });
+  }, []);
 
   useEffect(() => {
     return onSnapshot(collection(db, "funds"), snap => {
@@ -195,6 +202,43 @@ export default function App2() {
                   </div>
                 </div>
               </button>
+            );
+          })}
+        </div>
+
+        {/* ملخص المشاريع */}
+        <div style={{ background:"#fff", borderRadius:14, padding:16,
+          border:"1px solid #E2E8F0", marginBottom:14 }}>
+          <div style={{ fontSize:13, fontWeight:700, color:"#1E293B", marginBottom:12 }}>
+            📊 ملخص المشاريع
+          </div>
+          {[
+            { label:"قيد التنفيذ", status:"active", color:"#16A34A", bg:"#F0FDF4" },
+            { label:"المنتهية",    status:"done",   color:"#64748B", bg:"#F8FAFC" },
+          ].map(({label,status,color,bg})=>{
+            const list = projects.filter(p=>p.status===status);
+            const totDin = list.reduce((s,p)=>s+(p.balDin||0),0);
+            const totDol = list.reduce((s,p)=>s+(p.balDol||0),0);
+            return (
+              <div key={status} style={{ marginBottom:10 }}>
+                <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:7 }}>
+                  <span style={{ width:8, height:8, borderRadius:"50%",
+                    background:color, display:"inline-block"}}/>
+                  <span style={{ fontSize:12, fontWeight:700, color }}>
+                    {label} ({list.length} مشروع)
+                  </span>
+                </div>
+                <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
+                  <div style={{ background:bg, borderRadius:10, padding:"10px", textAlign:"center" }}>
+                    <div style={{ fontSize:9, color:"#64748B", marginBottom:3 }}>🇮🇶 الميزان</div>
+                    <div style={{ fontSize:14, fontWeight:700, color }}>{fNum(totDin)} د.ع</div>
+                  </div>
+                  <div style={{ background:"#EFF6FF", borderRadius:10, padding:"10px", textAlign:"center" }}>
+                    <div style={{ fontSize:9, color:"#64748B", marginBottom:3 }}>🇺🇸 الميزان</div>
+                    <div style={{ fontSize:14, fontWeight:700, color:"#2563EB" }}>{fNum(totDol)} $</div>
+                  </div>
+                </div>
+              </div>
             );
           })}
         </div>
