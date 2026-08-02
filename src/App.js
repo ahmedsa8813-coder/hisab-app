@@ -161,6 +161,13 @@ export default function App() {
     } catch(e) { alert("خطأ: " + e.code + " - " + e.message); }
   };
 
+  // تحديث المشروع المفتوح تلقائياً عند تغير البيانات
+  useEffect(() => {
+    if (!selProj) return;
+    const updated = projects.find(p => p.id === selProj.id);
+    if (updated) setSelProj(updated);
+  }, [projects]);
+
   if (page === "home")    return <HomePage onSelect={setPage} />;
   if (page === "admin")   return <AdminPage onBack={() => setPage("home")} />;
   if (page === "project" && selProj)
@@ -774,6 +781,20 @@ function ProjectDetail({ proj, onBack }) {
         return;
       }
     }
+    // التحقق من عدم تجاوز المصروف للمستلم
+    if (tab === "out") {
+      const curIn  = totalIn(form.currency);
+      const curOut = totalOut(form.currency);
+      const avail  = curIn - curOut;
+      if (amt > avail) {
+        alert(
+          "⛔ لا يمكن الصرف\n" +
+          "المصروف سيتجاوز المستلم!\n\n" +
+          "المتاح للصرف: " + fNum(Math.max(0, avail)) + (isDol ? " $" : " د.ع")
+        );
+        return;
+      }
+    }
     const isDolCur = form.currency === "دولار";
     const isIn = tab === "in";
     // حفظ الحركة
@@ -806,6 +827,20 @@ function ProjectDetail({ proj, onBack }) {
     setForm({ amount: "", currency: form.currency, receiver: "", date: form.date, note: "" });
     setShow(false);
   };
+
+  // إعادة حساب الميزان تلقائياً كلما تغيرت الحركات
+  useEffect(() => {
+    if (!txs || txs.length === 0) return;
+    const recDin = txs.filter(t=>t.type==="in"&&t.currency!=="دولار").reduce((s,t)=>s+t.amount,0);
+    const spdDin = txs.filter(t=>t.type!=="in"&&t.currency!=="دولار").reduce((s,t)=>s+t.amount,0);
+    const recDol = txs.filter(t=>t.type==="in"&&t.currency==="دولار").reduce((s,t)=>s+t.amount,0);
+    const spdDol = txs.filter(t=>t.type!=="in"&&t.currency==="دولار").reduce((s,t)=>s+t.amount,0);
+    updateDoc(doc(db,"projects",proj.id),{
+      recDin, spdDin, recDol, spdDol,
+      balDin: recDin - spdDin,
+      balDol: recDol - spdDol
+    });
+  }, [txs]);
 
   const deleteTx = async (id) => {
     if (!window.confirm("حذف؟")) return;
@@ -1130,6 +1165,22 @@ ${(f!=="in"&&totalIn("دولار")+totalOut("دولار")>0)||f==="all"?
             border: "1px solid #E2E8F0", marginBottom: 16 }}>
 
             {/* العملة */}
+            {tab === "out" && (
+              <div style={{ background: "#F8FAFC", borderRadius: 10, padding: "10px 14px",
+                marginBottom: 12, border: "1px solid #E2E8F0" }}>
+                <div style={{ fontSize: 11, color: "#64748B", marginBottom: 4 }}>
+                  💰 المتاح للصرف
+                </div>
+                <div style={{ display: "flex", gap: 16 }}>
+                  <span style={{ fontSize: 14, fontWeight: 700, color: "#D97706" }}>
+                    {fNum(Math.max(0, totalIn("دينار") - totalOut("دينار")))} د.ع
+                  </span>
+                  <span style={{ fontSize: 14, fontWeight: 700, color: "#2563EB" }}>
+                    {fNum(Math.max(0, totalIn("دولار") - totalOut("دولار")))} $
+                  </span>
+                </div>
+              </div>
+            )}
             <div style={{ fontSize: 13, color: "#64748B", fontWeight: 600, marginBottom: 8 }}>
               العملة
             </div>
