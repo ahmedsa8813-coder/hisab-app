@@ -1,18 +1,25 @@
 import React, { useState, useEffect } from "react";
-import App2 from "./App2";
-import { initializeApp } from "firebase/app";
+import { initializeApp, getApps } from "firebase/app";
 import { getFirestore, collection, addDoc, onSnapshot,
-  deleteDoc, doc, updateDoc, setDoc, query, where, getDocs, getDoc } from "firebase/firestore";
+  deleteDoc, doc, updateDoc, setDoc, query, where, getDocs } from "firebase/firestore";
 
-const app = initializeApp({
+// ─── Firebase (نفس المشروع) ───────────────────────────
+const firebaseConfig = {
   apiKey: "AIzaSyCBGovCJ_Bx64dOjC0UWzJsBPgXEuJaizI",
   authDomain: "bab-projects-b7d04.firebaseapp.com",
   projectId: "bab-projects-b7d04",
   storageBucket: "bab-projects-b7d04.firebasestorage.app",
   messagingSenderId: "982434748534",
   appId: "1:982434748534:web:ca0e52ef0115ecfc346757"
-});
-const db = getFirestore(app);
+};
+const app = getApps().length ? getApps()[0] : initializeApp(firebaseConfig);
+const db  = getFirestore(app);
+
+// ─── ثوابت ────────────────────────────────────────────
+const fNum = n => {
+  if (!n && n !== 0) return "0";
+  return Math.round(Number(n)).toLocaleString("en");
+};
 
 function w2(n) {
   const x = Math.floor(Math.abs(Number(n) || 0));
@@ -21,8 +28,8 @@ function w2(n) {
     "عشرة","أحد عشر","اثنا عشر","ثلاثة عشر","أربعة عشر","خمسة عشر",
     "ستة عشر","سبعة عشر","ثمانية عشر","تسعة عشر"];
   const t2 = ["","","عشرون","ثلاثون","أربعون","خمسون","ستون","سبعون","ثمانون","تسعون"];
-  const h = ["","مئة","مئتان","ثلاثمئة","أربعمئة","خمسمئة","ستمئة","سبعمئة","ثمانمئة","تسعمئة"];
-  const g = v => {
+  const h  = ["","مئة","مئتان","ثلاثمئة","أربعمئة","خمسمئة","ستمئة","سبعمئة","ثمانمئة","تسعمئة"];
+  const g  = v => {
     if (!v) return "";
     if (v < 20) return o[v];
     if (v < 100) return t2[Math.floor(v/10)] + (v%10 ? " و" + o[v%10] : "");
@@ -36,59 +43,36 @@ function w2(n) {
   return p.join(" و");
 }
 
-const fNum = n => {
-  const s = String(Math.round(Math.abs(Number(n) || 0)));
-  let r = "";
-  for (let i = 0; i < s.length; i++) {
-    if (i > 0 && (s.length - i) % 3 === 0) r += ",";
-    r += s[i];
-  }
-  return r;
-};
-
 const PASS = "1234";
 
-const PROVINCES = [
-  "بغداد","البصرة","نينوى","أربيل","السليمانية","دهوك","كركوك",
-  "الأنبار","صلاح الدين","ديالى","واسط","ميسان","ذي قار",
-  "المثنى","القادسية","بابل","كربلاء","النجف"
+const MAIN_FUNDS = [
+  { id:"رأس_المال", label:"رأس المال",     icon:"💼", color:"#059669", bg:"#ECFDF5" },
+  { id:"عام",       label:"الصندوق العام", icon:"🏦", color:"#D97706", bg:"#FFFBEB" },
+  { id:"شركاء",     label:"أرباح الشركاء",icon:"👥", color:"#9333EA", bg:"#FAF5FF" },
 ];
 
-const PARTNERS = [
-  { id: "إيهاب",  name: "م. إيهاب",  pct: 30, color: "#2563EB", bg: "#EFF6FF" },
-  { id: "أحمد",   name: "م. أحمد",   pct: 10, color: "#D97706", bg: "#FFFBEB" },
-  { id: "نور",    name: "م. نور",    pct: 30, color: "#059669", bg: "#ECFDF5" },
-  { id: "محمد",   name: "م. محمد",   pct: 30, color: "#7C3AED", bg: "#F5F3FF" },
+const DEPT_FUNDS = [
+  { id:"إشراف",    label:"إشراف",    icon:"👷", color:"#0284C7", bg:"#F0F9FF" },
+  { id:"ديكور",    label:"ديكور",    icon:"🎨", color:"#DB2777", bg:"#FDF2F8" },
+  { id:"مقاولات",  label:"مقاولات",  icon:"🏗️", color:"#7C3AED", bg:"#F5F3FF" },
+  { id:"واجهات",   label:"واجهات",   icon:"🏢", color:"#0891B2", bg:"#ECFEFF" },
 ];
 
-const TYPES = [
-  { val: "إشراف",   icon: "👷", color: "#059669", bg: "#ECFDF5" },
-  { val: "ديكور",   icon: "🎨", color: "#7C3AED", bg: "#F5F3FF" },
-  { val: "مقاولات", icon: "🏗️", color: "#D97706", bg: "#FFFBEB" },
-  { val: "واجهات",  icon: "🏢", color: "#2563EB", bg: "#EFF6FF" },
-];
+const ALL_FUNDS = [...MAIN_FUNDS, ...DEPT_FUNDS];
 
-const typeStyle = t => TYPES.find(x => x.val === t) || {};
-
-const emptyForm = {
-  type: "", name: "", province: "", city: "",
-  days: "",
-  valueDin: "", valueDol: "",
-  startDate: new Date().toISOString().split("T")[0]
-};
-
-export default function App() {
-  const [page, setPage]       = useState("home");
-  const [selProj, setSelProj] = useState(null);
-  const [projects, setProjects] = useState([]);
-  const [tab, setTab]     = useState("active");
-  const [form, setForm]   = useState(emptyForm);
-  const [showForm, setShowForm] = useState(false);
-  const sf = k => v => setForm(f => ({ ...f, [k]: v }));
-
+// ─── التطبيق الرئيسي ─────────────────────────────────
+export default function App2({ onBack }) {
+  const [page, setPage] = useState("home"); // home | fund | employees
+  const [selFund, setSelFund] = useState(null);
   const [funds, setFunds] = useState({});
-  const [closingProj, setClosingProj] = useState(null);
-  const [partnerPage, setPartnerPage] = useState(null); // {partner, mode:"view"|"withdraw"}
+  const [employees, setEmployees] = useState([]);
+  const [projects, setProjects]   = useState([]);
+
+  useEffect(() => {
+    return onSnapshot(collection(db, "projects"), snap => {
+      setProjects(snap.docs.map(d=>({id:d.id,...d.data()})));
+    });
+  }, []);
 
   useEffect(() => {
     return onSnapshot(collection(db, "funds"), snap => {
@@ -98,2158 +82,358 @@ export default function App() {
     });
   }, []);
 
-  // حساب رصيد الشركاء = مجموع أرصدة الشركاء الأربعة (تلقائي)
-  // لا حاجة لـ useEffect — الرصيد يُحدّث مباشرة عند كل توزيع أو سحب
-
   useEffect(() => {
-    return onSnapshot(collection(db, "projects"),
-      snap => {
-        const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-        list.sort((a,b) => b.createdAt?.localeCompare(a.createdAt || "") || 0);
-        setProjects(list);
-      },
-      err => alert("خطأ في قاعدة البيانات: " + err.message)
-    );
+    return onSnapshot(collection(db, "employees"), snap => {
+      const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      list.sort((a,b) => (a.name||"").localeCompare(b.name||""));
+      setEmployees(list);
+    });
   }, []);
 
-  const valid = form.type && form.name.trim() && form.province && form.days
-             && (Number(form.valueDin) > 0 || Number(form.valueDol) > 0)
-             && form.startDate;
+  if (page === "fund" && selFund)
+    return <FundPage fund={selFund} funds={funds}
+      onBack={() => { setPage("home"); setSelFund(null); }}/>;
 
-  const [saving, setSaving] = useState(false);
+  if (page === "employees")
+    return <EmployeesPage employees={employees}
+      onBack={() => setPage("home")}/>;
 
-  const addProject = async () => {
-    if (!valid || saving) return;
-    setSaving(true);
-    try {
-      const data = {
-        type:      form.type,
-        name:      form.name.trim(),
-        province:  form.province,
-        city:      form.city.trim(),
-        days:      Number(form.days),
-        valueDin:  Number(form.valueDin) || 0,
-        valueDol:  Number(form.valueDol) || 0,
-        startDate: form.startDate,
-        received:  0,
-        spent:     0,
-        status:    "active",
-        createdAt: new Date().toISOString()
-      };
-      const ref = await addDoc(collection(db, "projects"), data);
-      // تحقق فعلي إن البيانات وصلت Firebase
-      const saved = await getDoc(ref);
-      if (saved.exists()) {
-        setForm(emptyForm);
-        setShowForm(false);
-      } else {
-        alert("⚠️ لم يتم الحفظ في Firebase، تحقق من الاتصال");
-      }
-    } catch(e) {
-      alert("خطأ في الحفظ: " + e.code + " — " + e.message);
-    }
-    setSaving(false);
-  };
+  if (page === "reports")
+    return <ReportsPage funds={funds} projects={projects}
+      onBack={() => setPage("home")}/>;
 
-  const deleteProject = async id => {
-    const pw = window.prompt("🔒 حذف المشروع\nأدخل الباسورد:");
-    if (pw === null) return;
-    if (pw !== PASS) { alert("❌ باسورد غلط"); return; }
-    await deleteDoc(doc(db, "projects", id));
-    const s = await getDocs(query(collection(db, "project_txs"), where("projectId","==",id)));
-    for (const d of s.docs) await deleteDoc(doc(db, "project_txs", d.id));
-  };
+  if (page === "assets")
+    return <AssetsPage funds={funds} onBack={() => setPage("home")}/>;
 
-  const editProject = async (id, data) => {
-    const pw = window.prompt("🔒 تعديل المشروع\nأدخل الباسورد:");
-    if (pw === null) return false;
-    if (pw !== PASS) { alert("❌ باسورد غلط"); return false; }
-    await updateDoc(doc(db, "projects", id), data);
-    return true;
-  };
+  // الصفحة الرئيسية
+  const fundsDin    = ALL_FUNDS.reduce((s,f) => s + (funds[f.id]?.din||0), 0);
+  const fundsDol    = ALL_FUNDS.reduce((s,f) => s + (funds[f.id]?.dol||0), 0);
+  const activeDin   = projects.filter(p=>p.status==="active").reduce((s,p)=>s+(p.balDin||0),0);
+  const activeDol   = projects.filter(p=>p.status==="active").reduce((s,p)=>s+(p.balDol||0),0);
+  const totalDin    = fundsDin + activeDin;
+  const totalDol    = fundsDol + activeDol;
 
-  const resetAllProjects = async () => {
-    const pw = window.prompt("🔒 تصفير كل المشاريع\nأدخل الباسورد:");
-    if (pw === null) return;
-    if (pw !== PASS) { alert("❌ باسورد غلط"); return; }
-    if (!window.confirm("تأكيد: حذف كل المشاريع وبياناتها؟")) return;
-    const ps = await getDocs(collection(db, "projects"));
-    for (const d of ps.docs) await deleteDoc(doc(db, "projects", d.id));
-    const ts = await getDocs(collection(db, "project_txs"));
-    for (const d of ts.docs) await deleteDoc(doc(db, "project_txs", d.id));
-  };
-
-  const toggleStatus = async (id, current) => {
-    const label = current === "active" ? "إنهاء المشروع" : "إعادة تفعيل المشروع";
-    const pw = window.prompt("🔒 " + label + "\nأدخل الباسورد:");
-    if (pw === null) return;
-    if (pw !== PASS) { alert("❌ باسورد غلط"); return; }
-
-    if (current === "active") {
-      // فتح شاشة توزيع الأرباح
-      const proj = projects.find(p => p.id === id);
-      if (proj) setClosingProj(proj);
-    } else {
-      // إعادة تفعيل — اسحب من الصناديق
-      const proj = projects.find(p => p.id === id);
-      if (!proj) return;
-      const dists = proj.distributions || [];
-      for (const d of dists) {
-        const cur = funds[d.fund] || { din: 0, dol: 0 };
-        await setDoc(doc(db, "funds", d.fund),
-          { din: Math.max(0, cur.din - (d.din||0)),
-            dol: Math.max(0, cur.dol - (d.dol||0)) },
-          { merge: true });
-        if (d.fund === "شركاء") {
-          for (const p of PARTNERS) {
-            const pDin = Math.round((d.din||0) * p.pct / 100);
-            const pDol = Math.round((d.dol||0) * p.pct / 100);
-            const pId  = "partner_" + p.id;
-            const pCur = funds[pId] || { din: 0, dol: 0 };
-            await setDoc(doc(db, "funds", pId),
-              { din: Math.max(0, pCur.din - pDin), dol: Math.max(0, pCur.dol - pDol) },
-              { merge: true });
-          }
-        }
-      }
-      await updateDoc(doc(db, "projects", id),
-        { status: "active", distributions: [], closedAt: null });
-    }
-  };
-
-  const confirmClose = async (proj, distPcts) => {
-    const balDin = proj.balDin || 0;
-    const balDol = proj.balDol || 0;
-    const distributions = [];
-    for (const d of distPcts) {
-      if (!d.pct) continue;
-      const din = Math.round(balDin * d.pct / 100);
-      const dol = Math.round(balDol * d.pct / 100);
-      const cur = funds[d.fund] || { din: 0, dol: 0 };
-      await setDoc(doc(db, "funds", d.fund),
-        { din: cur.din + din, dol: cur.dol + dol }, { merge: true });
-      distributions.push({ fund: d.fund, label: d.label, pct: d.pct, din, dol });
-      // توزيع حصص الشركاء
-      if (d.fund === "شركاء") {
-        for (const p of PARTNERS) {
-          const pDin = Math.round(din * p.pct / 100);
-          const pDol = Math.round(dol * p.pct / 100);
-          const pId  = "partner_" + p.id;
-          const pCur = funds[pId] || { din: 0, dol: 0 };
-          await setDoc(doc(db, "funds", pId),
-            { din: pCur.din + pDin, dol: pCur.dol + pDol }, { merge: true });
-          if (pDin > 0 || pDol > 0) {
-            await addDoc(collection(db, "partner_txs"), {
-              partnerId: pId, partnerName: p.name,
-              type: "إيداع", din: pDin, dol: pDol,
-              note: "أرباح مشروع: " + proj.name,
-              date: new Date().toISOString().split("T")[0],
-              createdAt: new Date().toISOString()
-            });
-          }
-        }
-      }
-    }
-    await updateDoc(doc(db, "projects", proj.id), {
-      status: "done", distributions,
-      closedAt: new Date().toISOString().split("T")[0]
-    });
-    setClosingProj(null);
-  };
-
-  const active = projects.filter(p => p.status === "active");
-  const done   = projects.filter(p => p.status === "done");
-  const list   = tab === "active" ? active : done;
-
-  const testFirebase = async () => {
-    try {
-      const ref = await addDoc(collection(db, "test_ping"), { t: Date.now() });
-      const snap = await getDoc(ref);
-      if (snap.exists()) alert("Firebase OK - ID: " + ref.id);
-      else alert("فشل - البيانات ما وصلت للسيرفر");
-    } catch(e) { alert("خطأ: " + e.code + " - " + e.message); }
-  };
-
-  // تحديث المشروع المفتوح تلقائياً عند تغير البيانات
-  useEffect(() => {
-    if (!selProj) return;
-    const updated = projects.find(p => p.id === selProj.id);
-    if (updated) setSelProj(updated);
-  }, [projects]);
-
-  if (closingProj) return <ClosingModal
-    proj={closingProj} funds={funds}
-    onConfirm={confirmClose}
-    onCancel={() => setClosingProj(null)}/>;
-
-  if (partnerPage) return <PartnerPage
-    partner={partnerPage} funds={funds}
-    onBack={() => setPartnerPage(null)}
-    onWithdraw={async (pid, din, dol, note) => {
-      const pId = "partner_" + pid;
-      const pf = funds[pId] || { din:0, dol:0 };
-      const sf = funds["شركاء"] || { din:0, dol:0 };
-      const partner = PARTNERS.find(p=>p.id===pid);
-      await setDoc(doc(db,"funds",pId),
-        { din: Math.max(0,pf.din-din), dol: Math.max(0,pf.dol-dol) }, {merge:true});
-      await setDoc(doc(db,"funds","شركاء"),
-        { din: Math.max(0,sf.din-din), dol: Math.max(0,sf.dol-dol) }, {merge:true});
-      await addDoc(collection(db,"partner_txs"), {
-        partnerId: pId, partnerName: partner?.name||"",
-        type: "سحب", din, dol, note: note||"سحب",
-        date: new Date().toISOString().split("T")[0],
-        createdAt: new Date().toISOString()
-      });
-    }}/>;
-
-  if (page === "home")    return <HomePage onSelect={setPage} />;
-  if (page === "admin")   return <AdminPage onBack={() => setPage("home")} />;
-  if (page === "proj" && selProj)
-    return <ProjectDetail proj={selProj} onBack={() => { setPage("projects"); setSelProj(null); }}/>;
-
-  // الصفحة المالية الرئيسية — تُعرض عند page==="financial"
-  if (page === "financial2") return <App2 onBack={() => setPage("financial")} />;
-
-  if (page === "financial") return (
+  return (
     <div style={{ minHeight:"100vh", background:"#F1F5F9",
       fontFamily:"Tahoma", direction:"rtl" }}>
-      <div style={{ maxWidth:520, margin:"0 auto", padding:"24px 16px" }}>
-        <button onClick={() => setPage("home")} style={{ background:"#fff",
+      <div style={{ maxWidth:540, margin:"0 auto", padding:"22px 16px" }}>
+
+        {/* رجوع */}
+        <button onClick={onBack} style={{ background:"#fff",
           border:"1px solid #E2E8F0", borderRadius:10, padding:"8px 16px",
-          fontSize:13, color:"#475569", cursor:"pointer", marginBottom:20,
+          fontSize:13, color:"#475569", cursor:"pointer", marginBottom:16,
           fontFamily:"Tahoma", display:"flex", alignItems:"center", gap:6 }}>
-          ← رجوع للرئيسية
+          ← رجوع للقائمة الرئيسية
         </button>
-        <div style={{ fontSize:20, fontWeight:700, color:"#1E293B", marginBottom:16 }}>
-          💰 القسم المالي
+
+        {/* هيدر */}
+        <div style={{ background:"linear-gradient(135deg,#1E293B,#334155)",
+          borderRadius:18, padding:"20px", marginBottom:20 }}>
+          <div style={{ fontSize:20, fontWeight:700, color:"#fff", marginBottom:4 }}>
+            🏢 شركة باب المشاريع
+          </div>
+          <div style={{ fontSize:12, color:"#94A3B8" }}>نظام الحسابات الداخلي</div>
         </div>
 
-        {/* إجمالي كل الصناديق */}
-        {(() => {
-          const allFunds = [
-            "رأس_المال","عام","شركاء",
-            ...TYPES.map(t=>t.val)
-          ]; // 7 صناديق فقط — شركاء تشمل حصص الشركاء
-          const totalDin = allFunds.reduce((s,f)=>(funds[f]?.din||0)+s, 0);
-          const totalDol = allFunds.reduce((s,f)=>(funds[f]?.dol||0)+s, 0);
-          return (
-            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:20 }}>
-              <div style={{ background:"linear-gradient(135deg,#D97706,#F59E0B)",
-                borderRadius:14, padding:"16px", textAlign:"center",
-                boxShadow:"0 4px 20px rgba(217,119,6,0.3)" }}>
-                <div style={{ fontSize:12, color:"#FEF3C7", marginBottom:6 }}>
-                  🇮🇶 جرد إجمالي الدينار
-                </div>
-                <div style={{ fontSize:11, color:"#FEF3C7", marginBottom:4 }}>
-                  كل الصناديق مجتمعة
-                </div>
-                <div style={{ fontSize:20, fontWeight:700, color:"#fff" }}>
-                  {fNum(totalDin)}
-                </div>
-                <div style={{ fontSize:12, color:"#FEF3C7" }}>د.ع</div>
-              </div>
-              <div style={{ background:"linear-gradient(135deg,#1D4ED8,#3B82F6)",
-                borderRadius:14, padding:"16px", textAlign:"center",
-                boxShadow:"0 4px 20px rgba(29,78,216,0.3)" }}>
-                <div style={{ fontSize:12, color:"#DBEAFE", marginBottom:6 }}>
-                  🇺🇸 جرد إجمالي الدولار
-                </div>
-                <div style={{ fontSize:11, color:"#DBEAFE", marginBottom:4 }}>
-                  كل الصناديق مجتمعة
-                </div>
-                <div style={{ fontSize:20, fontWeight:700, color:"#fff" }}>
-                  {fNum(totalDol)}
-                </div>
-                <div style={{ fontSize:12, color:"#DBEAFE" }}>$</div>
-              </div>
+        {/* الجرد الإجمالي */}
+        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr",
+          gap:10, marginBottom:12 }}>
+          <div style={{ background:"linear-gradient(135deg,#D97706,#F59E0B)",
+            borderRadius:14, padding:16, textAlign:"center" }}>
+            <div style={{ fontSize:11, color:"#FEF3C7", marginBottom:4 }}>
+              🇮🇶 جرد الدينار الكلي
             </div>
-          );
-        })()}
-        {/* أزرار التنقل */}
-        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:14 }}>
-          <button onClick={() => setPage("projects")} style={{
-            background:"#fff", border:"1px solid #E2E8F0", borderTop:"4px solid #D97706",
-            borderRadius:16, padding:"14px 16px", cursor:"pointer", textAlign:"right",
-            fontFamily:"Tahoma" }}>
-            <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-              <span style={{ fontSize:22 }}>🏗️</span>
-              <div>
-                <div style={{ fontSize:14, fontWeight:700, color:"#1E293B" }}>المشاريع</div>
-                <div style={{ fontSize:11, color:"#64748B" }}>
-                  {projects.filter(p=>p.status==="active").length} نشط
-                </div>
-              </div>
+            <div style={{ fontSize:19, fontWeight:700, color:"#fff" }}>
+              {fNum(totalDin)}
             </div>
-          </button>
-          <button onClick={() => setPage("financial2")} style={{
-            background:"#fff", border:"1px solid #E2E8F0", borderTop:"4px solid #059669",
-            borderRadius:16, padding:"14px 16px", cursor:"pointer", textAlign:"right",
-            fontFamily:"Tahoma" }}>
-            <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-              <span style={{ fontSize:22 }}>📊</span>
-              <div>
-                <div style={{ fontSize:14, fontWeight:700, color:"#1E293B" }}>الحسابات</div>
-                <div style={{ fontSize:11, color:"#64748B" }}>الصناديق والموظفين</div>
-              </div>
+            <div style={{ fontSize:10, color:"#FEF3C7" }}>د.ع</div>
+          </div>
+          <div style={{ background:"linear-gradient(135deg,#1D4ED8,#3B82F6)",
+            borderRadius:14, padding:16, textAlign:"center" }}>
+            <div style={{ fontSize:11, color:"#DBEAFE", marginBottom:4 }}>
+              🇺🇸 جرد الدولار الكلي
             </div>
-          </button>
+            <div style={{ fontSize:19, fontWeight:700, color:"#fff" }}>
+              {fNum(totalDol)}
+            </div>
+            <div style={{ fontSize:10, color:"#DBEAFE" }}>$</div>
+          </div>
         </div>
 
-        {/* زر المشاريع القديم - محذوف */}
-        <button onClick={() => setPage("projects")} style={{ width:"100%", display:"none",
-          background:"#fff", border:"1px solid #E2E8F0", borderTop:"4px solid #D97706",
-          borderRadius:16, padding:"18px 20px", cursor:"pointer", textAlign:"right",
-          fontFamily:"Tahoma", marginBottom:20 }}>
-          <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:8 }}>
-            <div style={{ width:44, height:44, borderRadius:12, background:"#FFFBEB",
-              display:"flex", alignItems:"center", justifyContent:"center", fontSize:22 }}>🏗️</div>
+        {/* تفصيل الجرد */}
+        <div style={{ background:"#fff", borderRadius:12, padding:"12px 16px",
+          marginBottom:20, border:"1px solid #E2E8F0" }}>
+          <div style={{ display:"flex", justifyContent:"space-between",
+            fontSize:11, color:"#64748B", marginBottom:6 }}>
+            <span>💎 الصناديق (7)</span>
             <div>
-              <div style={{ fontSize:16, fontWeight:700, color:"#1E293B" }}>المشاريع</div>
-              <div style={{ fontSize:12, color:"#64748B", marginTop:2 }}>
-                {projects.filter(p=>p.status==="active").length} نشط ·{" "}
-                {projects.filter(p=>p.status==="done").length} منتهي
-              </div>
+              <span style={{ color:"#D97706", fontWeight:700 }}>{fNum(fundsDin)} د.ع</span>
+              <span style={{ color:"#94A3B8" }}> | </span>
+              <span style={{ color:"#2563EB", fontWeight:700 }}>{fNum(fundsDol)} $</span>
             </div>
           </div>
-        </button>
-        {/* الصناديق الأربعة */}
-        <div style={{ fontSize:14, fontWeight:700, color:"#1E293B", marginBottom:14 }}>
-          💎 الصناديق
+          <div style={{ display:"flex", justifyContent:"space-between",
+            fontSize:11, color:"#64748B" }}>
+            <span>🏗️ مشاريع قيد التنفيذ ({projects.filter(p=>p.status==="active").length})</span>
+            <div>
+              <span style={{ color:"#16A34A", fontWeight:700 }}>{fNum(activeDin)} د.ع</span>
+              <span style={{ color:"#94A3B8" }}> | </span>
+              <span style={{ color:"#2563EB", fontWeight:700 }}>{fNum(activeDol)} $</span>
+            </div>
+          </div>
         </div>
-        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12, marginBottom:12 }}>
-          {/* صندوق رأس المال */}
-          {[
-            { fund:"رأس_المال", label:"رأس المال",   icon:"💼", color:"#059669", bg:"#ECFDF5" },
-            { fund:"عام",       label:"الصندوق العام", icon:"🏦", color:"#D97706", bg:"#FFFBEB" },
-          ].map(({ fund, label, icon, color, bg }) => {
-            const f = funds[fund] || { din:0, dol:0 };
+
+        {/* الصناديق الرئيسية */}
+        <div style={{ fontSize:13, fontWeight:700, color:"#1E293B", marginBottom:10 }}>
+          💎 الصناديق الرئيسية
+        </div>
+        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:20 }}>
+          {MAIN_FUNDS.map(f => {
+            const bal = funds[f.id] || { din:0, dol:0 };
             return (
-              <div key={fund} style={{ background:bg, borderRadius:14, padding:"14px 16px",
-                border:"1.5px solid "+color+"40" }}>
+              <button key={f.id} onClick={() => { setSelFund(f); setPage("fund"); }}
+                style={{ background:f.bg, border:"1.5px solid "+f.color+"40",
+                  borderRadius:14, padding:"14px", textAlign:"right",
+                  cursor:"pointer", fontFamily:"Tahoma",
+                  gridColumn: f.id==="شركاء"?"span 2":"span 1" }}>
                 <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:10 }}>
-                  <span style={{ fontSize:20 }}>{icon}</span>
-                  <span style={{ fontSize:13, fontWeight:700, color }}>{label}</span>
+                  <span style={{ fontSize:20 }}>{f.icon}</span>
+                  <span style={{ fontSize:13, fontWeight:700, color:f.color }}>{f.label}</span>
+                  <span style={{ marginRight:"auto", fontSize:10, color:f.color,
+                    background:"#fff", borderRadius:20, padding:"2px 8px" }}>← تفاصيل</span>
                 </div>
                 <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:6 }}>
                   <div style={{ background:"#fff", borderRadius:8, padding:"8px", textAlign:"center" }}>
                     <div style={{ fontSize:9, color:"#64748B", marginBottom:2 }}>🇮🇶 دينار</div>
-                    <div style={{ fontSize:14, fontWeight:700, color }}>{fNum(f.din)} د.ع</div>
+                    <div style={{ fontSize:13, fontWeight:700, color:f.color }}>{fNum(bal.din)}</div>
                   </div>
                   <div style={{ background:"#fff", borderRadius:8, padding:"8px", textAlign:"center" }}>
                     <div style={{ fontSize:9, color:"#64748B", marginBottom:2 }}>🇺🇸 دولار</div>
-                    <div style={{ fontSize:14, fontWeight:700, color:"#2563EB" }}>{fNum(f.dol)} $</div>
+                    <div style={{ fontSize:13, fontWeight:700, color:"#2563EB" }}>{fNum(bal.dol)}</div>
                   </div>
                 </div>
-              </div>
+              </button>
             );
           })}
-          {/* صندوق أرباح الشركاء — بطاقة كاملة */}
-          {(() => {
-            const sf = funds["شركاء"] || { din:0, dol:0 };
-            return (
-              <div style={{ background:"#FAF5FF", borderRadius:14, padding:"14px 16px",
-                border:"1.5px solid #9333EA40", gridColumn:"span 2" }}>
-                <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between",
-                  marginBottom:10 }}>
-                  <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-                    <span style={{ fontSize:20 }}>👥</span>
-                    <span style={{ fontSize:13, fontWeight:700, color:"#9333EA" }}>أرباح الشركاء</span>
-                  </div>
-                  <div style={{ display:"flex", gap:12, alignItems:"center" }}>
-                    <span style={{ fontSize:13, fontWeight:700, color:"#9333EA" }}>
-                      {fNum(sf.din)} <span style={{fontSize:10}}>د.ع</span>
-                    </span>
-                    {sf.dol > 0 && (
-                      <span style={{ fontSize:13, fontWeight:700, color:"#2563EB" }}>
-                        {fNum(sf.dol)} <span style={{fontSize:10}}>$</span>
-                      </span>
-                    )}
-                    {/* زر توزيع الرصيد الحالي لأول مرة */}
-                    {sf.din + sf.dol > 0 && (() => {
-                      const sumDin = PARTNERS.reduce((s,p)=>s+(funds["partner_"+p.id]?.din||0),0);
-                      const sumDol = PARTNERS.reduce((s,p)=>s+(funds["partner_"+p.id]?.dol||0),0);
-                      if (Math.abs(sumDin - sf.din) < 2 && Math.abs(sumDol - sf.dol) < 2) return null;
-                      return (
-                        <button onClick={async () => {
-                          for (const p of PARTNERS) {
-                            const pDin = Math.round(sf.din * p.pct / 100);
-                            const pDol = Math.round(sf.dol * p.pct / 100);
-                            await setDoc(doc(db,"funds","partner_"+p.id),
-                              { din: pDin, dol: pDol }, { merge: true });
-                          }
-                        }} style={{ fontSize:10, color:"#9333EA", background:"#fff",
-                          border:"1px solid #9333EA", borderRadius:6, padding:"3px 8px",
-                          cursor:"pointer", fontFamily:"Tahoma", fontWeight:700 }}>
-                          🔄 توزيع
-                        </button>
-                      );
-                    })()}
-                  </div>
-                </div>
-                <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
-                  {PARTNERS.map(p => {
-                    const pf = funds["partner_"+p.id] || { din:0, dol:0 };
-                    return (
-                      <button key={p.id} onClick={() => setPartnerPage(p)}
-                        style={{ background:p.bg, border:"1.5px solid "+p.color+"50",
-                          borderRadius:12, padding:"12px", textAlign:"right",
-                          cursor:"pointer", fontFamily:"Tahoma" }}>
-                        <div style={{ display:"flex", justifyContent:"space-between",
-                          alignItems:"center", marginBottom:6 }}>
-                          <span style={{ fontSize:12, fontWeight:700, color:p.color,
-                            background:"#fff", borderRadius:20, padding:"2px 8px" }}>
-                            {p.pct}%
-                          </span>
-                          <span style={{ fontSize:13, fontWeight:700, color:"#1E293B" }}>
-                            {p.name}
-                          </span>
-                        </div>
-                        <div style={{ fontSize:14, fontWeight:700, color:p.color }}>
-                          {fNum(pf.din)} <span style={{fontSize:10, color:"#64748B"}}>د.ع</span>
-                        </div>
-                        {pf.dol > 0 && (
-                          <div style={{ fontSize:12, fontWeight:700, color:"#2563EB" }}>
-                            {fNum(pf.dol)} <span style={{fontSize:10, color:"#64748B"}}>$</span>
-                          </div>
-                        )}
-                        <div style={{ fontSize:10, color:"#9333EA", marginTop:5, fontWeight:600 }}>
-                          اضغط للسحب ←
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            );
-          })()}
         </div>
+
         {/* صناديق الأقسام */}
-        <div style={{ fontSize:13, fontWeight:700, color:"#64748B", marginBottom:10 }}>
-          صناديق الأقسام
+        <div style={{ fontSize:13, fontWeight:700, color:"#1E293B", marginBottom:10 }}>
+          🏗️ صناديق الأقسام
         </div>
-        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
-          {TYPES.map(({ val, icon, color, bg }) => {
-            const f = funds[val] || { din:0, dol:0 };
+        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:20 }}>
+          {DEPT_FUNDS.map(f => {
+            const bal = funds[f.id] || { din:0, dol:0 };
             return (
-              <div key={val} style={{ background:bg, borderRadius:14, padding:"14px 16px",
-                border:"1.5px solid "+color+"40" }}>
+              <button key={f.id} onClick={() => { setSelFund(f); setPage("fund"); }}
+                style={{ background:f.bg, border:"1.5px solid "+f.color+"40",
+                  borderRadius:14, padding:"14px", textAlign:"right",
+                  cursor:"pointer", fontFamily:"Tahoma" }}>
                 <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:10 }}>
-                  <span style={{ fontSize:18 }}>{icon}</span>
-                  <span style={{ fontSize:13, fontWeight:700, color }}>{val}</span>
+                  <span style={{ fontSize:18 }}>{f.icon}</span>
+                  <span style={{ fontSize:13, fontWeight:700, color:f.color }}>{f.label}</span>
                 </div>
                 <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:6 }}>
                   <div style={{ background:"#fff", borderRadius:8, padding:"8px", textAlign:"center" }}>
                     <div style={{ fontSize:9, color:"#64748B", marginBottom:2 }}>🇮🇶</div>
-                    <div style={{ fontSize:13, fontWeight:700, color }}>{fNum(f.din)} د.ع</div>
+                    <div style={{ fontSize:13, fontWeight:700, color:f.color }}>{fNum(bal.din)} د.ع</div>
                   </div>
                   <div style={{ background:"#fff", borderRadius:8, padding:"8px", textAlign:"center" }}>
                     <div style={{ fontSize:9, color:"#64748B", marginBottom:2 }}>🇺🇸</div>
-                    <div style={{ fontSize:14, fontWeight:700, color:"#2563EB" }}>{fNum(f.dol)} $</div>
+                    <div style={{ fontSize:13, fontWeight:700, color:"#2563EB" }}>{fNum(bal.dol)} $</div>
                   </div>
                 </div>
-              </div>
+              </button>
             );
           })}
         </div>
-      </div>
-    </div>
-  );
 
-  return (
-    <div style={{ minHeight: "100vh", background: "#F1F5F9",
-      fontFamily: "Tahoma", direction: "rtl" }}>
-      <div style={{ maxWidth: 640, margin: "0 auto", padding: "22px 16px" }}>
-        {/* رجوع للرئيسية */}
-        <button onClick={() => setPage("financial")} style={{
-          background: "#fff", border: "1px solid #E2E8F0", borderRadius: 10,
-          padding: "8px 16px", fontSize: 13, color: "#475569", cursor: "pointer",
-          marginBottom: 16, fontFamily: "Tahoma", display: "flex",
-          alignItems: "center", gap: 6
-        }}>← رجوع للقسم المالي</button>
-
-        {/* هيدر */}
-        <div style={{ background: "#fff", borderRadius: 14, padding: "16px 20px",
-          marginBottom: 16, border: "1px solid #E2E8F0", borderTop: "4px solid #D97706" }}>
-          <div style={{ fontSize: 20, fontWeight: 700, color: "#1E293B" }}>🏗️ صندوق المشاريع</div>
-          <div style={{ display: "flex", gap: 16, marginTop: 6, alignItems: "center" }}>
-            <span style={{ fontSize: 13, color: "#16A34A", fontWeight: 600 }}>● {active.length} قيد العمل</span>
-            <span style={{ fontSize: 13, color: "#64748B", fontWeight: 600 }}>✓ {done.length} منتهية</span>
-            <button onClick={testFirebase} style={{ fontSize: 11, background: "#F0FDF4", border: "1px solid #16A34A", borderRadius: 7, padding: "4px 10px", cursor: "pointer", color: "#16A34A", fontFamily: "Tahoma", fontWeight: 700 }}>🔌 اختبار</button>
-          </div>
-        </div>
-
-        {/* تبويبات */}
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 14 }}>
-          {[["active","● قيد العمل","#16A34A"],["done","✓ منتهية","#64748B"]].map(([v,l,c]) => (
-            <button key={v} onClick={() => setTab(v)} style={{
-              border: tab === v ? "none" : "1px solid #E2E8F0",
-              borderRadius: 10, padding: "12px", cursor: "pointer",
-              fontFamily: "Tahoma", fontSize: 14, fontWeight: 700,
-              background: tab === v ? c : "#fff",
-              color: tab === v ? "#fff" : "#64748B"
-            }}>{l} ({v === "active" ? active.length : done.length})</button>
-          ))}
-        </div>
-
-        {/* أزرار */}
-        <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
-          {tab === "active" && (
-            <button onClick={() => { setShowForm(v => !v); setForm(emptyForm); }} style={{
-              flex: 1,
-            width: "100%", background: showForm ? "#475569" : "#D97706",
-            border: "none", borderRadius: 12, padding: "13px",
-              color: "#fff", fontSize: 15, fontWeight: 700,
-              cursor: "pointer", fontFamily: "Tahoma"
-            }}>
-              {showForm ? "✕ إلغاء" : "+ إضافة مشروع جديد"}
-            </button>
-          )}
-          <button onClick={resetAllProjects} style={{
-            background: "#FFF1F2", border: "1px solid #FEE2E2",
-            borderRadius: 12, padding: "13px 16px", cursor: "pointer",
-            color: "#DC2626", fontFamily: "Tahoma", fontSize: 13, fontWeight: 700,
-            whiteSpace: "nowrap"
-          }}>
-            🗑️ تصفير
-          </button>
-        </div>
-
-        {/* فورم */}
-        {showForm && tab === "active" && (
-          <div style={{ background: "#fff", borderRadius: 14, padding: 20,
-            border: "1px solid #E2E8F0", marginBottom: 16 }}>
-
-            {/* نوع المشروع */}
-            <div style={{ fontSize: 13, color: "#64748B", fontWeight: 600, marginBottom: 8 }}>
-              نوع المشروع *
+        {/* التقارير */}
+        <button onClick={() => setPage("reports")} style={{
+          width:"100%", background:"#fff", border:"1px solid #E2E8F0",
+          borderTop:"4px solid #7C3AED", borderRadius:14, padding:"16px 20px",
+          cursor:"pointer", textAlign:"right", fontFamily:"Tahoma", marginBottom:14 }}>
+          <div style={{ display:"flex", alignItems:"center", gap:12 }}>
+            <div style={{ width:44, height:44, borderRadius:12, background:"#F5F3FF",
+              display:"flex", alignItems:"center", justifyContent:"center", fontSize:22 }}>
+              📊
             </div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 18 }}>
-              {TYPES.map(({ val, icon, color, bg }) => (
-                <button key={val} onClick={() => sf("type")(val)} style={{
-                  border: "2px solid " + (form.type === val ? color : "#E2E8F0"),
-                  borderRadius: 12, padding: "14px 10px", cursor: "pointer",
-                  fontFamily: "Tahoma", fontSize: 14, fontWeight: 700,
-                  display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
-                  background: form.type === val ? bg : "#fff",
-                  color: form.type === val ? color : "#94A3B8"
-                }}>
-                  <span style={{ fontSize: 22 }}>{icon}</span> {val}
-                </button>
-              ))}
-            </div>
-
-            {/* اسم المشروع */}
-            <div style={{ fontSize: 13, color: "#64748B", fontWeight: 600, marginBottom: 6 }}>
-              اسم المشروع *
-            </div>
-            <input autoFocus placeholder="أدخل اسم المشروع..." value={form.name}
-              onChange={e => sf("name")(e.target.value)}
-              style={{ width: "100%", border: "1px solid #CBD5E1", borderRadius: 10,
-                padding: "12px 14px", fontSize: 15, outline: "none", fontFamily: "Tahoma",
-                direction: "rtl", marginBottom: 14, boxSizing: "border-box",
-                background: "#F8FAFC", color: "#1E293B" }}/>
-
-            {/* المحافظة */}
-            <div style={{ fontSize: 13, color: "#64748B", fontWeight: 600, marginBottom: 6 }}>
-              المحافظة *
-            </div>
-            <select value={form.province} onChange={e => sf("province")(e.target.value)}
-              style={{ width: "100%", border: "1px solid #CBD5E1", borderRadius: 10,
-                padding: "12px 14px", fontSize: 15, outline: "none", fontFamily: "Tahoma",
-                direction: "rtl", marginBottom: 14, boxSizing: "border-box",
-                background: "#F8FAFC", color: form.province ? "#1E293B" : "#94A3B8",
-                appearance: "none" }}>
-              <option value="">اختر المحافظة...</option>
-              {PROVINCES.map(pr => <option key={pr} value={pr}>{pr}</option>)}
-            </select>
-
-            {/* المدينة */}
-            <div style={{ fontSize: 13, color: "#64748B", fontWeight: 600, marginBottom: 6 }}>
-              المدينة
-            </div>
-            <input placeholder="اسم المنطقة أو المدينة..." value={form.city}
-              onChange={e => sf("city")(e.target.value)}
-              style={{ width: "100%", border: "1px solid #CBD5E1", borderRadius: 10,
-                padding: "12px 14px", fontSize: 15, outline: "none", fontFamily: "Tahoma",
-                direction: "rtl", marginBottom: 14, boxSizing: "border-box",
-                background: "#F8FAFC", color: "#1E293B" }}/>
-
-            {/* مدة المشروع بالأيام */}
-            <div style={{ fontSize: 13, color: "#64748B", fontWeight: 600, marginBottom: 6 }}>
-              مدة المشروع بالأيام *
-            </div>
-            <input placeholder="مثال: 90" value={form.days} inputMode="numeric"
-              onChange={e => sf("days")(e.target.value.replace(/[^0-9]/g, ""))}
-              style={{ width: "100%", border: "1px solid #CBD5E1", borderRadius: 10,
-                padding: "12px 14px", fontSize: 15, outline: "none", fontFamily: "Tahoma",
-                direction: "rtl", marginBottom: 4, boxSizing: "border-box",
-                background: "#F8FAFC", color: "#1E293B",
-                MozAppearance: "textfield", WebkitAppearance: "none" }}/>
-            {Number(form.days) > 0 && (
-              <div style={{ fontSize: 12, color: "#059669", fontWeight: 600, marginBottom: 14 }}>
-                ✍️ {w2(Number(form.days))} يوم
+            <div>
+              <div style={{ fontSize:15, fontWeight:700, color:"#1E293B" }}>التقارير</div>
+              <div style={{ fontSize:12, color:"#64748B", marginTop:2 }}>
+                تقارير مالية شاملة بفلاتر متعددة
               </div>
-            )}
-            {!Number(form.days) && <div style={{ marginBottom: 10 }}/>}
-
-            {/* قيمة المشروع */}
-            <div style={{ fontSize: 13, color: "#64748B", fontWeight: 600, marginBottom: 8 }}>
-              قيمة المشروع * (دينار و/أو دولار)
             </div>
-            <div style={{ background: "#F8FAFC", borderRadius: 12, padding: 14,
-              border: "1px solid #E2E8F0", marginBottom: 14 }}>
-              <div style={{ fontSize: 12, color: "#16A34A", fontWeight: 600, marginBottom: 6 }}>
-                🇮🇶 الدينار العراقي
-              </div>
-              <input placeholder="٠" value={form.valueDin} inputMode="numeric"
-                onChange={e => sf("valueDin")(e.target.value.replace(/[^0-9]/g, ""))}
-                style={{ width: "100%", border: "1px solid #CBD5E1", borderRadius: 10,
-                  padding: "12px 14px", fontSize: 15, outline: "none", fontFamily: "Tahoma",
-                  direction: "rtl", marginBottom: 4, boxSizing: "border-box",
-                  background: "#fff", color: "#1E293B",
-                  MozAppearance: "textfield", WebkitAppearance: "none" }}/>
-              {Number(form.valueDin) > 0 && (
-                <div style={{ fontSize: 12, color: "#16A34A", fontWeight: 600, marginBottom: 12 }}>
-                  ✍️ {w2(Number(form.valueDin))} دينار — {fNum(form.valueDin)} د.ع
-                </div>
-              )}
-              {!Number(form.valueDin) && <div style={{ marginBottom: 12 }}/>}
-              <div style={{ fontSize: 12, color: "#2563EB", fontWeight: 600, marginBottom: 6 }}>
-                🇺🇸 الدولار الأمريكي
-              </div>
-              <input placeholder="٠" value={form.valueDol} inputMode="numeric"
-                onChange={e => sf("valueDol")(e.target.value.replace(/[^0-9]/g, ""))}
-                style={{ width: "100%", border: "1px solid #CBD5E1", borderRadius: 10,
-                  padding: "12px 14px", fontSize: 15, outline: "none", fontFamily: "Tahoma",
-                  direction: "rtl", marginBottom: 4, boxSizing: "border-box",
-                  background: "#fff", color: "#1E293B",
-                  MozAppearance: "textfield", WebkitAppearance: "none" }}/>
-              {Number(form.valueDol) > 0 && (
-                <div style={{ fontSize: 12, color: "#2563EB", fontWeight: 600 }}>
-                  ✍️ {w2(Number(form.valueDol))} دولار — {fNum(form.valueDol)} $
-                </div>
-              )}
-            </div>
-
-            {/* تاريخ بداية العمل */}
-            <div style={{ fontSize: 13, color: "#64748B", fontWeight: 600, marginBottom: 6 }}>
-              تاريخ بداية العمل *
-            </div>
-            <input type="date" value={form.startDate}
-              onChange={e => sf("startDate")(e.target.value)}
-              style={{ width: "100%", border: "1px solid #CBD5E1", borderRadius: 10,
-                padding: "12px 14px", fontSize: 15, outline: "none", fontFamily: "Tahoma",
-                direction: "rtl", marginBottom: 16, boxSizing: "border-box",
-                background: "#F8FAFC", color: "#1E293B" }}/>
-
-            <button onClick={addProject} disabled={!valid} style={{
-              width: "100%", border: "none", borderRadius: 10, padding: "13px",
-              fontSize: 15, fontWeight: 700, fontFamily: "Tahoma",
-              cursor: valid && !saving ? "pointer" : "not-allowed",
-              background: valid && !saving ? "#D97706" : "#E2E8F0",
-              color: valid && !saving ? "#fff" : "#94A3B8"
-            }}>
-              {saving ? "⏳ جاري الحفظ..." : "✅ حفظ المشروع"}
-            </button>
-          </div>
-        )}
-
-        {/* قائمة المشاريع */}
-        {list.length === 0 ? (
-          <div style={{ textAlign: "center", padding: 40, color: "#94A3B8",
-            background: "#fff", borderRadius: 14, border: "1px solid #E2E8F0" }}>
-            <div style={{ fontSize: 40, marginBottom: 8 }}>{tab === "active" ? "🏗️" : "✅"}</div>
-            <div style={{ fontSize: 15 }}>
-              {tab === "active" ? "ما في مشاريع قيد العمل" : "ما في مشاريع منتهية"}
-            </div>
-          </div>
-        ) : list.map(p => <ProjectCard key={p.id} p={p}
-            onOpen={() => { setSelProj(p); setPage("proj"); }}
-            onToggle={() => toggleStatus(p.id, p.status)}
-            onDelete={() => deleteProject(p.id)}
-            onEdit={editProject} />
-        )}
-      </div>
-    </div>
-  );
-}
-
-function HomePage({ onSelect }) {
-  return (
-    <div style={{ minHeight: "100vh", background: "#1E293B",
-      fontFamily: "Tahoma", direction: "rtl",
-      display: "flex", flexDirection: "column",
-      alignItems: "center", justifyContent: "center", padding: 20 }}>
-
-      {/* الشعار */}
-      <div style={{ textAlign: "center", marginBottom: 40 }}>
-        <div style={{ fontSize: 48, marginBottom: 12 }}>🏗️</div>
-        <div style={{ fontSize: 24, fontWeight: 700, color: "#fff" }}>
-          شركة باب المشاريع
-        </div>
-        <div style={{ fontSize: 13, color: "#94A3B8", marginTop: 6 }}>
-          اختر القسم للمتابعة
-        </div>
-      </div>
-
-      {/* القسمان */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr",
-        gap: 16, width: "100%", maxWidth: 500 }}>
-
-        {/* القسم المالي */}
-        <button onClick={() => onSelect("financial")} style={{
-          background: "linear-gradient(135deg, #D97706, #F59E0B)",
-          border: "none", borderRadius: 20, padding: "32px 16px",
-          cursor: "pointer", textAlign: "center", fontFamily: "Tahoma",
-          boxShadow: "0 8px 32px rgba(217,119,6,0.4)",
-          transition: "transform 0.15s"
-        }}
-          onMouseEnter={e => e.currentTarget.style.transform = "scale(1.03)"}
-          onMouseLeave={e => e.currentTarget.style.transform = "scale(1)"}>
-          <div style={{ fontSize: 40, marginBottom: 10 }}>💰</div>
-          <div style={{ fontSize: 18, fontWeight: 700, color: "#fff", marginBottom: 6 }}>
-            القسم المالي
-          </div>
-          <div style={{ fontSize: 12, color: "#FEF3C7" }}>
-            المشاريع · الصرف · الإيرادات
+            <span style={{ marginRight:"auto", fontSize:12, color:"#7C3AED", fontWeight:600 }}>
+              ← فتح
+            </span>
           </div>
         </button>
 
-        {/* القسم الإداري */}
-        <button onClick={() => onSelect("admin")} style={{
-          background: "linear-gradient(135deg, #1D4ED8, #3B82F6)",
-          border: "none", borderRadius: 20, padding: "32px 16px",
-          cursor: "pointer", textAlign: "center", fontFamily: "Tahoma",
-          boxShadow: "0 8px 32px rgba(29,78,216,0.4)",
-          transition: "transform 0.15s"
-        }}
-          onMouseEnter={e => e.currentTarget.style.transform = "scale(1.03)"}
-          onMouseLeave={e => e.currentTarget.style.transform = "scale(1)"}>
-          <div style={{ fontSize: 40, marginBottom: 10 }}>📋</div>
-          <div style={{ fontSize: 18, fontWeight: 700, color: "#fff", marginBottom: 6 }}>
-            القسم الإداري
-          </div>
-          <div style={{ fontSize: 12, color: "#DBEAFE" }}>
-            إدارة العمل · الموظفون · المهام
+        {/* الأصول */}
+        <button onClick={() => setPage("assets")} style={{
+          width:"100%", background:"#fff", border:"1px solid #E2E8F0",
+          borderTop:"4px solid #0891B2", borderRadius:14, padding:"16px 20px",
+          cursor:"pointer", textAlign:"right", fontFamily:"Tahoma", marginBottom:14 }}>
+          <div style={{ display:"flex", alignItems:"center", gap:12 }}>
+            <div style={{ width:44, height:44, borderRadius:12, background:"#ECFEFF",
+              display:"flex", alignItems:"center", justifyContent:"center", fontSize:22 }}>
+              📦
+            </div>
+            <div>
+              <div style={{ fontSize:15, fontWeight:700, color:"#1E293B" }}>الأصول الثابتة</div>
+              <div style={{ fontSize:12, color:"#64748B", marginTop:2 }}>
+                معدات، مركبات، عقارات وغيرها
+              </div>
+            </div>
+            <span style={{ marginRight:"auto", fontSize:12, color:"#0891B2", fontWeight:600 }}>
+              ← إدارة
+            </span>
           </div>
         </button>
-      </div>
-    </div>
-  );
-}
 
-function AdminPage({ onBack }) {
-  const [tasks, setTasks]       = useState([]);
-  const [activeProjs, setActiveProjs] = useState([]);
-  const [text, setText]         = useState("");
-  const [selProj, setSelProj]   = useState("");  // ربط بمشروع
-  const [filter, setFilter]     = useState("all");
-  const today = new Date().toISOString().split("T")[0];
-
-  useEffect(() => {
-    return onSnapshot(collection(db, "daily_tasks"), snap => {
-      const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-      list.sort((a,b) => (b.createdAt||"").localeCompare(a.createdAt||""));
-      setTasks(list);
-    });
-  }, []);
-
-  // جلب المشاريع المفتوحة من القسم المالي
-  useEffect(() => {
-    return onSnapshot(collection(db, "projects"), snap => {
-      const list = snap.docs.map(d => ({ id: d.id, ...d.data() }))
-        .filter(p => p.status === "active")
-        .sort((a,b) => (a.name||"").localeCompare(b.name||""));
-      setActiveProjs(list);
-    });
-  }, []);
-
-  const addTask = () => {
-    if (!text.trim()) return;
-    const proj = activeProjs.find(p => p.id === selProj);
-    addDoc(collection(db, "daily_tasks"), {
-      text: text.trim(),
-      date: today,
-      done: false,
-      projectId:   proj?.id   || "",
-      projectName: proj?.name || "",
-      createdAt: new Date().toISOString()
-    });
-    setText("");
-    setSelProj("");
-  };
-
-  const toggleDone = (id, done) => {
-    updateDoc(doc(db, "daily_tasks", id), { done: !done });
-  };
-
-  const deleteTask = id => {
-    deleteDoc(doc(db, "daily_tasks", id));
-  };
-
-  const todayTasks = tasks.filter(t => t.date === today);
-  const oldTasks   = tasks.filter(t => t.date !== today);
-  const pending    = todayTasks.filter(t => !t.done).length;
-  const done_count = todayTasks.filter(t => t.done).length;
-
-  return (
-    <div style={{ minHeight: "100vh", background: "#F1F5F9",
-      fontFamily: "Tahoma", direction: "rtl" }}>
-      <div style={{ maxWidth: 600, margin: "0 auto", padding: "22px 16px" }}>
-
-        <button onClick={onBack} style={{ background: "#fff", border: "1px solid #E2E8F0",
-          borderRadius: 10, padding: "8px 16px", fontSize: 13, color: "#475569",
-          cursor: "pointer", marginBottom: 16, fontFamily: "Tahoma",
-          display: "flex", alignItems: "center", gap: 6 }}>
-          ← رجوع للرئيسية
+        {/* الموظفين */}
+        <button onClick={() => setPage("employees")} style={{
+          width:"100%", background:"#fff", border:"1px solid #E2E8F0",
+          borderTop:"4px solid #0284C7", borderRadius:14, padding:"16px 20px",
+          cursor:"pointer", textAlign:"right", fontFamily:"Tahoma" }}>
+          <div style={{ display:"flex", alignItems:"center", gap:12 }}>
+            <div style={{ width:44, height:44, borderRadius:12, background:"#F0F9FF",
+              display:"flex", alignItems:"center", justifyContent:"center", fontSize:22 }}>
+              👷
+            </div>
+            <div>
+              <div style={{ fontSize:15, fontWeight:700, color:"#1E293B" }}>الموظفون</div>
+              <div style={{ fontSize:12, color:"#64748B", marginTop:2 }}>
+                {employees.length} موظف مسجل
+              </div>
+            </div>
+            <span style={{ marginRight:"auto", fontSize:12, color:"#0284C7", fontWeight:600 }}>
+              ← إدارة
+            </span>
+          </div>
         </button>
 
-        {/* هيدر */}
-        <div style={{ background: "linear-gradient(135deg,#1D4ED8,#3B82F6)",
-          borderRadius: 16, padding: "18px 20px", marginBottom: 16 }}>
-          <div style={{ fontSize: 20, fontWeight: 700, color: "#fff", marginBottom: 4 }}>
-            📋 القسم الإداري
-          </div>
-          <div style={{ display: "flex", gap: 16 }}>
-            <span style={{ fontSize: 13, color: "#DBEAFE" }}>
-              ⏳ {pending} معلقة اليوم
-            </span>
-            <span style={{ fontSize: 13, color: "#BBF7D0" }}>
-              ✅ {done_count} منجزة اليوم
-            </span>
-          </div>
-        </div>
-
-        {/* إضافة مهمة */}
-        <div style={{ background: "#fff", borderRadius: 14, padding: 16,
-          border: "1px solid #E2E8F0", marginBottom: 16 }}>
-          <div style={{ fontSize: 14, fontWeight: 700, color: "#1E293B", marginBottom: 12 }}>
-            ➕ إضافة عمل جديد
-          </div>
-          {/* ربط بمشروع */}
-          <div style={{ marginBottom: 10 }}>
-            <div style={{ fontSize: 12, color: "#64748B", fontWeight: 600, marginBottom: 6 }}>
-              🏗️ ربط بمشروع (اختياري)
-            </div>
-            <select value={selProj} onChange={e => setSelProj(e.target.value)}
-              style={{ width: "100%", border: "1px solid #CBD5E1", borderRadius: 10,
-                padding: "10px 14px", fontSize: 14, outline: "none", fontFamily: "Tahoma",
-                direction: "rtl", background: selProj ? "#EFF6FF" : "#F8FAFC",
-                color: selProj ? "#2563EB" : "#94A3B8",
-                fontWeight: selProj ? 700 : 400, appearance: "none",
-                boxSizing: "border-box" }}>
-              <option value="">— بدون ربط —</option>
-              {activeProjs.map(p => {
-                const ts = typeStyle(p.type);
-                return <option key={p.id} value={p.id}>{ts.icon} {p.name}{p.province?" — "+p.province:""}</option>;
-              })}
-            </select>
-            {activeProjs.length === 0 && (
-              <div style={{ fontSize: 11, color: "#94A3B8", marginTop: 4 }}>
-                ما في مشاريع مفتوحة حالياً
-              </div>
-            )}
-          </div>
-          <div style={{ display: "flex", gap: 8 }}>
-            <input
-              placeholder="اكتب المهمة أو العمل المطلوب..."
-              value={text}
-              onChange={e => setText(e.target.value)}
-              onKeyDown={e => e.key === "Enter" && addTask()}
-              style={{ flex: 1, border: "1px solid #CBD5E1", borderRadius: 10,
-                padding: "11px 14px", fontSize: 14, outline: "none",
-                fontFamily: "Tahoma", direction: "rtl", background: "#F8FAFC",
-                color: "#1E293B" }}
-            />
-            <button onClick={addTask} disabled={!text.trim()} style={{
-              background: text.trim() ? "#2563EB" : "#E2E8F0",
-              border: "none", borderRadius: 10, padding: "11px 18px",
-              color: text.trim() ? "#fff" : "#94A3B8",
-              cursor: text.trim() ? "pointer" : "not-allowed",
-              fontSize: 14, fontWeight: 700, fontFamily: "Tahoma", whiteSpace: "nowrap"
-            }}>
-              إضافة
-            </button>
-          </div>
-        </div>
-
-        {/* فلتر */}
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr",
-          gap: 6, marginBottom: 14 }}>
-          {[["all","الكل"],["pending","⏳ معلقة"],["done","✅ منجزة"]].map(([v,l]) => (
-            <button key={v} onClick={() => setFilter(v)} style={{
-              border: filter === v ? "none" : "1px solid #E2E8F0",
-              borderRadius: 10, padding: "10px", cursor: "pointer",
-              fontFamily: "Tahoma", fontSize: 13, fontWeight: 700,
-              background: filter === v ? "#2563EB" : "#fff",
-              color: filter === v ? "#fff" : "#64748B"
-            }}>{l}</button>
-          ))}
-        </div>
-
-        {/* مهام اليوم */}
-        <div style={{ fontSize: 13, fontWeight: 700, color: "#1D4ED8",
-          marginBottom: 10, display: "flex", alignItems: "center", gap: 6 }}>
-          <div style={{ width: 3, height: 16, background: "#2563EB", borderRadius: 2 }}/>
-          أعمال اليوم — {today}
-        </div>
-
-        {todayTasks.filter(t =>
-          filter === "all" ? true :
-          filter === "pending" ? !t.done : t.done
-        ).length === 0 ? (
-          <div style={{ textAlign: "center", padding: 28, color: "#94A3B8",
-            background: "#fff", borderRadius: 12, border: "1px solid #E2E8F0",
-            marginBottom: 14 }}>
-            {filter === "done" ? "ما في أعمال منجزة اليوم" : "ما في أعمال بعد، أضف عملك الأول ↑"}
-          </div>
-        ) : (
-          todayTasks.filter(t =>
-            filter === "all" ? true :
-            filter === "pending" ? !t.done : t.done
-          ).map(t => (
-            <div key={t.id} style={{ background: "#fff", borderRadius: 12,
-              padding: "13px 16px", marginBottom: 10, border: "1px solid #E2E8F0",
-              borderRight: "4px solid " + (t.done ? "#16A34A" : "#2563EB"),
-              opacity: t.done ? 0.75 : 1 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                {/* تشيك بوكس */}
-                <button onClick={() => toggleDone(t.id, t.done)} style={{
-                  width: 26, height: 26, borderRadius: 7, cursor: "pointer",
-                  border: "2px solid " + (t.done ? "#16A34A" : "#CBD5E1"),
-                  background: t.done ? "#16A34A" : "#fff",
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                  flexShrink: 0, fontSize: 14
-                }}>
-                  {t.done ? "✓" : ""}
-                </button>
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 14, fontWeight: 600,
-                    textDecoration: t.done ? "line-through" : "none",
-                    color: t.done ? "#94A3B8" : "#1E293B" }}>
-                    {t.text}
-                  </div>
-                  {t.projectName && (
-                    <div style={{ fontSize: 11, color: "#2563EB", marginTop: 3,
-                      fontWeight: 600 }}>
-                      🏗️ {t.projectName}
-                    </div>
-                  )}
-                </div>
-                <button onClick={() => deleteTask(t.id)} style={{
-                  background: "none", border: "none", color: "#DC2626",
-                  cursor: "pointer", fontSize: 13, fontFamily: "Tahoma"
-                }}>🗑️</button>
-              </div>
-            </div>
-          ))
-        )}
-
-        {/* أعمال سابقة */}
-        {oldTasks.length > 0 && filter === "all" && (
-          <>
-            <div style={{ fontSize: 13, fontWeight: 700, color: "#94A3B8",
-              marginTop: 20, marginBottom: 10, display: "flex", alignItems: "center", gap: 6 }}>
-              <div style={{ width: 3, height: 14, background: "#CBD5E1", borderRadius: 2 }}/>
-              أعمال سابقة ({oldTasks.length})
-            </div>
-            {oldTasks.map(t => (
-              <div key={t.id} style={{ background: "#FAFAFA", borderRadius: 12,
-                padding: "11px 16px", marginBottom: 8, border: "1px solid #E2E8F0",
-                borderRight: "4px solid #CBD5E1", opacity: 0.8 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                  <div style={{ width: 10, height: 10, borderRadius: "50%", flexShrink: 0,
-                    background: t.done ? "#16A34A" : "#94A3B8" }}/>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: 13, color: "#64748B",
-                      textDecoration: t.done ? "line-through" : "none" }}>
-                      {t.text}
-                    </div>
-                    <div style={{ fontSize: 11, color: "#94A3B8", marginTop: 2 }}>
-                      📅 {t.date}
-                    </div>
-                    {t.projectName && (
-                      <div style={{ fontSize: 11, color: "#2563EB", fontWeight: 600 }}>
-                        🏗️ {t.projectName}
-                      </div>
-                    )}
-                  </div>
-                  <button onClick={() => deleteTask(t.id)} style={{
-                    background: "none", border: "none", color: "#DC2626",
-                    cursor: "pointer", fontSize: 12
-                  }}>🗑️</button>
-                </div>
-              </div>
-            ))}
-          </>
-        )}
       </div>
     </div>
   );
 }
 
-function ProjectCard({ p, onOpen, onToggle, onDelete, onEdit }) {
-  const ts = typeStyle(p.type);
-  const [showEdit, setShowEdit] = React.useState(false);
-  const [ef, setEf] = React.useState({
-    name: p.name||"", province: p.province||"", city: p.city||"",
-    days: String(p.days||""), valueDin: String(p.valueDin||""), valueDol: String(p.valueDol||""),
-    startDate: p.startDate||""
-  });
-  const se = k => v => setEf(x=>({...x,[k]:v}));
-
-  return (
-    <div style={{ background: "#fff", borderRadius: 14, padding: "16px 18px",
-      marginBottom: 14, border: "1px solid #E2E8F0",
-      borderRight: "5px solid " + (ts.color || "#D97706") }}>
-
-      {/* السطر الأول */}
-      <div style={{ display: "flex", justifyContent: "space-between",
-        alignItems: "flex-start", marginBottom: 10 }}>
-        <div style={{ flex: 1 }}>
-          <div style={{ display: "flex", gap: 6, marginBottom: 6, flexWrap: "wrap" }}>
-            {p.type && (
-              <span style={{ fontSize: 11, fontWeight: 600, padding: "3px 10px",
-                borderRadius: 20, background: ts.bg, color: ts.color }}>
-                {ts.icon} {p.type}
-              </span>
-            )}
-            <span style={{ fontSize: 11, fontWeight: 600, padding: "3px 10px",
-              borderRadius: 20,
-              background: p.status === "active" ? "#DCFCE7" : "#F1F5F9",
-              color: p.status === "active" ? "#16A34A" : "#64748B" }}>
-              {p.status === "active" ? "● قيد العمل" : "✓ منتهي"}
-            </span>
-          </div>
-          <div onClick={onOpen} style={{ fontSize: 16, fontWeight: 700,
-            color: "#1E293B", cursor: "pointer", textDecoration: "underline dotted" }}>
-            {p.name}
-          </div>
-          <div style={{ display: "flex", gap: 14, marginTop: 5, flexWrap: "wrap" }}>
-            {p.startDate && <span style={{ fontSize: 12, color: "#64748B" }}>📅 {p.startDate}</span>}
-            {p.days > 0  && <span style={{ fontSize: 12, color: "#64748B" }}>⏱️ {p.days} يوم</span>}
-            {p.province && <span style={{ fontSize: 12, color: "#64748B" }}>📍 {p.province}{p.city?" — "+p.city:""}</span>}
-          </div>
-        </div>
-        <div style={{ display: "flex", flexDirection: "column", gap: 6, marginRight: 8 }}>
-          <button onClick={onToggle} style={{
-            background: p.status === "active" ? "#F0FDF4" : "#FFFBEB",
-            border: "1px solid " + (p.status === "active" ? "#16A34A" : "#D97706"),
-            borderRadius: 8, padding: "5px 10px", cursor: "pointer",
-            fontSize: 11, fontFamily: "Tahoma", fontWeight: 700,
-            color: p.status === "active" ? "#16A34A" : "#D97706"
-          }}>
-            {p.status === "active" ? "✓ إنهاء" : "↩ تفعيل"}
-          </button>
-          <button onClick={e => { e.stopPropagation(); onEdit && setShowEdit(true); }} style={{
-            background: "#EFF6FF", border: "1px solid #BFDBFE",
-            borderRadius: 7, padding: "5px 10px",
-            color: "#2563EB", cursor: "pointer", fontSize: 11,
-            fontFamily: "Tahoma", fontWeight: 700, marginBottom: 4
-          }}>
-            ✏️ تعديل
-          </button>
-          <button onClick={e => { e.stopPropagation(); onDelete(); }} style={{
-            background: "#FFF1F2", border: "1px solid #FEE2E2",
-            borderRadius: 7, padding: "5px 10px",
-            color: "#DC2626", cursor: "pointer", fontSize: 11,
-            fontFamily: "Tahoma", fontWeight: 700
-          }}>
-            🗑️ حذف
-          </button>
-        </div>
-      </div>
-
-      {/* نافذة التعديل */}
-      {showEdit && (
-        <div onClick={e=>e.stopPropagation()} style={{ position:"fixed",inset:0,
-          background:"rgba(0,0,0,0.5)",zIndex:999,display:"flex",
-          alignItems:"center",justifyContent:"center",padding:16 }}>
-          <div style={{ background:"#fff",borderRadius:18,width:"100%",maxWidth:420,
-            maxHeight:"90vh",overflow:"auto",boxShadow:"0 20px 60px rgba(0,0,0,0.25)" }}>
-            <div style={{ padding:"16px 20px",borderBottom:"1px solid #E2E8F0",
-              display:"flex",justifyContent:"space-between",alignItems:"center" }}>
-              <div style={{ fontSize:15,fontWeight:700,color:"#2563EB" }}>✏️ تعديل المشروع</div>
-              <button onClick={()=>setShowEdit(false)} style={{ background:"none",border:"none",
-                fontSize:20,cursor:"pointer",color:"#64748B" }}>✕</button>
-            </div>
-            <div style={{ padding:"18px 20px" }}>
-              {/* نوع المشروع */}
-              <div style={{ fontSize:12,color:"#64748B",fontWeight:600,marginBottom:8 }}>نوع المشروع</div>
-              <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:6,marginBottom:14 }}>
-                {TYPES.map(({val,icon,color,bg})=>(
-                  <button key={val} onClick={()=>se("type")(val)} style={{
-                    border:"2px solid "+(ef.type===val?color:"#E2E8F0"),
-                    borderRadius:10,padding:"10px 8px",cursor:"pointer",
-                    fontFamily:"Tahoma",fontSize:13,fontWeight:700,
-                    display:"flex",alignItems:"center",justifyContent:"center",gap:8,
-                    background:ef.type===val?bg:"#fff",color:ef.type===val?color:"#94A3B8"
-                  }}><span style={{fontSize:18}}>{icon}</span>{val}</button>
-                ))}
-              </div>
-              {[
-                {l:"اسم المشروع",k:"name",ph:"..."},
-                {l:"تاريخ البداية",k:"startDate",ph:"",t:"date"},
-                {l:"المدة بالأيام",k:"days",ph:"90",t:"number"},
-                {l:"قيمة الدينار",k:"valueDin",ph:"٠",t:"number"},
-                {l:"قيمة الدولار",k:"valueDol",ph:"٠",t:"number"},
-              ].map(({l,k,ph,t})=>(
-                <div key={k} style={{marginBottom:12}}>
-                  <div style={{fontSize:12,color:"#64748B",fontWeight:600,marginBottom:5}}>{l}</div>
-                  <input type={t||"text"} placeholder={ph} value={ef[k]||""}
-                    onChange={e=>se(k)(e.target.value)}
-                    style={{width:"100%",border:"1px solid #CBD5E1",borderRadius:9,
-                      padding:"10px 13px",fontSize:14,outline:"none",fontFamily:"Tahoma",
-                      direction:"rtl",boxSizing:"border-box",background:"#F8FAFC"}}/>
-                  {(k==="valueDin"||k==="valueDol") && Number(ef[k])>0 && (
-                    <div style={{fontSize:11,color:"#059669",fontWeight:600,marginTop:3}}>
-                      ✍️ {w2(Number(ef[k]))} {k==="valueDin"?"دينار عراقي":"دولار أمريكي"}
-                    </div>
-                  )}
-                </div>
-              ))}
-              <div style={{marginBottom:12}}>
-                <div style={{fontSize:12,color:"#64748B",fontWeight:600,marginBottom:5}}>المحافظة</div>
-                <select value={ef.province||""} onChange={e=>se("province")(e.target.value)}
-                  style={{width:"100%",border:"1px solid #CBD5E1",borderRadius:9,
-                    padding:"10px 13px",fontSize:14,outline:"none",fontFamily:"Tahoma",
-                    direction:"rtl",boxSizing:"border-box",background:"#F8FAFC",appearance:"none"}}>
-                  <option value="">اختر...</option>
-                  {PROVINCES.map(pr=><option key={pr} value={pr}>{pr}</option>)}
-                </select>
-              </div>
-              <div style={{marginBottom:16}}>
-                <div style={{fontSize:12,color:"#64748B",fontWeight:600,marginBottom:5}}>المدينة</div>
-                <input placeholder="..." value={ef.city||""} onChange={e=>se("city")(e.target.value)}
-                  style={{width:"100%",border:"1px solid #CBD5E1",borderRadius:9,
-                    padding:"10px 13px",fontSize:14,outline:"none",fontFamily:"Tahoma",
-                    direction:"rtl",boxSizing:"border-box",background:"#F8FAFC"}}/>
-              </div>
-              <button onClick={async()=>{
-                const ok = await onEdit(p.id,{
-                  name:ef.name.trim()||p.name,
-                  type:ef.type||p.type,
-                  province:ef.province||p.province||"",
-                  city:ef.city?.trim()||"",
-                  days:Number(ef.days)||p.days||0,
-                  valueDin:Number(ef.valueDin)||0,
-                  valueDol:Number(ef.valueDol)||0,
-                  startDate:ef.startDate||p.startDate||""
-                });
-                if(ok)setShowEdit(false);
-              }} style={{width:"100%",border:"none",borderRadius:10,padding:"13px",
-                fontSize:14,fontWeight:700,fontFamily:"Tahoma",
-                background:"#2563EB",color:"#fff",cursor:"pointer"}}>
-                ✅ حفظ التعديلات
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* الميزان في القائمة */}
-      <div style={{ borderTop: "1px solid #F1F5F9", paddingTop: 10,
-        display: "flex", gap: 8, flexWrap: "wrap" }}>
-        <div style={{ background: (p.balDin||0) >= 0 ? "#FFFBEB" : "#FFF1F2",
-          borderRadius: 9, padding: "7px 12px",
-          border: "1.5px solid " + ((p.balDin||0) >= 0 ? "#D97706" : "#DC2626") }}>
-          <span style={{ fontSize: 10, color: "#64748B" }}>⚖️ ميزان د.ع  </span>
-          <span style={{ fontSize: 13, fontWeight: 700,
-            color: (p.balDin||0) >= 0 ? "#D97706" : "#DC2626" }}>
-            {(p.balDin||0) >= 0 ? "+" : ""}{fNum(p.balDin||0)} د.ع
-          </span>
-        </div>
-        <div style={{ background: (p.balDol||0) >= 0 ? "#EFF6FF" : "#FFF1F2",
-          borderRadius: 9, padding: "7px 12px",
-          border: "1.5px solid " + ((p.balDol||0) >= 0 ? "#2563EB" : "#DC2626") }}>
-          <span style={{ fontSize: 10, color: "#64748B" }}>⚖️ ميزان $  </span>
-          <span style={{ fontSize: 13, fontWeight: 700,
-            color: (p.balDol||0) >= 0 ? "#2563EB" : "#DC2626" }}>
-            {(p.balDol||0) >= 0 ? "+" : ""}{fNum(p.balDol||0)} $
-          </span>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ─── صفحة تفاصيل المشروع ───────────────────────────────
-function ProjectDetail({ proj, onBack }) {
-  const [txs, setTxs]     = useState([]);
-  const [tab, setTab]     = useState("in");
-  const [show, setShow]   = useState(false);
-  const [printFilter, setPrintFilter] = useState("all");
-  const [showPrint, setShowPrint] = useState(false);
-  const [form, setForm]   = useState({
-    amount: "", currency: "دينار", receiver: "", date: new Date().toISOString().split("T")[0], note: ""
-  });
-  const sf = k => v => setForm(f => ({ ...f, [k]: v }));
-  const amt = Number(form.amount) || 0;
-
-  // جلب الحركات
-  useEffect(() => {
-    return onSnapshot(
-      query(collection(db, "project_txs"), where("projectId","==",proj.id)),
-      snap => {
-        const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-        list.sort((a,b) => b.createdAt?.localeCompare(a.createdAt || "") || 0);
-        setTxs(list);
-      }
-    );
-  }, [proj.id]);
-
-  const inTxs  = txs.filter(t => t.type === "in");
-  const outTxs = txs.filter(t => t.type === "out");
-
-  const totalIn  = (cur) => inTxs.filter(t=>t.currency===cur).reduce((s,t)=>s+t.amount,0);
-  const totalOut = (cur) => outTxs.filter(t=>t.currency===cur).reduce((s,t)=>s+t.amount,0);
-
-  const addTx = () => {
-    if (!amt || !form.receiver.trim()) return;
-    const isDol = form.currency === "دولار";
-    // الاستلام: حر بدون حد أقصى
-    // التحقق من عدم تجاوز المصروف للمستلم
-    if (tab === "out") {
-      const curIn  = totalIn(form.currency);
-      const curOut = totalOut(form.currency);
-      const avail  = curIn - curOut;
-      if (amt > avail) {
-        alert(
-          "⛔ لا يمكن الصرف\n" +
-          "المصروف سيتجاوز المستلم!\n\n" +
-          "المتاح للصرف: " + fNum(Math.max(0, avail)) + (isDol ? " $" : " د.ع")
-        );
-        return;
-      }
-    }
-    const isDolCur = form.currency === "دولار";
-    const isIn = tab === "in";
-    // حفظ الحركة
-    addDoc(collection(db, "project_txs"), {
-      projectId: proj.id,
-      projectName: proj.name,
-      type: tab,
-      amount: amt,
-      currency: form.currency,
-      receiver: form.receiver.trim(),
-      date: form.date,
-      note: form.note.trim(),
-      createdAt: new Date().toISOString()
-    });
-    // حساب المجاميع من txs الحالية (دائماً محدّثة) + الحركة الجديدة
-    const curRecDin = inTxs.filter(t=>t.currency!=="دولار").reduce((s,t)=>s+t.amount,0);
-    const curSpdDin = outTxs.filter(t=>t.currency!=="دولار").reduce((s,t)=>s+t.amount,0);
-    const curRecDol = inTxs.filter(t=>t.currency==="دولار").reduce((s,t)=>s+t.amount,0);
-    const curSpdDol = outTxs.filter(t=>t.currency==="دولار").reduce((s,t)=>s+t.amount,0);
-    const newRecDin = !isDolCur && isIn  ? curRecDin + amt : curRecDin;
-    const newSpdDin = !isDolCur && !isIn ? curSpdDin + amt : curSpdDin;
-    const newRecDol = isDolCur  && isIn  ? curRecDol + amt : curRecDol;
-    const newSpdDol = isDolCur  && !isIn ? curSpdDol + amt : curSpdDol;
-    updateDoc(doc(db, "projects", proj.id), {
-      recDin: newRecDin, spdDin: newSpdDin,
-      recDol: newRecDol, spdDol: newSpdDol,
-      balDin: newRecDin - newSpdDin,
-      balDol: newRecDol - newSpdDol
-    });
-    setForm({ amount: "", currency: form.currency, receiver: "", date: form.date, note: "" });
-    setShow(false);
-  };
-
-  // إعادة حساب الميزان تلقائياً كلما تغيرت الحركات
-  useEffect(() => {
-    if (!txs || txs.length === 0) return;
-    const recDin = txs.filter(t=>t.type==="in"&&t.currency!=="دولار").reduce((s,t)=>s+t.amount,0);
-    const spdDin = txs.filter(t=>t.type!=="in"&&t.currency!=="دولار").reduce((s,t)=>s+t.amount,0);
-    const recDol = txs.filter(t=>t.type==="in"&&t.currency==="دولار").reduce((s,t)=>s+t.amount,0);
-    const spdDol = txs.filter(t=>t.type!=="in"&&t.currency==="دولار").reduce((s,t)=>s+t.amount,0);
-    updateDoc(doc(db,"projects",proj.id),{
-      recDin, spdDin, recDol, spdDol,
-      balDin: recDin - spdDin,
-      balDol: recDol - spdDol
-    });
-  }, [txs]);
-
-  const deleteTx = async (id) => {
-    if (!window.confirm("حذف؟")) return;
-    const t = txs.find(x=>x.id===id);
-    if(!t)return;
-    await deleteDoc(doc(db, "project_txs", id));
-    // إعادة حساب الميزان بعد الحذف
-    const isDolCur = t.currency==="دولار";
-    const isIn = t.type==="in";
-    const curRecDin = inTxs.filter(x=>x.currency!=="دولار").reduce((s,x)=>s+x.amount,0);
-    const curSpdDin = outTxs.filter(x=>x.currency!=="دولار").reduce((s,x)=>s+x.amount,0);
-    const curRecDol = inTxs.filter(x=>x.currency==="دولار").reduce((s,x)=>s+x.amount,0);
-    const curSpdDol = outTxs.filter(x=>x.currency==="دولار").reduce((s,x)=>s+x.amount,0);
-    const newRecDin = !isDolCur && isIn  ? curRecDin - t.amount : curRecDin;
-    const newSpdDin = !isDolCur && !isIn ? curSpdDin - t.amount : curSpdDin;
-    const newRecDol = isDolCur  && isIn  ? curRecDol - t.amount : curRecDol;
-    const newSpdDol = isDolCur  && !isIn ? curSpdDol - t.amount : curSpdDol;
-    updateDoc(doc(db,"projects",proj.id),{
-      recDin:Math.max(0,newRecDin), spdDin:Math.max(0,newSpdDin),
-      recDol:Math.max(0,newRecDol), spdDol:Math.max(0,newSpdDol),
-      balDin:Math.max(0,newRecDin)-Math.max(0,newSpdDin),
-      balDol:Math.max(0,newRecDol)-Math.max(0,newSpdDol)
-    });
-  };
-
-  const ts = typeStyle(proj.type);
-
-  const doPrint = (filter) => {
-    const f = filter || printFilter;
-    const list = (f==="in"?inTxs:f==="out"?outTxs:[...inTxs,...outTxs])
-      .sort((a,b)=>{
-        const d=(a.date||"").localeCompare(b.date||"");
-        if(d!==0)return d;
-        return (a.createdAt||"").localeCompare(b.createdAt||"");
-      });
-
-    // بناء الصفوف مع الميزان التراكمي لكل عملة
-    const buildRows = (currency) => {
-      const rows = list.filter(t => !currency || t.currency === currency);
-      let bal = 0;
-      let n = 0;
-      return rows.map(t => {
-        n++;
-        const isIn = t.type === "in";
-        const amt = t.amount || 0;
-        bal = isIn ? bal + amt : bal - amt;
-        const bg = n%2===0?"#F8FAFC":"#fff";
-        const details = [t.receiver, t.note].filter(Boolean).join(" — ") || "—";
-        return `<tr style="background:${bg}">
-          <td style="color:#64748B;font-size:10px">${t.date||""}</td>
-          <td style="text-align:right;padding:7px 10px">${details}</td>
-          <td style="color:#DC2626;font-weight:700;text-align:center">${!isIn?fNum(amt):""}</td>
-          <td style="color:#16A34A;font-weight:700;text-align:center">${isIn?fNum(amt):""}</td>
-          <td style="font-weight:700;text-align:center;color:${bal>=0?"#D97706":"#DC2626"}">${fNum(Math.abs(bal))}</td>
-        </tr>`;
-      }).join("");
-    };
-
-    const rowsDin = buildRows("دينار");
-    const rowsDol = buildRows("دولار");
-    const balDin = totalIn("دينار")-totalOut("دينار");
-    const balDol = totalIn("دولار")-totalOut("دولار");
-
-    const tableStyle = `
-      table{width:100%;border-collapse:collapse;margin-bottom:28px}
-      thead tr{background:#1E3A5F}
-      th{color:#fff;padding:9px 8px;font-size:11px;font-weight:700}
-      td{padding:7px 8px;font-size:11px;border-bottom:1px solid #E2E8F0}
-      .tot td{background:#F1F5F9;font-weight:700;border-top:2px solid #1E3A5F}
-    `;
-
-    const makeTable = (rows, cur, totalIn_, totalOut_, bal_) => {
-      const sym = cur==="دولار"?"$":"د.ع";
-      return `
-      <div style="margin-bottom:6px;font-size:13px;font-weight:700;color:#1E3A5F">
-        ${cur==="دولار"?"🇺🇸 الدولار الأمريكي":"🇮🇶 الدينار العراقي"}
-      </div>
-      <table>
-        <thead><tr>
-          <th style="width:90px">التاريخ</th>
-          <th style="text-align:right">التفاصيل</th>
-          <th style="width:110px">المصاريف</th>
-          <th style="width:110px">المقبوضات</th>
-          <th style="width:110px">الميزان</th>
-        </tr></thead>
-        <tbody>
-          ${rows}
-          <tr class="tot">
-            <td colspan="2" style="text-align:center">الإجمالي</td>
-            <td style="color:#DC2626;text-align:center">${fNum(totalOut_)} ${sym}</td>
-            <td style="color:#16A34A;text-align:center">${fNum(totalIn_)} ${sym}</td>
-            <td style="color:${bal_>=0?"#D97706":"#DC2626"};text-align:center">${fNum(Math.abs(bal_))} ${sym}</td>
-          </tr>
-        </tbody>
-      </table>`;
-    };
-
-    const html = `<!DOCTYPE html><html dir="rtl"><head><meta charset="utf-8"/>
-<style>
-  *{font-family:Tahoma,Arial,sans-serif;box-sizing:border-box}
-  body{margin:0;padding:20px;direction:rtl;color:#1E293B}
-  .header{text-align:center;border-bottom:3px solid #1E3A5F;padding-bottom:12px;margin-bottom:16px}
-  .co{font-size:22px;font-weight:700;letter-spacing:1px}
-  .sub{font-size:13px;color:#64748B;margin-top:4px}
-  .proj-title{font-size:16px;font-weight:700;margin:12px 0 4px;color:#1E3A5F}
-  .proj-info{font-size:11px;color:#64748B;margin-bottom:14px}
-  ${tableStyle}
-  .footer{margin-top:16px;font-size:10px;color:#94A3B8;
-    display:flex;justify-content:space-between;border-top:1px solid #E2E8F0;padding-top:8px}
-  @media print{body{padding:12px}}
-</style></head><body>
-
-<div class="header">
-  <div class="co">شركة باب المشاريع</div>
-  <div class="sub">بغداد — العرصات</div>
-</div>
-
-<div class="proj-title">
-  ${f==="in"?"كشف المقبوضات":f==="out"?"كشف المصاريف":"الكشف الشامل"} — ${proj.name}
-</div>
-<div class="proj-info">
-  ${proj.type?"النوع: "+proj.type+"   ·   ":""}
-  ${proj.province?proj.province+(proj.city?" — "+proj.city:"")+"   ·   ":""}
-  ${proj.startDate?"بداية: "+proj.startDate+"   ·   ":""}
-  ${proj.days?"مدة: "+proj.days+" يوم":""}
-</div>
-
-${(f!=="out"&&totalIn("دينار")+totalOut("دينار")>0)||f==="all"?
-  makeTable(rowsDin,"دينار",totalIn("دينار"),totalOut("دينار"),balDin):""}
-${(f!=="in"&&totalIn("دولار")+totalOut("دولار")>0)||f==="all"?
-  makeTable(rowsDol,"دولار",totalIn("دولار"),totalOut("دولار"),balDol):""}
-
-<div class="footer">
-  <span>شركة باب المشاريع</span>
-  <span>تاريخ الطباعة: ${new Date().toISOString().split("T")[0]}</span>
-</div>
-</body></html>`;
-
-    const w = window.open("","_blank","width=920,height=750");
-    if(!w){alert("السماح بالنوافذ المنبثقة");return;}
-    w.document.write(html);w.document.close();w.focus();
-    setTimeout(()=>w.print(),700);
-  };
-
-  return (
-    <div style={{ minHeight: "100vh", background: "#F1F5F9",
-      fontFamily: "Tahoma", direction: "rtl" }}>
-      <div style={{ maxWidth: 680, margin: "0 auto", padding: "20px 16px" }}>
-
-        {/* رجوع */}
-        <button onClick={onBack} style={{ background: "#fff", border: "1px solid #E2E8F0",
-          borderRadius: 10, padding: "8px 16px", fontSize: 13, color: "#475569",
-          cursor: "pointer", marginBottom: 16, fontFamily: "Tahoma",
-          display: "flex", alignItems: "center", gap: 6 }}>
-          ← رجوع للمشاريع
-        </button>
-
-        {/* بطاقة المشروع */}
-        <div style={{ background: "#fff", borderRadius: 14, padding: "16px 18px",
-          marginBottom: 16, border: "1px solid #E2E8F0",
-          borderTop: "4px solid " + (ts.color || "#D97706") }}>
-          <div style={{ display: "flex", gap: 8, marginBottom: 8, flexWrap: "wrap" }}>
-            {proj.type && (
-              <span style={{ fontSize: 11, fontWeight: 600, padding: "3px 10px",
-                borderRadius: 20, background: ts.bg, color: ts.color }}>
-                {ts.icon} {proj.type}
-              </span>
-            )}
-            <span style={{ fontSize: 11, fontWeight: 600, padding: "3px 10px",
-              borderRadius: 20,
-              background: proj.status === "active" ? "#DCFCE7" : "#F1F5F9",
-              color: proj.status === "active" ? "#16A34A" : "#64748B" }}>
-              {proj.status === "active" ? "● قيد العمل" : "✓ منتهي"}
-            </span>
-          </div>
-          <div style={{ fontSize: 18, fontWeight: 700, color: "#1E293B", marginBottom: 6 }}>
-            {proj.name}
-          </div>
-          <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
-            {proj.startDate && <span style={{ fontSize: 12, color: "#64748B" }}>📅 {proj.startDate}</span>}
-            {proj.days > 0  && <span style={{ fontSize: 12, color: "#64748B" }}>⏱️ {proj.days} يوم</span>}
-            {proj.valueDin > 0 && <span style={{ fontSize: 12, color: "#D97706", fontWeight: 600 }}>
-              🇮🇶 {fNum(proj.valueDin)} د.ع</span>}
-            {proj.valueDol > 0 && <span style={{ fontSize: 12, color: "#2563EB", fontWeight: 600 }}>
-              🇺🇸 {fNum(proj.valueDol)} $</span>}
-          </div>
-        </div>
-
-        {/* ملخص مالي */}
-        <div style={{ background: "#fff", borderRadius: 14, padding: 16,
-          border: "1px solid #E2E8F0", marginBottom: 14 }}>
-          <div style={{ display: "flex", justifyContent: "space-between",
-            alignItems: "center", marginBottom: 12 }}>
-            <div style={{ fontSize: 13, fontWeight: 700, color: "#1E293B" }}>
-              📊 الملخص المالي
-            </div>
-            <button onClick={() => setShowPrint(v => !v)} style={{
-              background: showPrint ? "#475569" : "#D97706", border: "none",
-              borderRadius: 9, padding: "7px 14px", color: "#fff", cursor: "pointer",
-              fontSize: 12, fontFamily: "Tahoma", fontWeight: 700 }}>
-              {showPrint ? "✕ إغلاق" : "🖨️ طباعة الكشف"}
-            </button>
-          </div>
-          {/* الدينار */}
-          <div style={{ marginBottom: 10 }}>
-            <div style={{ fontSize: 11, color: "#64748B", fontWeight: 600, marginBottom: 6 }}>🇮🇶 الدينار العراقي</div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
-              <div style={{ background: "#F0FDF4", borderRadius: 10, padding: "10px", textAlign: "center" }}>
-                <div style={{ fontSize: 10, color: "#64748B", marginBottom: 3 }}>↓ مستلم</div>
-                <div style={{ fontSize: 13, fontWeight: 700, color: "#16A34A" }}>{fNum(totalIn("دينار"))} د.ع</div>
-              </div>
-              <div style={{ background: "#FFF1F2", borderRadius: 10, padding: "10px", textAlign: "center" }}>
-                <div style={{ fontSize: 10, color: "#64748B", marginBottom: 3 }}>↑ مصروف</div>
-                <div style={{ fontSize: 13, fontWeight: 700, color: "#DC2626" }}>{fNum(totalOut("دينار"))} د.ع</div>
-              </div>
-              <div style={{ background: totalIn("دينار")-totalOut("دينار") >= 0 ? "#FFFBEB" : "#FFF1F2",
-                borderRadius: 10, padding: "10px", textAlign: "center",
-                border: "2px solid " + (totalIn("دينار")-totalOut("دينار") >= 0 ? "#D97706" : "#DC2626") }}>
-                <div style={{ fontSize: 10, color: "#64748B", marginBottom: 3 }}>⚖️ الميزان</div>
-                <div style={{ fontSize: 13, fontWeight: 700,
-                  color: totalIn("دينار")-totalOut("دينار") >= 0 ? "#D97706" : "#DC2626" }}>
-                  {totalIn("دينار")-totalOut("دينار") >= 0 ? "+" : ""}{fNum(totalIn("دينار")-totalOut("دينار"))} د.ع
-                </div>
-              </div>
-            </div>
-          </div>
-          {/* الدولار */}
-          <div>
-            <div style={{ fontSize: 11, color: "#64748B", fontWeight: 600, marginBottom: 6 }}>🇺🇸 الدولار الأمريكي</div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
-              <div style={{ background: "#EFF6FF", borderRadius: 10, padding: "10px", textAlign: "center" }}>
-                <div style={{ fontSize: 10, color: "#64748B", marginBottom: 3 }}>↓ مستلم</div>
-                <div style={{ fontSize: 13, fontWeight: 700, color: "#2563EB" }}>{fNum(totalIn("دولار"))} $</div>
-              </div>
-              <div style={{ background: "#FEF2F2", borderRadius: 10, padding: "10px", textAlign: "center" }}>
-                <div style={{ fontSize: 10, color: "#64748B", marginBottom: 3 }}>↑ مصروف</div>
-                <div style={{ fontSize: 13, fontWeight: 700, color: "#DC2626" }}>{fNum(totalOut("دولار"))} $</div>
-              </div>
-              <div style={{ background: totalIn("دولار")-totalOut("دولار") >= 0 ? "#EFF6FF" : "#FFF1F2",
-                borderRadius: 10, padding: "10px", textAlign: "center",
-                border: "2px solid " + (totalIn("دولار")-totalOut("دولار") >= 0 ? "#2563EB" : "#DC2626") }}>
-                <div style={{ fontSize: 10, color: "#64748B", marginBottom: 3 }}>⚖️ الميزان</div>
-                <div style={{ fontSize: 13, fontWeight: 700,
-                  color: totalIn("دولار")-totalOut("دولار") >= 0 ? "#2563EB" : "#DC2626" }}>
-                  {totalIn("دولار")-totalOut("دولار") >= 0 ? "+" : ""}{fNum(totalIn("دولار")-totalOut("دولار"))} $
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* فلترة الطباعة */}
-        {showPrint && (
-          <div style={{ background: "#FFFBEB", borderRadius: 14, padding: 16,
-            border: "1px solid #D97706", marginBottom: 14 }}>
-            <div style={{ fontSize: 13, fontWeight: 700, color: "#D97706", marginBottom: 12 }}>
-              🖨️ اختر ما تريد طباعته
-            </div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, marginBottom: 12 }}>
-              {[
-                ["all","الكل معاً","#1E293B","#F1F5F9"],
-                ["in","↓ المستلمات فقط","#16A34A","#F0FDF4"],
-                ["out","↑ المصروفات فقط","#DC2626","#FFF1F2"],
-              ].map(([v,l,color,bg]) => (
-                <button key={v} onClick={() => setPrintFilter(v)} style={{
-                  border: "2px solid "+(printFilter===v?color:"#E2E8F0"),
-                  borderRadius: 10, padding: "12px 6px", cursor: "pointer",
-                  fontFamily: "Tahoma", fontSize: 12, fontWeight: 700,
-                  background: printFilter===v?bg:"#fff",
-                  color: printFilter===v?color:"#94A3B8"
-                }}>{l}</button>
-              ))}
-            </div>
-            <div style={{ fontSize: 12, color: "#64748B", marginBottom: 12 }}>
-              سيتم طباعة{" "}
-              <strong style={{ color: "#1E293B" }}>
-                {printFilter==="in"?inTxs.length:printFilter==="out"?outTxs.length:inTxs.length+outTxs.length}
-              </strong>
-              {printFilter==="in"?" مستلمات":printFilter==="out"?" مصروفات":" (الكل)"}
-            </div>
-            <button onClick={()=>{ doPrint(printFilter); setShowPrint(false); }}
-              style={{ width:"100%", border:"none", borderRadius:10, padding:"12px",
-                fontSize:14, fontWeight:700, fontFamily:"Tahoma",
-                background:"#D97706", color:"#fff", cursor:"pointer" }}>
-              🖨️ طباعة الآن
-            </button>
-          </div>
-        )}
-
-        {/* تبويبات */}
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 14 }}>
-          <button onClick={() => { setTab("in"); setShow(false); }} style={{
-            border: tab === "in" ? "none" : "1px solid #E2E8F0",
-            borderRadius: 10, padding: "12px", cursor: "pointer",
-            fontFamily: "Tahoma", fontSize: 14, fontWeight: 700,
-            background: tab === "in" ? "#16A34A" : "#fff",
-            color: tab === "in" ? "#fff" : "#64748B"
-          }}>↓ المبالغ المستلمة ({inTxs.length})</button>
-          <button onClick={() => { setTab("out"); setShow(false); }} style={{
-            border: tab === "out" ? "none" : "1px solid #E2E8F0",
-            borderRadius: 10, padding: "12px", cursor: "pointer",
-            fontFamily: "Tahoma", fontSize: 14, fontWeight: 700,
-            background: tab === "out" ? "#DC2626" : "#fff",
-            color: tab === "out" ? "#fff" : "#64748B"
-          }}>↑ المبالغ المصروفة ({outTxs.length})</button>
-        </div>
-
-        {/* زر إضافة */}
-        <button onClick={() => setShow(v => !v)} style={{
-          width: "100%", border: "none", borderRadius: 12, padding: "13px",
-          fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "Tahoma",
-          marginBottom: 14,
-          background: show ? "#475569" : tab === "in" ? "#16A34A" : "#DC2626",
-          color: "#fff"
-        }}>
-          {show ? "✕ إلغاء" : tab === "in" ? "+ إضافة مبلغ مستلم" : "+ إضافة مبلغ مصروف"}
-        </button>
-
-        {/* فورم الإضافة */}
-        {show && (
-          <div style={{ background: "#fff", borderRadius: 14, padding: 18,
-            border: "1px solid #E2E8F0", marginBottom: 16 }}>
-
-            {/* العملة */}
-            {tab === "out" && (
-              <div style={{ background: "#F8FAFC", borderRadius: 10, padding: "10px 14px",
-                marginBottom: 12, border: "1px solid #E2E8F0" }}>
-                <div style={{ fontSize: 11, color: "#64748B", marginBottom: 4 }}>
-                  💰 المتاح للصرف
-                </div>
-                <div style={{ display: "flex", gap: 16 }}>
-                  <span style={{ fontSize: 14, fontWeight: 700, color: "#D97706" }}>
-                    {fNum(Math.max(0, totalIn("دينار") - totalOut("دينار")))} د.ع
-                  </span>
-                  <span style={{ fontSize: 14, fontWeight: 700, color: "#2563EB" }}>
-                    {fNum(Math.max(0, totalIn("دولار") - totalOut("دولار")))} $
-                  </span>
-                </div>
-              </div>
-            )}
-            <div style={{ fontSize: 13, color: "#64748B", fontWeight: 600, marginBottom: 8 }}>
-              العملة
-            </div>
-            <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
-              {["دينار","دولار"].map(cur => (
-                <button key={cur} onClick={() => sf("currency")(cur)} style={{
-                  flex: 1, padding: "10px", borderRadius: 10, cursor: "pointer",
-                  fontFamily: "Tahoma", fontSize: 13, fontWeight: 700,
-                  border: "2px solid " + (form.currency === cur ? (cur === "دينار" ? "#16A34A" : "#2563EB") : "#E2E8F0"),
-                  background: form.currency === cur ? (cur === "دينار" ? "#F0FDF4" : "#EFF6FF") : "#fff",
-                  color: form.currency === cur ? (cur === "دينار" ? "#16A34A" : "#2563EB") : "#94A3B8"
-                }}>
-                  {cur === "دينار" ? "🇮🇶 دينار" : "🇺🇸 دولار"}
-                </button>
-              ))}
-            </div>
-
-            {/* المبلغ */}
-            <div style={{ fontSize: 13, color: "#64748B", fontWeight: 600, marginBottom: 6 }}>
-              المبلغ *
-            </div>
-            <input placeholder="٠" value={form.amount} inputMode="numeric"
-              onChange={e => sf("amount")(e.target.value.replace(/[^0-9]/g, ""))}
-              style={{ width: "100%", border: "1px solid #CBD5E1", borderRadius: 10,
-                padding: "12px 14px", fontSize: 15, outline: "none", fontFamily: "Tahoma",
-                direction: "rtl", marginBottom: 4, boxSizing: "border-box",
-                background: "#F8FAFC", color: "#1E293B",
-                MozAppearance: "textfield", WebkitAppearance: "none" }}/>
-            {amt > 0 && (
-              <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 12,
-                color: form.currency === "دينار" ? "#16A34A" : "#2563EB" }}>
-                ✍️ {w2(amt)} {form.currency === "دينار" ? "دينار عراقي" : "دولار أمريكي"}
-                {" — "}{fNum(amt)} {form.currency === "دينار" ? "د.ع" : "$"}
-              </div>
-            )}
-            {!amt && <div style={{ marginBottom: 12 }}/>}
-
-            {/* المستلم */}
-            <div style={{ fontSize: 13, color: "#64748B", fontWeight: 600, marginBottom: 6 }}>
-              {tab === "in" ? "المستلم *" : "صُرف على *"}
-            </div>
-            <input placeholder={tab === "in" ? "اسم المستلم..." : "وجهة الصرف..."}
-              value={form.receiver}
-              onChange={e => sf("receiver")(e.target.value)}
-              style={{ width: "100%", border: "1px solid #CBD5E1", borderRadius: 10,
-                padding: "12px 14px", fontSize: 15, outline: "none", fontFamily: "Tahoma",
-                direction: "rtl", marginBottom: 14, boxSizing: "border-box",
-                background: "#F8FAFC", color: "#1E293B" }}/>
-
-            {/* التاريخ */}
-            <div style={{ fontSize: 13, color: "#64748B", fontWeight: 600, marginBottom: 6 }}>
-              التاريخ *
-            </div>
-            <input type="date" value={form.date}
-              onChange={e => sf("date")(e.target.value)}
-              style={{ width: "100%", border: "1px solid #CBD5E1", borderRadius: 10,
-                padding: "12px 14px", fontSize: 15, outline: "none", fontFamily: "Tahoma",
-                direction: "rtl", marginBottom: 14, boxSizing: "border-box",
-                background: "#F8FAFC", color: "#1E293B" }}/>
-
-            {/* الملاحظات */}
-            <div style={{ fontSize: 13, color: "#64748B", fontWeight: 600, marginBottom: 6 }}>
-              ملاحظات
-            </div>
-            <textarea placeholder="أي تفاصيل إضافية..."
-              value={form.note}
-              onChange={e => sf("note")(e.target.value)}
-              rows={3}
-              style={{ width: "100%", border: "1px solid #CBD5E1", borderRadius: 10,
-                padding: "12px 14px", fontSize: 14, outline: "none", fontFamily: "Tahoma",
-                direction: "rtl", marginBottom: 16, boxSizing: "border-box",
-                background: "#F8FAFC", color: "#1E293B", resize: "none" }}/>
-
-            <div style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: 8 }}>
-              <button onClick={addTx} disabled={!amt || !form.receiver.trim()} style={{
-                border: "none", borderRadius: 10, padding: "13px",
-                fontSize: 14, fontWeight: 700, fontFamily: "Tahoma",
-                cursor: amt && form.receiver.trim() ? "pointer" : "not-allowed",
-                background: amt && form.receiver.trim()
-                  ? (tab === "in" ? "#16A34A" : "#DC2626") : "#E2E8F0",
-                color: amt && form.receiver.trim() ? "#fff" : "#94A3B8"
-              }}>
-                {tab === "in" ? "✅ تسجيل المبلغ المستلم" : "✅ تسجيل المبلغ المصروف"}
-              </button>
-              {amt > 0 && form.receiver.trim() && (
-                <button onClick={() => {
-                  const isDol = form.currency === "دولار";
-                  const html = `<!DOCTYPE html><html dir="rtl"><head><meta charset="utf-8"/>
-<style>*{font-family:Tahoma}body{margin:30px;direction:rtl;max-width:400px}
-.top{text-align:center;border-bottom:2px dashed #E2E8F0;padding-bottom:14px;margin-bottom:14px}
-.co{font-size:18px;font-weight:700;color:#1E293B}.ca{font-size:11px;color:#64748B;margin-top:3px}
-.title{font-size:14px;font-weight:700;color:${tab==="in"?"#16A34A":"#DC2626"};margin:14px 0 10px}
-.row{display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid #F1F5F9}
-.lbl{font-size:12px;color:#64748B}.val{font-size:12px;font-weight:700;color:#1E293B}
-.amount{font-size:22px;font-weight:700;text-align:center;margin:14px 0;
-  color:${tab==="in"?"#16A34A":"#DC2626"}}
-.footer{text-align:center;font-size:10px;color:#94A3B8;margin-top:16px;border-top:2px dashed #E2E8F0;padding-top:10px}
-</style></head><body>
-<div class="top">
-  <div class="co">شركة باب المشاريع</div>
-  <div class="ca">بغداد</div>
-</div>
-<div class="title">${tab==="in"?"🧾 إيصال استلام":"🧾 إيصال صرف"}</div>
-<div class="amount">${tab==="in"?"+":"-"}${fNum(amt)} ${isDol?"$":"د.ع"}</div>
-<div style="font-size:12px;color:#64748B;text-align:center;margin-bottom:12px">
-  ${w2(amt)} ${isDol?"دولار أمريكي":"دينار عراقي"}
-</div>
-<div class="row"><span class="lbl">المشروع</span><span class="val">${proj.name}</span></div>
-<div class="row"><span class="lbl">${tab==="in"?"المستلم":"صُرف على"}</span><span class="val">${form.receiver}</span></div>
-<div class="row"><span class="lbl">التاريخ</span><span class="val">${form.date}</span></div>
-${form.note?`<div class="row"><span class="lbl">ملاحظة</span><span class="val">${form.note}</span></div>`:""}
-<div class="footer">طُبع: ${new Date().toISOString().split("T")[0]}</div>
-</body></html>`;
-                  const w = window.open("","_blank","width=500,height=600");
-                  if(!w){alert("السماح بالنوافذ المنبثقة");return;}
-                  w.document.write(html);w.document.close();w.focus();
-                  setTimeout(()=>w.print(),600);
-                }} style={{ border: "none", borderRadius: 10, padding: "13px 14px",
-                  background: "#F0F9FF", border: "1px solid #0EA5E9",
-                  color: "#0EA5E9", cursor: "pointer", fontSize: 13,
-                  fontFamily: "Tahoma", fontWeight: 700, whiteSpace: "nowrap" }}>
-                  🖨️ إيصال
-                </button>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* قائمة الحركات */}
-        {(tab === "in" ? inTxs : outTxs).length === 0 ? (
-          <div style={{ textAlign: "center", padding: 32, color: "#94A3B8",
-            background: "#fff", borderRadius: 12, border: "1px solid #E2E8F0" }}>
-            {tab === "in" ? "ما في مبالغ مستلمة بعد" : "ما في مبالغ مصروفة بعد"}
-          </div>
-        ) : (
-          (tab === "in" ? inTxs : outTxs).map(t => (
-            <div key={t.id} style={{ background: "#fff", borderRadius: 12, padding: "14px 16px",
-              marginBottom: 10, border: "1px solid #E2E8F0",
-              borderRight: "5px solid " + (tab === "in" ? "#16A34A" : "#DC2626") }}>
-              <div style={{ display: "flex", justifyContent: "space-between",
-                alignItems: "flex-start" }}>
-                <div style={{ flex: 1 }}>
-                  {/* المبلغ + العملة */}
-                  <div style={{ fontSize: 18, fontWeight: 700, marginBottom: 4,
-                    color: tab === "in" ? "#16A34A" : "#DC2626" }}>
-                    {tab === "in" ? "↓ " : "↑ "}
-                    {fNum(t.amount)} {t.currency === "دينار" ? "د.ع" : "$"}
-                  </div>
-                  {/* كتابة */}
-                  <div style={{ fontSize: 11, color: "#64748B", marginBottom: 6 }}>
-                    ✍️ {w2(t.amount)} {t.currency === "دينار" ? "دينار" : "دولار"}
-                  </div>
-                  {/* العملة badge */}
-                  <span style={{ fontSize: 10, fontWeight: 600, padding: "2px 8px",
-                    borderRadius: 20, marginBottom: 6, display: "inline-block",
-                    background: t.currency === "دينار" ? "#F0FDF4" : "#EFF6FF",
-                    color: t.currency === "دينار" ? "#16A34A" : "#2563EB" }}>
-                    {t.currency === "دينار" ? "🇮🇶 دينار" : "🇺🇸 دولار"}
-                  </span>
-                  <div style={{ marginTop: 6 }}>
-                    <div style={{ fontSize: 12, color: "#1E293B", fontWeight: 600 }}>
-                      👤 {t.receiver}
-                    </div>
-                    <div style={{ fontSize: 11, color: "#64748B", marginTop: 3 }}>
-                      📅 {t.date}
-                    </div>
-                    {t.note && (
-                      <div style={{ fontSize: 11, color: "#475569", marginTop: 4,
-                        background: "#F8FAFC", borderRadius: 7, padding: "5px 8px" }}>
-                        📝 {t.note}
-                      </div>
-                    )}
-                  </div>
-                </div>
-                <button onClick={() => deleteTx(t.id)} style={{
-                  background: "none", border: "none", color: "#DC2626",
-                  cursor: "pointer", fontSize: 13, fontFamily: "Tahoma",
-                  fontWeight: 600, marginRight: 8
-                }}>🗑️</button>
-              </div>
-            </div>
-          ))
-        )}
-      </div>
-    </div>
-  );
-}
-
-// ─── شاشة إنهاء وتوزيع الأرباح ───────────────────────────
-function ClosingModal({ proj, funds, onConfirm, onCancel }) {
-  const balDin = proj.balDin || 0;
-  const balDol = proj.balDol || 0;
-  const ts = typeStyle(proj.type);
-
-  const FUNDS = [
-    { fund: "رأس_المال",  label: "💼 صندوق رأس المال",  color: "#059669", bg: "#ECFDF5" },
-    { fund: "عام",        label: "🏦 الصندوق العام",    color: "#D97706", bg: "#FFFBEB" },
-    { fund: proj.type,    label: (ts.icon||"")+" صندوق "+proj.type, color: ts.color||"#7C3AED", bg: ts.bg||"#F5F3FF" },
-    { fund: "شركاء",      label: "👥 صندوق أرباح الشركاء", color: "#9333EA", bg: "#FAF5FF" },
-  ];
-
-  const [pcts, setPcts] = React.useState({ "رأس_المال": 0, "عام": 0, [proj.type]: 0, "شركاء": 0 });
-  const [loading, setLoading] = React.useState(false);
-  const total = Object.values(pcts).reduce((s, v) => s + (Number(v) || 0), 0);
-  const valid = total === 100 && balDin + balDol > 0;
-
-  const set = (fund, val) => {
-    const n = Math.min(100, Math.max(0, Number(val) || 0));
-    setPcts(p => ({ ...p, [fund]: n }));
-  };
-
-  const handleConfirm = async () => {
-    if (!valid || loading) return;
-    setLoading(true);
-    const dists = FUNDS.map(f => ({ fund: f.fund, label: f.label, pct: Number(pcts[f.fund]) || 0 }));
-    await onConfirm(proj, dists);
-    setLoading(false);
-  };
-
-  return (
-    <div style={{ minHeight:"100vh", background:"#1E293B", fontFamily:"Tahoma",
-      direction:"rtl", display:"flex", alignItems:"center", justifyContent:"center", padding:16 }}>
-      <div style={{ background:"#fff", borderRadius:20, width:"100%", maxWidth:480,
-        maxHeight:"94vh", overflow:"auto", boxShadow:"0 24px 80px rgba(0,0,0,0.4)" }}>
-
-        {/* هيدر */}
-        <div style={{ background:"linear-gradient(135deg,#1E293B,#334155)",
-          borderRadius:"20px 20px 0 0", padding:"20px 24px" }}>
-          <div style={{ fontSize:22, marginBottom:6 }}>🏁</div>
-          <div style={{ fontSize:18, fontWeight:700, color:"#fff", marginBottom:4 }}>
-            إنهاء المشروع وتوزيع الأرباح
-          </div>
-          <div style={{ fontSize:13, color:"#94A3B8" }}>{proj.name}</div>
-        </div>
-
-        <div style={{ padding:"20px 24px" }}>
-
-          {/* الأرباح */}
-          <div style={{ background:"#F8FAFC", borderRadius:12, padding:14, marginBottom:20 }}>
-            <div style={{ fontSize:12, fontWeight:700, color:"#64748B", marginBottom:10 }}>
-              💰 الأرباح المراد توزيعها
-            </div>
-            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
-              <div style={{ background:"#FFFBEB", borderRadius:10, padding:"10px",
-                textAlign:"center", border:"2px solid #D97706" }}>
-                <div style={{ fontSize:10, color:"#64748B", marginBottom:3 }}>🇮🇶 دينار</div>
-                <div style={{ fontSize:16, fontWeight:700, color:"#D97706" }}>
-                  {fNum(balDin)} د.ع
-                </div>
-              </div>
-              <div style={{ background:"#EFF6FF", borderRadius:10, padding:"10px",
-                textAlign:"center", border:"2px solid #2563EB" }}>
-                <div style={{ fontSize:10, color:"#64748B", marginBottom:3 }}>🇺🇸 دولار</div>
-                <div style={{ fontSize:16, fontWeight:700, color:"#2563EB" }}>
-                  {fNum(balDol)} $
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* التوزيع */}
-          <div style={{ fontSize:13, fontWeight:700, color:"#1E293B", marginBottom:14 }}>
-            حدد النسبة لكل صندوق (المجموع = 100%)
-          </div>
-          {FUNDS.map(({ fund, label, color, bg }) => {
-            const pct = Number(pcts[fund]) || 0;
-            const shareDin = Math.round(balDin * pct / 100);
-            const shareDol = Math.round(balDol * pct / 100);
-            return (
-              <div key={fund} style={{ background: bg, borderRadius: 14, padding: "14px 16px",
-                marginBottom: 10, border: "1.5px solid " + color + "40" }}>
-                <div style={{ display:"flex", justifyContent:"space-between",
-                  alignItems:"center", marginBottom: 10 }}>
-                  <div style={{ fontSize: 13, fontWeight: 700, color }}>{label}</div>
-                  <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-                    <input type="number" inputMode="numeric" min="0" max="100"
-                      value={pcts[fund] === 0 ? "" : pcts[fund]}
-                      onChange={e => set(fund, e.target.value)}
-                      placeholder="0"
-                      style={{ width:70, border:"2px solid "+color, borderRadius:9,
-                        padding:"8px", fontSize:20, fontWeight:700, textAlign:"center",
-                        outline:"none", fontFamily:"Tahoma", color,
-                        background:"#fff", MozAppearance:"textfield" }}/>
-                    <span style={{ fontSize:18, fontWeight:700, color }}>%</span>
-                  </div>
-                </div>
-                {pct > 0 && (
-                  <div style={{ fontSize:12 }}>
-                    {balDin > 0 && (
-                      <div style={{ fontWeight:700, color, marginBottom:2 }}>
-                        {fNum(shareDin)} د.ع
-                        <span style={{ fontWeight:400, color:"#64748B", marginRight:6 }}>
-                          ✍️ {w2(shareDin)} دينار
-                        </span>
-                      </div>
-                    )}
-                    {balDol > 0 && (
-                      <div style={{ fontWeight:700, color:"#2563EB" }}>
-                        {fNum(shareDol)} $
-                        <span style={{ fontWeight:400, color:"#64748B", marginRight:6 }}>
-                          ✍️ {w2(shareDol)} دولار
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-            );
-          })}
-
-          {/* مجموع النسب */}
-          <div style={{ borderRadius:10, padding:"10px 14px", marginBottom:16, textAlign:"center",
-            background: total === 100 ? "#F0FDF4" : total > 100 ? "#FFF1F2" : "#F8FAFC",
-            border: "1.5px solid " + (total===100?"#16A34A":total>100?"#DC2626":"#E2E8F0") }}>
-            <span style={{ fontSize:14, fontWeight:700,
-              color: total===100?"#16A34A":total>100?"#DC2626":"#64748B" }}>
-              المجموع: {total}%
-              {total === 100 ? " ✅" : total > 100 ? " ⚠️ تجاوز 100%" : " (يجب أن يكون 100%)"}
-            </span>
-          </div>
-
-          {/* أزرار */}
-          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
-            <button onClick={onCancel} style={{ border:"1px solid #E2E8F0", borderRadius:10,
-              padding:"13px", fontSize:14, fontWeight:700, fontFamily:"Tahoma",
-              background:"#fff", color:"#64748B", cursor:"pointer" }}>
-              إلغاء
-            </button>
-            <button onClick={handleConfirm} disabled={!valid || loading} style={{
-              border:"none", borderRadius:10, padding:"13px", fontSize:14, fontWeight:700,
-              fontFamily:"Tahoma", cursor: valid&&!loading?"pointer":"not-allowed",
-              background: valid?"#16A34A":"#E2E8F0", color: valid?"#fff":"#94A3B8" }}>
-              {loading ? "جاري التوزيع..." : "🏁 تأكيد الإنهاء والتوزيع"}
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ─── صفحة الشريك ───────────────────────────────────────
-function PartnerPage({ partner, funds, onBack, onWithdraw }) {
-  const pf = funds["partner_" + partner.id] || { din: 0, dol: 0 };
+// ─── صفحة تفاصيل الصندوق ─────────────────────────────
+function FundPage({ fund, funds, onBack }) {
+  const bal = funds[fund.id] || { din:0, dol:0 };
   const [txs, setTxs] = useState([]);
-  const [wDin, setWDin] = useState("");
-  const [wDol, setWDol] = useState("");
-  const [wNote, setWNote] = useState("");
-  const [saving, setSaving] = useState(false);
-  const [ok, setOk] = useState(false);
-  const [showStatement, setShowStatement] = useState(false);
+  const [showAdd, setShowAdd] = useState(false);
+  const [form, setForm] = useState({ type:"إيداع", din:"", dol:"", note:"",
+    date: new Date().toISOString().split("T")[0] });
+  const sf = k => v => setForm(f => ({...f, [k]:v}));
+  const [showStmt, setShowStmt] = useState(false);
   const [fromDate, setFromDate] = useState("");
-  const [toDate, setToDate] = useState("");
-  const amtDin = Number(wDin) || 0;
-  const amtDol = Number(wDol) || 0;
-  const valid = (amtDin > 0 || amtDol > 0) && amtDin <= pf.din && amtDol <= pf.dol;
+  const [toDate, setToDate]     = useState("");
 
-  // جلب سجل الحركات
   useEffect(() => {
     return onSnapshot(
-      query(collection(db, "partner_txs"),
-        where("partnerId","==","partner_"+partner.id)),
+      query(collection(db,"fund_txs"), where("fundId","==",fund.id)),
       snap => {
-        const list = snap.docs.map(d=>({id:d.id,...d.data()}));
+        const list = snap.docs.map(d => ({id:d.id,...d.data()}));
         list.sort((a,b)=>(b.createdAt||"").localeCompare(a.createdAt||""));
         setTxs(list);
       }
     );
-  }, [partner.id]);
+  }, [fund.id]);
 
-  const totalDep = { din: txs.filter(t=>t.type==="إيداع").reduce((s,t)=>s+(t.din||0),0),
-                     dol: txs.filter(t=>t.type==="إيداع").reduce((s,t)=>s+(t.dol||0),0) };
-  const totalWit = { din: txs.filter(t=>t.type==="سحب").reduce((s,t)=>s+(t.din||0),0),
-                     dol: txs.filter(t=>t.type==="سحب").reduce((s,t)=>s+(t.dol||0),0) };
-
-  const printReceipt = (din, dol, note) => {
-    const today = new Date().toISOString().split("T")[0];
-    const html = `<!DOCTYPE html><html dir="rtl"><head><meta charset="utf-8"/>
-<style>*{font-family:Tahoma}body{margin:30px;direction:rtl;max-width:420px}
-.top{text-align:center;border-bottom:3px solid ${partner.color};padding-bottom:14px;margin-bottom:16px}
-.co{font-size:18px;font-weight:700}.ca{font-size:11px;color:#64748B}
-.title{font-size:15px;font-weight:700;color:${partner.color};margin:14px 0 10px}
-.amount{font-size:26px;font-weight:700;text-align:center;margin:14px 0;color:#DC2626}
-.row{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #F1F5F9}
-.lbl{font-size:12px;color:#64748B}.val{font-size:12px;font-weight:700;color:#1E293B}
-.summary{background:#F8FAFC;border-radius:10px;padding:12px;margin:14px 0}
-.srow{display:flex;justify-content:space-between;margin-bottom:6px}
-.slbl{font-size:11px;color:#64748B}.sval{font-size:12px;font-weight:700}
-.footer{text-align:center;font-size:10px;color:#94A3B8;margin-top:16px;
-  border-top:2px dashed #E2E8F0;padding-top:10px}
-</style></head><body>
-<div class="top">
-  <div class="co">شركة باب المشاريع</div>
-  <div class="ca">بغداد — العرصات</div>
-</div>
-<div class="title">↑ إيصال سحب — ${partner.name}</div>
-<div class="amount">${din > 0 ? fNum(din) + " د.ع" : ""}${din > 0 && dol > 0 ? " | " : ""}${dol > 0 ? fNum(dol) + " $" : ""}</div>
-${din > 0 ? `<div style="text-align:center;font-size:12px;color:#64748B;margin-bottom:8px">✍️ ${w2(din)} دينار عراقي</div>` : ""}
-${dol > 0 ? `<div style="text-align:center;font-size:12px;color:#64748B;margin-bottom:8px">✍️ ${w2(dol)} دولار أمريكي</div>` : ""}
-<div class="row"><span class="lbl">الشريك</span><span class="val">${partner.name}</span></div>
-<div class="row"><span class="lbl">الحصة</span><span class="val">${partner.pct}%</span></div>
-<div class="row"><span class="lbl">التاريخ</span><span class="val">${today}</span></div>
-${note ? `<div class="row"><span class="lbl">ملاحظة</span><span class="val">${note}</span></div>` : ""}
-<div class="summary">
-  <div style="font-size:11px;font-weight:700;color:#64748B;margin-bottom:8px">📊 الجرد المالي للشريك</div>
-  <div class="srow"><span class="slbl">إجمالي الإيداعات (دينار)</span>
-    <span class="sval" style="color:#16A34A">+${fNum(totalDep.din)} د.ع</span></div>
-  <div class="srow"><span class="slbl">إجمالي السحوبات (دينار)</span>
-    <span class="sval" style="color:#DC2626">-${fNum(totalWit.din + din)} د.ع</span></div>
-  <div class="srow"><span class="slbl" style="font-weight:700">الرصيد المتبقي (دينار)</span>
-    <span class="sval" style="color:${partner.color}">${fNum(Math.max(0,pf.din-din))} د.ع</span></div>
-  ${totalDep.dol > 0 || dol > 0 ? `
-  <div style="border-top:1px solid #E2E8F0;margin:8px 0"></div>
-  <div class="srow"><span class="slbl">إجمالي الإيداعات (دولار)</span>
-    <span class="sval" style="color:#16A34A">+${fNum(totalDep.dol)} $</span></div>
-  <div class="srow"><span class="slbl">إجمالي السحوبات (دولار)</span>
-    <span class="sval" style="color:#DC2626">-${fNum(totalWit.dol + dol)} $</span></div>
-  <div class="srow"><span class="slbl" style="font-weight:700">الرصيد المتبقي (دولار)</span>
-    <span class="sval" style="color:#2563EB">${fNum(Math.max(0,pf.dol-dol))} $</span></div>` : ""}
-</div>
-<div class="footer">شركة باب المشاريع — طُبع: ${today}</div>
-</body></html>`;
-    const w = window.open("","_blank","width=500,height=700");
-    if(!w){alert("السماح بالنوافذ المنبثقة");return;}
-    w.document.write(html);w.document.close();w.focus();
-    setTimeout(()=>w.print(),600);
+  const addTx = async () => {
+    const din = Number(form.din)||0;
+    const dol = Number(form.dol)||0;
+    if (!din && !dol) return;
+    const isIn = form.type === "إيداع";
+    if (!isIn) {
+      if (din > bal.din) { alert("⛔ يتجاوز رصيد الدينار! المتاح: "+fNum(bal.din)+" د.ع"); return; }
+      if (dol > bal.dol) { alert("⛔ يتجاوز رصيد الدولار! المتاح: "+fNum(bal.dol)+" $"); return; }
+    }
+    await addDoc(collection(db,"fund_txs"), {
+      fundId: fund.id, fundLabel: fund.label,
+      type: form.type, din, dol,
+      note: form.note.trim(),
+      date: form.date,
+      createdAt: new Date().toISOString()
+    });
+    const newDin = isIn ? bal.din+din : bal.din-din;
+    const newDol = isIn ? bal.dol+dol : bal.dol-dol;
+    await setDoc(doc(db,"funds",fund.id), { din:Math.max(0,newDin), dol:Math.max(0,newDol) }, {merge:true});
+    setForm({ type:form.type, din:"", dol:"", note:"", date:form.date });
+    setShowAdd(false);
   };
 
   const printStatement = () => {
-    // كل الحركات (إيداع + سحب) مفلترة بالتاريخ
     const filtered = txs.filter(t => {
       if (fromDate && t.date < fromDate) return false;
-      if (toDate && t.date > toDate) return false;
+      if (toDate   && t.date > toDate)   return false;
       return true;
-    }).sort((a,b) => (a.date||"").localeCompare(b.date||"")||(a.createdAt||"").localeCompare(b.createdAt||""));
+    }).sort((a,b)=>(a.date||"").localeCompare(b.date||"")||(a.createdAt||"").localeCompare(b.createdAt||""));
 
-    if (filtered.length === 0) { alert("ما في حركات في هذه الفترة"); return; }
+    if (!filtered.length) { alert("ما في حركات في هذه الفترة"); return; }
 
-    let balDin = 0, balDol = 0, n = 0;
-    let totDepDin=0, totDepDol=0, totWitDin=0, totWitDol=0;
-
+    let runDin=0, runDol=0, n=0;
+    let totDepDin=0, totDepDol=0, totOutDin=0, totOutDol=0;
     const rows = filtered.map(t => {
       n++;
-      const isIn = t.type === "إيداع";
-      const din = t.din || 0;
-      const dol = t.dol || 0;
-      if (isIn) { balDin += din; balDol += dol; totDepDin += din; totDepDol += dol; }
-      else       { balDin -= din; balDol -= dol; totWitDin += din; totWitDol += dol; }
-      const bg = n%2===0?"#F8FAFC":"#fff";
-      return `<tr style="background:${bg}">
-        <td>${n}</td>
-        <td>${t.date||""}</td>
-        <td style="text-align:right;padding:7px 10px">${t.note||"—"}</td>
-        <td style="color:#16A34A;font-weight:700">${isIn&&din>0?"+"+fNum(din)+" د.ع":""}</td>
-        <td style="color:#DC2626;font-weight:700">${!isIn&&din>0?"-"+fNum(din)+" د.ع":""}</td>
-        <td style="color:#16A34A;font-weight:700">${isIn&&dol>0?"+"+fNum(dol)+" $":""}</td>
-        <td style="color:#DC2626;font-weight:700">${!isIn&&dol>0?"-"+fNum(dol)+" $":""}</td>
-        <td style="font-weight:700;color:${balDin>=0?"#D97706":"#DC2626"}">${fNum(balDin)} د.ع</td>
+      const isIn = t.type==="إيداع";
+      const d=t.din||0, l=t.dol||0;
+      if(isIn){runDin+=d;runDol+=l;totDepDin+=d;totDepDol+=l;}
+      else    {runDin-=d;runDol-=l;totOutDin+=d;totOutDol+=l;}
+      return `<tr style="background:${n%2===0?"#F8FAFC":"#fff"}">
+        <td>${n}</td><td>${t.date||""}</td>
+        <td style="color:${isIn?"#16A34A":"#DC2626"};font-weight:700">${isIn?"↓ إيداع":"↑ صرف"}</td>
+        <td style="text-align:right">${t.note||"—"}</td>
+        <td style="color:${isIn?"#16A34A":"#DC2626"};font-weight:700">${isIn?"+":"-"}${fNum(d)} د.ع</td>
+        <td style="color:${isIn?"#16A34A":"#2563EB"};font-weight:700">${isIn?"+":"-"}${fNum(l)} $</td>
+        <td style="font-weight:700;color:${runDin>=0?"#D97706":"#DC2626"}">${fNum(runDin)} د.ع</td>
       </tr>`;
     }).join("");
 
     const today = new Date().toISOString().split("T")[0];
-    const period = (fromDate||"البداية") + " — " + (toDate||"اليوم");
-
-    const html = `<!DOCTYPE html><html dir="rtl"><head><meta charset="utf-8"/>
-<style>
-*{font-family:Tahoma,Arial}body{margin:20px;direction:rtl}
-.hdr{border-bottom:3px solid ${partner.color};padding-bottom:12px;margin-bottom:14px;text-align:center}
+    const html=`<!DOCTYPE html><html dir="rtl"><head><meta charset="utf-8"/>
+<style>*{font-family:Tahoma}body{margin:22px;direction:rtl}
+.hdr{text-align:center;border-bottom:3px solid ${fund.color};padding-bottom:12px;margin-bottom:14px}
 .co{font-size:20px;font-weight:700}.ca{font-size:11px;color:#64748B}
-.title{font-size:16px;font-weight:700;color:${partner.color};margin:12px 0 4px}
-.info{font-size:11px;color:#64748B;margin-bottom:14px}
-.sg{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:16px}
-.sb{border-radius:9px;padding:10px;text-align:center}
+.title{font-size:16px;font-weight:700;color:${fund.color};margin:10px 0 4px}
+.sg{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:14px}
+.sb{border-radius:8px;padding:10px;text-align:center}
 .sl{font-size:9px;color:#64748B;margin-bottom:3px}.sv{font-size:13px;font-weight:700}
 table{width:100%;border-collapse:collapse}
-thead tr{background:${partner.color}}th{color:#fff;padding:8px 6px;font-size:10px}
+thead tr{background:${fund.color}}th{color:#fff;padding:8px 6px;font-size:10px}
 td{padding:7px 6px;font-size:10px;text-align:center;border-bottom:1px solid #F1F5F9}
-.tot td{background:#F1F5F9;font-weight:700;border-top:2px solid ${partner.color}}
-.ft{margin-top:14px;font-size:10px;color:#94A3B8;display:flex;justify-content:space-between;border-top:1px dashed #E2E8F0;padding-top:8px}
+.tot td{background:#F1F5F9;font-weight:700;border-top:2px solid ${fund.color}}
+.ft{margin-top:12px;font-size:10px;color:#94A3B8;display:flex;justify-content:space-between}
 </style></head><body>
-<div class="hdr">
-  <div class="co">شركة باب المشاريع</div>
-  <div class="ca">بغداد — العرصات</div>
-</div>
-<div class="title">📋 كشف الحساب الشامل — ${partner.name}</div>
-<div class="info">الحصة: ${partner.pct}% &nbsp;·&nbsp; الفترة: ${period} &nbsp;·&nbsp; ${filtered.length} حركة</div>
+<div class="hdr"><div class="co">شركة باب المشاريع</div><div class="ca">بغداد — العرصات</div></div>
+<div class="title">${fund.icon} كشف حساب — ${fund.label}</div>
+<p style="font-size:11px;color:#64748B">الفترة: ${fromDate||"البداية"} — ${toDate||"اليوم"} · ${filtered.length} حركة</p>
 <div class="sg">
-  <div class="sb" style="background:#F0FDF4;border:1px solid #16A34A20">
-    <div class="sl">↓ إجمالي الإيداعات دينار</div>
-    <div class="sv" style="color:#16A34A">+${fNum(totDepDin)} د.ع</div>
-  </div>
-  <div class="sb" style="background:#FFF1F2;border:1px solid #DC262620">
-    <div class="sl">↑ إجمالي السحوبات دينار</div>
-    <div class="sv" style="color:#DC2626">-${fNum(totWitDin)} د.ع</div>
-  </div>
-  <div class="sb" style="background:#EFF6FF;border:1px solid #2563EB20">
-    <div class="sl">↓ إجمالي الإيداعات دولار</div>
-    <div class="sv" style="color:#2563EB">+${fNum(totDepDol)} $</div>
-  </div>
-  <div class="sb" style="background:${partner.bg};border:2px solid ${partner.color}">
-    <div class="sl">⚖️ الرصيد الحالي</div>
-    <div class="sv" style="color:${partner.color}">${fNum(pf.din)} د.ع</div>
-    ${pf.dol>0?`<div style="font-size:11px;font-weight:700;color:#2563EB">${fNum(pf.dol)} $</div>`:""}
-  </div>
+  <div class="sb" style="background:#F0FDF4"><div class="sl">↓ إيداعات دينار</div><div class="sv" style="color:#16A34A">+${fNum(totDepDin)} د.ع</div></div>
+  <div class="sb" style="background:#FFF1F2"><div class="sl">↑ صرف دينار</div><div class="sv" style="color:#DC2626">-${fNum(totOutDin)} د.ع</div></div>
+  <div class="sb" style="background:#EFF6FF"><div class="sl">↓ إيداعات دولار</div><div class="sv" style="color:#2563EB">+${fNum(totDepDol)} $</div></div>
+  <div class="sb" style="background:${fund.bg};border:2px solid ${fund.color}40"><div class="sl">⚖️ الرصيد الحالي</div><div class="sv" style="color:${fund.color}">${fNum(bal.din)} د.ع</div></div>
 </div>
-<table>
-  <thead><tr>
-    <th>#</th><th>التاريخ</th><th style="text-align:right">البيان</th>
-    <th>إيداع دينار</th><th>سحب دينار</th>
-    <th>إيداع دولار</th><th>سحب دولار</th>
-    <th>الميزان</th>
-  </tr></thead>
-  <tbody>${rows}</tbody>
-  <tr class="tot">
-    <td colspan="2">الإجمالي</td><td></td>
-    <td style="color:#16A34A">+${fNum(totDepDin)} د.ع</td>
-    <td style="color:#DC2626">-${fNum(totWitDin)} د.ع</td>
-    <td style="color:#16A34A">+${fNum(totDepDol)} $</td>
-    <td style="color:#DC2626">-${fNum(totWitDol)} $</td>
-    <td style="color:${partner.color}">${fNum(pf.din)} د.ع</td>
-  </tr>
+<table><thead><tr><th>#</th><th>التاريخ</th><th>النوع</th><th style="text-align:right">البيان</th><th>دينار</th><th>دولار</th><th>الميزان</th></tr></thead>
+<tbody>${rows}</tbody>
+<tr class="tot"><td colspan="3">الإجمالي</td><td></td>
+<td>+${fNum(totDepDin)}/-${fNum(totOutDin)}</td>
+<td>+${fNum(totDepDol)}/-${fNum(totOutDol)}</td>
+<td style="color:${fund.color}">${fNum(bal.din)} د.ع</td></tr>
 </table>
-<div class="ft">
-  <span>${partner.name} — شركة باب المشاريع</span>
-  <span>طُبع: ${today}</span>
-</div>
+<div class="ft"><span>${fund.label} — شركة باب المشاريع</span><span>طُبع: ${today}</span></div>
 </body></html>`;
-
-    const w = window.open("","_blank","width=1000,height=750");
+    const w=window.open("","_blank","width=980,height=720");
     if(!w){alert("السماح بالنوافذ المنبثقة");return;}
-    w.document.write(html);w.document.close();w.focus();
-    setTimeout(()=>w.print(),700);
+    w.document.write(html);w.document.close();w.focus();setTimeout(()=>w.print(),700);
   };
 
-  const doWithdraw = async () => {
-    if (!valid || saving) return;
-    setSaving(true);
-    await onWithdraw(partner.id, amtDin, amtDol, wNote);
-    setSaving(false);
-    setOk(true);
-    setTimeout(() => { setOk(false); setWDin(""); setWDol(""); setWNote(""); }, 1500);
-  };
+  const totIn  = { din:txs.filter(t=>t.type==="إيداع").reduce((s,t)=>s+(t.din||0),0),
+                   dol:txs.filter(t=>t.type==="إيداع").reduce((s,t)=>s+(t.dol||0),0) };
+  const totOut = { din:txs.filter(t=>t.type!=="إيداع").reduce((s,t)=>s+(t.din||0),0),
+                   dol:txs.filter(t=>t.type!=="إيداع").reduce((s,t)=>s+(t.dol||0),0) };
 
   return (
     <div style={{ minHeight:"100vh", background:"#F1F5F9",
@@ -2261,235 +445,1007 @@ td{padding:7px 6px;font-size:10px;text-align:center;border-bottom:1px solid #F1F
           cursor:"pointer", marginBottom:16, fontFamily:"Tahoma",
           display:"flex", alignItems:"center", gap:6 }}>← رجوع</button>
 
-        {/* بطاقة الشريك */}
-        <div style={{ background:partner.bg, borderRadius:16, padding:"20px",
-          border:"2px solid "+partner.color+"40", marginBottom:14 }}>
-          <div style={{ display:"flex", justifyContent:"space-between",
-            alignItems:"center", marginBottom:14 }}>
-            <div>
-              <div style={{ fontSize:20, fontWeight:700, color:partner.color }}>{partner.name}</div>
-              <div style={{ fontSize:13, color:"#64748B", marginTop:3 }}>حصة {partner.pct}%</div>
-            </div>
-            <div style={{ width:50, height:50, borderRadius:14, background:"#fff",
-              display:"flex", alignItems:"center", justifyContent:"center", fontSize:26 }}>👤</div>
+        {/* هيدر الصندوق */}
+        <div style={{ background:fund.bg, borderRadius:16, padding:"18px 20px",
+          border:"2px solid "+fund.color+"40", marginBottom:14 }}>
+          <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:12 }}>
+            <span style={{ fontSize:28 }}>{fund.icon}</span>
+            <span style={{ fontSize:18, fontWeight:700, color:fund.color }}>{fund.label}</span>
           </div>
-          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
-            <div style={{ background:"#fff", borderRadius:12, padding:"14px",
-              textAlign:"center", border:"1.5px solid "+partner.color+"30" }}>
-              <div style={{ fontSize:10, color:"#64748B", marginBottom:4 }}>💰 رصيد الدينار</div>
-              <div style={{ fontSize:20, fontWeight:700, color:partner.color }}>{fNum(pf.din)}</div>
-              <div style={{ fontSize:12, color:"#64748B" }}>د.ع</div>
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:8 }}>
+            <div style={{ background:"#fff", borderRadius:10, padding:"10px", textAlign:"center" }}>
+              <div style={{ fontSize:9, color:"#64748B", marginBottom:3 }}>↓ إيداعات دينار</div>
+              <div style={{ fontSize:13, fontWeight:700, color:"#16A34A" }}>{fNum(totIn.din)} د.ع</div>
             </div>
-            <div style={{ background:"#fff", borderRadius:12, padding:"14px",
-              textAlign:"center", border:"1.5px solid #2563EB30" }}>
-              <div style={{ fontSize:10, color:"#64748B", marginBottom:4 }}>💰 رصيد الدولار</div>
-              <div style={{ fontSize:20, fontWeight:700, color:"#2563EB" }}>{fNum(pf.dol)}</div>
-              <div style={{ fontSize:12, color:"#64748B" }}>$</div>
+            <div style={{ background:"#fff", borderRadius:10, padding:"10px", textAlign:"center" }}>
+              <div style={{ fontSize:9, color:"#64748B", marginBottom:3 }}>↑ صرف دينار</div>
+              <div style={{ fontSize:13, fontWeight:700, color:"#DC2626" }}>{fNum(totOut.din)} د.ع</div>
+            </div>
+            <div style={{ background:"#fff", borderRadius:10, padding:"10px", textAlign:"center",
+              border:"2px solid "+fund.color }}>
+              <div style={{ fontSize:9, color:"#64748B", marginBottom:3 }}>⚖️ الرصيد</div>
+              <div style={{ fontSize:14, fontWeight:700, color:fund.color }}>{fNum(bal.din)} د.ع</div>
+              {bal.dol>0&&<div style={{ fontSize:11, fontWeight:700, color:"#2563EB" }}>{fNum(bal.dol)} $</div>}
             </div>
           </div>
         </div>
 
-        {/* سحب */}
-        <div style={{ background:"#fff", borderRadius:14, padding:"18px 20px",
-          border:"1px solid #E2E8F0", marginBottom:14 }}>
-          <div style={{ fontSize:14, fontWeight:700, color:"#1E293B", marginBottom:14 }}>
-            ↑ سحب من الرصيد
-          </div>
-          {ok ? (
-            <div style={{ textAlign:"center", padding:"20px 0" }}>
-              <div style={{ fontSize:40 }}>✅</div>
-              <div style={{ fontSize:16, fontWeight:700, color:"#16A34A", marginTop:8 }}>
-                تم السحب وطباعة الإيصال
-              </div>
+        {/* أزرار */}
+        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:14 }}>
+          <button onClick={()=>setShowAdd(v=>!v)} style={{ border:"none", borderRadius:12,
+            padding:"12px", fontSize:14, fontWeight:700, fontFamily:"Tahoma",
+            background:showAdd?"#475569":fund.color, color:"#fff", cursor:"pointer" }}>
+            {showAdd?"✕ إلغاء":"+ إضافة حركة"}
+          </button>
+          <button onClick={()=>setShowStmt(v=>!v)} style={{ border:"1px solid "+fund.color,
+            borderRadius:12, padding:"12px", fontSize:14, fontWeight:700,
+            fontFamily:"Tahoma", background:"#fff", color:fund.color, cursor:"pointer" }}>
+            🖨️ كشف الحساب
+          </button>
+        </div>
+
+        {/* فورم الإضافة */}
+        {showAdd && (
+          <div style={{ background:"#fff", borderRadius:14, padding:16,
+            border:"1px solid #E2E8F0", marginBottom:14 }}>
+            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, marginBottom:12 }}>
+              {["إيداع","صرف"].map(t=>(
+                <button key={t} onClick={()=>sf("type")(t)} style={{
+                  border:"2px solid "+(form.type===t?t==="إيداع"?"#16A34A":"#DC2626":"#E2E8F0"),
+                  borderRadius:10, padding:"10px", cursor:"pointer",
+                  fontFamily:"Tahoma", fontSize:13, fontWeight:700,
+                  background:form.type===t?t==="إيداع"?"#F0FDF4":"#FFF1F2":"#fff",
+                  color:form.type===t?t==="إيداع"?"#16A34A":"#DC2626":"#94A3B8"
+                }}>{t==="إيداع"?"↓ إيداع":"↑ صرف"}</button>
+              ))}
             </div>
-          ) : (
-            <>
-              <div style={{ marginBottom:12 }}>
-                <div style={{ fontSize:12, color:"#16A34A", fontWeight:700, marginBottom:6 }}>
-                  🇮🇶 مبلغ الدينار
-                </div>
-                <input type="text" inputMode="numeric" placeholder="٠" value={wDin}
-                  onChange={e=>setWDin(e.target.value.replace(/[^0-9]/g,""))}
-                  style={{ width:"100%", border:"1px solid #CBD5E1", borderRadius:10,
-                    padding:"12px 14px", fontSize:15, outline:"none", fontFamily:"Tahoma",
+            {[{l:"مبلغ الدينار",k:"din",c:"#16A34A"},{l:"مبلغ الدولار",k:"dol",c:"#2563EB"}].map(({l,k,c})=>(
+              <div key={k} style={{ marginBottom:10 }}>
+                <div style={{ fontSize:12, color:c, fontWeight:600, marginBottom:5 }}>{l}</div>
+                <input type="text" inputMode="numeric" placeholder="٠" value={form[k]}
+                  onChange={e=>sf(k)(e.target.value.replace(/[^0-9]/g,""))}
+                  style={{ width:"100%", border:"1px solid #CBD5E1", borderRadius:9,
+                    padding:"11px 13px", fontSize:14, outline:"none", fontFamily:"Tahoma",
                     direction:"rtl", boxSizing:"border-box", background:"#F8FAFC" }}/>
-                {amtDin > 0 && <div style={{ fontSize:12, fontWeight:600, marginTop:4,
-                  color: amtDin>pf.din?"#DC2626":"#16A34A" }}>
-                  {amtDin>pf.din ? "⛔ يتجاوز الرصيد! المتاح: "+fNum(pf.din)+" د.ع"
-                    : "✍️ "+w2(amtDin)+" دينار — المتبقي: "+fNum(pf.din-amtDin)+" د.ع"}
-                </div>}
-              </div>
-              <div style={{ marginBottom:12 }}>
-                <div style={{ fontSize:12, color:"#2563EB", fontWeight:700, marginBottom:6 }}>
-                  🇺🇸 مبلغ الدولار
-                </div>
-                <input type="text" inputMode="numeric" placeholder="٠" value={wDol}
-                  onChange={e=>setWDol(e.target.value.replace(/[^0-9]/g,""))}
-                  style={{ width:"100%", border:"1px solid #CBD5E1", borderRadius:10,
-                    padding:"12px 14px", fontSize:15, outline:"none", fontFamily:"Tahoma",
-                    direction:"rtl", boxSizing:"border-box", background:"#F8FAFC" }}/>
-                {amtDol > 0 && <div style={{ fontSize:12, fontWeight:600, marginTop:4,
-                  color: amtDol>pf.dol?"#DC2626":"#2563EB" }}>
-                  {amtDol>pf.dol ? "⛔ يتجاوز الرصيد! المتاح: "+fNum(pf.dol)+" $"
-                    : "✍️ "+w2(amtDol)+" دولار — المتبقي: "+fNum(pf.dol-amtDol)+" $"}
-                </div>}
-              </div>
-              <div style={{ marginBottom:16 }}>
-                <div style={{ fontSize:12, color:"#64748B", fontWeight:700, marginBottom:6 }}>
-                  ملاحظة
-                </div>
-                <input placeholder="سبب السحب..." value={wNote}
-                  onChange={e=>setWNote(e.target.value)}
-                  style={{ width:"100%", border:"1px solid #CBD5E1", borderRadius:10,
-                    padding:"12px 14px", fontSize:14, outline:"none", fontFamily:"Tahoma",
-                    direction:"rtl", boxSizing:"border-box", background:"#F8FAFC" }}/>
-              </div>
-              <div style={{ display:"grid", gridTemplateColumns:"1fr auto", gap:8 }}>
-                <button onClick={doWithdraw} disabled={!valid||saving} style={{
-                  border:"none", borderRadius:12, padding:"14px",
-                  fontSize:15, fontWeight:700, fontFamily:"Tahoma",
-                  cursor:valid&&!saving?"pointer":"not-allowed",
-                  background:valid?partner.color:"#E2E8F0",
-                  color:valid?"#fff":"#94A3B8" }}>
-                  {saving?"جاري...":"✅ تأكيد السحب"}
-                </button>
-                {valid && (
-                  <button onClick={()=>printReceipt(amtDin,amtDol,wNote)}
-                    style={{ border:"1px solid "+partner.color, borderRadius:12,
-                      padding:"14px 16px", fontSize:14, fontWeight:700,
-                      fontFamily:"Tahoma", background:"#fff",
-                      color:partner.color, cursor:"pointer", whiteSpace:"nowrap" }}>
-                    🖨️ إيصال
-                  </button>
+                {Number(form[k])>0 && (
+                  <div style={{ fontSize:12, color:c, fontWeight:600, marginTop:4 }}>
+                    ✍️ {w2(Number(form[k]))} {k==="din"?"دينار عراقي":"دولار أمريكي"}
+                    {" — "}{fNum(Number(form[k]))} {k==="din"?"د.ع":"$"}
+                  </div>
                 )}
               </div>
-            </>
-          )}
-        </div>
-
-        {/* زر كشف حساب السحوبات */}
-        <div style={{ background:"#fff", borderRadius:14, padding:"16px 20px",
-          border:"1px solid #E2E8F0", marginBottom:14 }}>
-          <div style={{ display:"flex", justifyContent:"space-between",
-            alignItems:"center", marginBottom: showStatement?14:0 }}>
-            <div style={{ fontSize:14, fontWeight:700, color:"#1E293B" }}>
-              🖨️ كشف الحساب الشامل
+            ))}
+            <div style={{ marginBottom:10 }}>
+              <div style={{ fontSize:12, color:"#64748B", fontWeight:600, marginBottom:5 }}>البيان</div>
+              <input placeholder="وصف الحركة..." value={form.note} onChange={e=>sf("note")(e.target.value)}
+                style={{ width:"100%", border:"1px solid #CBD5E1", borderRadius:9,
+                  padding:"11px 13px", fontSize:14, outline:"none", fontFamily:"Tahoma",
+                  direction:"rtl", boxSizing:"border-box", background:"#F8FAFC" }}/>
             </div>
-            <button onClick={()=>setShowStatement(v=>!v)} style={{
-              background:showStatement?"#475569":partner.color, border:"none",
-              borderRadius:9, padding:"8px 16px", color:"#fff", cursor:"pointer",
-              fontSize:13, fontFamily:"Tahoma", fontWeight:700 }}>
-              {showStatement?"✕ إغلاق":"📊 فتح الكشف"}
+            <div style={{ marginBottom:14 }}>
+              <div style={{ fontSize:12, color:"#64748B", fontWeight:600, marginBottom:5 }}>التاريخ</div>
+              <input type="date" value={form.date} onChange={e=>sf("date")(e.target.value)}
+                style={{ width:"100%", border:"1px solid #CBD5E1", borderRadius:9,
+                  padding:"11px 13px", fontSize:14, outline:"none", fontFamily:"Tahoma",
+                  boxSizing:"border-box", background:"#F8FAFC" }}/>
+            </div>
+            <button onClick={addTx} disabled={!Number(form.din)&&!Number(form.dol)}
+              style={{ width:"100%", border:"none", borderRadius:10, padding:"13px",
+                fontSize:14, fontWeight:700, fontFamily:"Tahoma", cursor:"pointer",
+                background:Number(form.din)||Number(form.dol)?fund.color:"#E2E8F0",
+                color:Number(form.din)||Number(form.dol)?"#fff":"#94A3B8" }}>
+              ✅ تأكيد الحركة
             </button>
           </div>
-          {showStatement && (
-            <div>
-              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, marginBottom:12 }}>
-                <div>
-                  <div style={{ fontSize:11, color:"#64748B", fontWeight:600, marginBottom:5 }}>
-                    من تاريخ
-                  </div>
-                  <input type="date" value={fromDate} onChange={e=>setFromDate(e.target.value)}
-                    style={{ width:"100%", border:"1px solid #CBD5E1", borderRadius:9,
-                      padding:"9px 12px", fontSize:13, outline:"none", fontFamily:"Tahoma",
-                      boxSizing:"border-box", background:"#F8FAFC" }}/>
-                </div>
-                <div>
-                  <div style={{ fontSize:11, color:"#64748B", fontWeight:600, marginBottom:5 }}>
-                    إلى تاريخ
-                  </div>
-                  <input type="date" value={toDate} onChange={e=>setToDate(e.target.value)}
-                    style={{ width:"100%", border:"1px solid #CBD5E1", borderRadius:9,
-                      padding:"9px 12px", fontSize:13, outline:"none", fontFamily:"Tahoma",
-                      boxSizing:"border-box", background:"#F8FAFC" }}/>
-                </div>
-              </div>
-              {(fromDate||toDate) && (
-                <button onClick={()=>{setFromDate("");setToDate("");}}
-                  style={{ fontSize:11, color:partner.color, background:partner.bg,
-                    border:"none", borderRadius:6, padding:"5px 12px",
-                    cursor:"pointer", fontFamily:"Tahoma", fontWeight:600, marginBottom:10 }}>
-                  ✕ مسح التواريخ
-                </button>
-              )}
-              <div style={{ fontSize:12, color:"#64748B", marginBottom:12 }}>
-                سيتم طباعة{" "}
-                <strong style={{ color:"#1E293B" }}>
-                  {txs.filter(t=>(!fromDate||t.date>=fromDate)&&(!toDate||t.date<=toDate)).length}
-                </strong>
-                {" "}حركة
-                {fromDate||toDate?" في الفترة المحددة":" (كل الحركات)"}
-              </div>
-              <button onClick={printStatement} style={{
-                width:"100%", border:"none", borderRadius:10, padding:"12px",
-                fontSize:14, fontWeight:700, fontFamily:"Tahoma",
-                background:partner.color, color:"#fff", cursor:"pointer" }}>
-                🖨️ طباعة كشف الحساب الشامل
-              </button>
-            </div>
-          )}
-        </div>
+        )}
 
-        {/* كشف الحساب */}
+        {/* كشف الحساب - فلترة */}
+        {showStmt && (
+          <div style={{ background:"#FFFBEB", borderRadius:14, padding:16,
+            border:"1px solid #D97706", marginBottom:14 }}>
+            <div style={{ fontSize:13, fontWeight:700, color:"#D97706", marginBottom:12 }}>
+              🖨️ كشف الحساب
+            </div>
+            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, marginBottom:12 }}>
+              <div>
+                <div style={{ fontSize:11, color:"#64748B", fontWeight:600, marginBottom:5 }}>من تاريخ</div>
+                <input type="date" value={fromDate} onChange={e=>setFromDate(e.target.value)}
+                  style={{ width:"100%", border:"1px solid #CBD5E1", borderRadius:9,
+                    padding:"9px 12px", fontSize:13, outline:"none", fontFamily:"Tahoma",
+                    boxSizing:"border-box", background:"#F8FAFC" }}/>
+              </div>
+              <div>
+                <div style={{ fontSize:11, color:"#64748B", fontWeight:600, marginBottom:5 }}>إلى تاريخ</div>
+                <input type="date" value={toDate} onChange={e=>setToDate(e.target.value)}
+                  style={{ width:"100%", border:"1px solid #CBD5E1", borderRadius:9,
+                    padding:"9px 12px", fontSize:13, outline:"none", fontFamily:"Tahoma",
+                    boxSizing:"border-box", background:"#F8FAFC" }}/>
+              </div>
+            </div>
+            <div style={{ fontSize:12, color:"#64748B", marginBottom:12 }}>
+              سيتم طباعة <strong>{txs.filter(t=>(!fromDate||t.date>=fromDate)&&(!toDate||t.date<=toDate)).length}</strong> حركة
+            </div>
+            <button onClick={printStatement} style={{ width:"100%", border:"none",
+              borderRadius:10, padding:"12px", fontSize:14, fontWeight:700,
+              fontFamily:"Tahoma", background:fund.color, color:"#fff", cursor:"pointer" }}>
+              🖨️ طباعة الكشف
+            </button>
+          </div>
+        )}
+
+        {/* قائمة الحركات */}
         <div style={{ background:"#fff", borderRadius:14, padding:"16px 20px",
           border:"1px solid #E2E8F0" }}>
           <div style={{ fontSize:14, fontWeight:700, color:"#1E293B", marginBottom:14 }}>
-            📋 كشف الحساب ({txs.length} حركة)
+            📋 سجل الحركات ({txs.length})
           </div>
-          {txs.length === 0 ? (
-            <div style={{ textAlign:"center", padding:20, color:"#94A3B8" }}>
-              ما في حركات بعد
-            </div>
-          ) : txs.map(t => {
-            const isIn = t.type === "إيداع";
+          {txs.length===0 ? (
+            <div style={{ textAlign:"center", padding:20, color:"#94A3B8" }}>ما في حركات بعد</div>
+          ) : txs.map(t=>{
+            const isIn = t.type==="إيداع";
             return (
-              <div key={t.id} style={{ borderRadius:10, padding:"12px 14px",
-                marginBottom:8, border:"1px solid "+(isIn?"#DCFCE7":"#FEE2E2"),
+              <div key={t.id} style={{ borderRadius:10, padding:"12px 14px", marginBottom:8,
+                border:"1px solid "+(isIn?"#DCFCE7":"#FEE2E2"),
                 borderRight:"4px solid "+(isIn?"#16A34A":"#DC2626") }}>
-                <div style={{ display:"flex", justifyContent:"space-between",
-                  alignItems:"flex-start" }}>
+                <div style={{ display:"flex", justifyContent:"space-between" }}>
                   <div>
                     <div style={{ fontSize:12, fontWeight:700,
                       color:isIn?"#16A34A":"#DC2626", marginBottom:3 }}>
-                      {isIn?"↓ إيداع أرباح":"↑ سحب"}
+                      {isIn?"↓ إيداع":"↑ صرف"}
                     </div>
                     <div style={{ fontSize:11, color:"#64748B" }}>📅 {t.date}</div>
-                    {t.note && <div style={{ fontSize:11, color:"#475569", marginTop:2 }}>{t.note}</div>}
+                    {t.note&&<div style={{ fontSize:11, color:"#475569", marginTop:2 }}>{t.note}</div>}
                   </div>
                   <div style={{ textAlign:"left" }}>
-                    {(t.din||0) > 0 && (
-                      <div style={{ fontSize:14, fontWeight:700,
-                        color:isIn?"#16A34A":"#DC2626" }}>
-                        {isIn?"+":"-"}{fNum(t.din)} <span style={{fontSize:10}}>د.ع</span>
-                      </div>
-                    )}
-                    {(t.dol||0) > 0 && (
-                      <div style={{ fontSize:13, fontWeight:700, color:"#2563EB" }}>
-                        {isIn?"+":"-"}{fNum(t.dol)} <span style={{fontSize:10}}>$</span>
-                      </div>
-                    )}
+                    {(t.din||0)>0&&<div style={{ fontSize:14, fontWeight:700,
+                      color:isIn?"#16A34A":"#DC2626" }}>
+                      {isIn?"+":"-"}{fNum(t.din)} <span style={{fontSize:10}}>د.ع</span>
+                    </div>}
+                    {(t.dol||0)>0&&<div style={{ fontSize:12, fontWeight:700, color:"#2563EB" }}>
+                      {isIn?"+":"-"}{fNum(t.dol)} <span style={{fontSize:10}}>$</span>
+                    </div>}
                   </div>
                 </div>
               </div>
             );
           })}
-          {txs.length > 0 && (
-            <div style={{ marginTop:12, padding:"10px 14px", background:"#F8FAFC",
-              borderRadius:10, display:"flex", justifyContent:"space-between" }}>
-              <span style={{ fontSize:12, color:"#64748B" }}>الرصيد الحالي</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── صفحة الموظفين ───────────────────────────────────
+function EmployeesPage({ employees, onBack }) {
+  return (
+    <div style={{ minHeight:"100vh", background:"#F1F5F9",
+      fontFamily:"Tahoma", direction:"rtl" }}>
+      <div style={{ maxWidth:540, margin:"0 auto", padding:"22px 16px" }}>
+        <button onClick={onBack} style={{ background:"#fff", border:"1px solid #E2E8F0",
+          borderRadius:10, padding:"8px 16px", fontSize:13, color:"#475569",
+          cursor:"pointer", marginBottom:16, fontFamily:"Tahoma",
+          display:"flex", alignItems:"center", gap:6 }}>← رجوع</button>
+        <div style={{ background:"#fff", borderRadius:14, padding:"20px",
+          border:"1px solid #E2E8F0", textAlign:"center", color:"#64748B" }}>
+          <div style={{ fontSize:40, marginBottom:10 }}>👷</div>
+          <div style={{ fontSize:16, fontWeight:700, color:"#1E293B", marginBottom:6 }}>
+            قريباً — إدارة الموظفين
+          </div>
+          <div style={{ fontSize:13 }}>سيتم إضافة هذا القسم قريباً</div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── صفحة التقارير ───────────────────────────────────
+function ReportsPage({ funds, projects, onBack }) {
+  const [reportType, setReportType] = useState(""); 
+  // projects | funds | partners | summary
+  const [filters, setFilters] = useState({
+    fromDate:"", toDate:"", status:"all",
+    projType:"all", fundId:"all", partnerId:"all"
+  });
+  const sf = k => v => setFilters(f=>({...f,[k]:v}));
+
+  const [projTxs,    setProjTxs]    = useState([]);
+  const [fundTxs,    setFundTxs]    = useState([]);
+  const [partnerTxs, setPartnerTxs] = useState([]);
+
+  useEffect(()=>{
+    const u1 = onSnapshot(collection(db,"project_txs"), s=>{
+      setProjTxs(s.docs.map(d=>({id:d.id,...d.data()})));
+    });
+    const u2 = onSnapshot(collection(db,"fund_txs"), s=>{
+      setFundTxs(s.docs.map(d=>({id:d.id,...d.data()})));
+    });
+    const u3 = onSnapshot(collection(db,"partner_txs"), s=>{
+      setPartnerTxs(s.docs.map(d=>({id:d.id,...d.data()})));
+    });
+    return ()=>{u1();u2();u3();};
+  },[]);
+
+  const REPORT_TYPES = [
+    {id:"projects",  label:"تقرير المشاريع",    icon:"🏗️", color:"#D97706", bg:"#FFFBEB"},
+    {id:"funds",     label:"تقرير الصناديق",    icon:"💎", color:"#059669", bg:"#ECFDF5"},
+    {id:"partners",  label:"تقرير الشركاء",     icon:"👥", color:"#9333EA", bg:"#FAF5FF"},
+    {id:"summary",   label:"التقرير الشامل",    icon:"📊", color:"#1D4ED8", bg:"#EFF6FF"},
+  ];
+
+  const PROJ_TYPES = ["إشراف","ديكور","مقاولات","واجهات"];
+  const PARTNERS_LIST = [
+    {id:"partner_إيهاب",name:"م. إيهاب"},
+    {id:"partner_أحمد", name:"م. أحمد"},
+    {id:"partner_نور",  name:"م. نور"},
+    {id:"partner_محمد", name:"م. محمد"},
+  ];
+
+  const filterDate = t =>
+    (!filters.fromDate || (t.date||"") >= filters.fromDate) &&
+    (!filters.toDate   || (t.date||"") <= filters.toDate);
+
+  // ── بناء التقرير ──────────────────────────────────
+  const buildReport = () => {
+    const today = new Date().toISOString().split("T")[0];
+    const period = (filters.fromDate||"البداية") + " — " + (filters.toDate||"اليوم");
+    let html = "";
+
+    const STYLE = `<style>
+      *{font-family:Tahoma,Arial}body{margin:22px;direction:rtl}
+      .hdr{text-align:center;border-bottom:3px solid #1E3A5F;padding-bottom:12px;margin-bottom:14px}
+      .co{font-size:20px;font-weight:700}.ca{font-size:11px;color:#64748B}
+      .title{font-size:17px;font-weight:700;color:#1E3A5F;margin:12px 0 4px}
+      .info{font-size:11px;color:#64748B;margin-bottom:14px}
+      .sg{display:grid;gap:8px;margin-bottom:14px}
+      .sb{border-radius:9px;padding:11px;text-align:center;background:#F8FAFC}
+      .sl{font-size:9px;color:#64748B;margin-bottom:3px}.sv{font-size:14px;font-weight:700}
+      table{width:100%;border-collapse:collapse;margin-bottom:18px}
+      thead tr{background:#1E3A5F}th{color:#fff;padding:8px 7px;font-size:10px}
+      td{padding:7px;font-size:10px;text-align:center;border-bottom:1px solid #F1F5F9}
+      .tot td{background:#F1F5F9;font-weight:700;border-top:2px solid #1E3A5F}
+      h3{font-size:13px;color:#1E3A5F;margin:16px 0 8px;border-bottom:1px solid #E2E8F0;padding-bottom:5px}
+      .ft{margin-top:14px;font-size:10px;color:#94A3B8;display:flex;justify-content:space-between;border-top:1px dashed #E2E8F0;padding-top:8px}
+    </style>`;
+
+    const HDR = `<div class="hdr"><div class="co">شركة باب المشاريع</div><div class="ca">بغداد — العرصات</div></div>`;
+
+    if (reportType === "projects") {
+      let list = projects;
+      if (filters.status !== "all") list = list.filter(p=>p.status===filters.status);
+      if (filters.projType !== "all") list = list.filter(p=>p.type===filters.projType);
+      list.sort((a,b)=>(a.name||"").localeCompare(b.name||""));
+
+      const totRecDin = list.reduce((s,p)=>s+(p.recDin||0),0);
+      const totSpdDin = list.reduce((s,p)=>s+(p.spdDin||0),0);
+      const totBalDin = list.reduce((s,p)=>s+(p.balDin||0),0);
+      const totRecDol = list.reduce((s,p)=>s+(p.recDol||0),0);
+      const totBalDol = list.reduce((s,p)=>s+(p.balDol||0),0);
+
+      const rows = list.map((p,i)=>`<tr style="background:${i%2===0?"#fff":"#F8FAFC"}">
+        <td>${i+1}</td>
+        <td style="text-align:right;font-weight:700">${p.name||""}</td>
+        <td>${p.type||""}</td>
+        <td>${p.province||""}</td>
+        <td style="color:${p.status==="active"?"#16A34A":"#64748B"}">${p.status==="active"?"● نشط":"✓ منتهي"}</td>
+        <td style="color:#16A34A">${fNum(p.recDin||0)} د.ع</td>
+        <td style="color:#DC2626">${fNum(p.spdDin||0)} د.ع</td>
+        <td style="color:#D97706;font-weight:700">${fNum(p.balDin||0)} د.ع</td>
+        <td style="color:#2563EB;font-weight:700">${fNum(p.balDol||0)} $</td>
+      </tr>`).join("");
+
+      html = `<!DOCTYPE html><html dir="rtl"><head><meta charset="utf-8"/>${STYLE}</head><body>
+${HDR}
+<div class="title">🏗️ تقرير المشاريع</div>
+<div class="info">
+  ${filters.status==="all"?"كل المشاريع":filters.status==="active"?"قيد التنفيذ":"المنتهية"}
+  ${filters.projType!=="all"?" · نوع: "+filters.projType:""}
+  · إجمالي: ${list.length} مشروع
+</div>
+<div class="sg" style="grid-template-columns:repeat(4,1fr)">
+  <div class="sb"><div class="sl">إجمالي المستلم</div><div class="sv" style="color:#16A34A">${fNum(totRecDin)} د.ع</div></div>
+  <div class="sb"><div class="sl">إجمالي المصروف</div><div class="sv" style="color:#DC2626">${fNum(totSpdDin)} د.ع</div></div>
+  <div class="sb" style="background:#FFFBEB"><div class="sl">ميزان الدينار</div><div class="sv" style="color:#D97706">${fNum(totBalDin)} د.ع</div></div>
+  <div class="sb" style="background:#EFF6FF"><div class="sl">ميزان الدولار</div><div class="sv" style="color:#2563EB">${fNum(totBalDol)} $</div></div>
+</div>
+<table><thead><tr><th>#</th><th style="text-align:right">المشروع</th><th>النوع</th><th>المحافظة</th><th>الحالة</th><th>مستلم</th><th>مصروف</th><th>ميزان د.ع</th><th>ميزان $</th></tr></thead>
+<tbody>${rows}</tbody>
+<tr class="tot"><td colspan="4">الإجمالي</td><td></td><td style="color:#16A34A">${fNum(totRecDin)} د.ع</td><td style="color:#DC2626">${fNum(totSpdDin)} د.ع</td><td style="color:#D97706">${fNum(totBalDin)} د.ع</td><td style="color:#2563EB">${fNum(totBalDol)} $</td></tr>
+</table>
+<div class="ft"><span>شركة باب المشاريع</span><span>طُبع: ${today}</span></div>
+</body></html>`;
+
+    } else if (reportType === "funds") {
+      const selF = filters.fundId === "all" ? null : ALL_FUNDS.find(f=>f.id===filters.fundId);
+      const fList = selF ? [selF] : ALL_FUNDS;
+      const filtered = fundTxs.filter(t => filterDate(t) &&
+        (filters.fundId==="all" || t.fundId===filters.fundId));
+
+      let secHtml = "";
+      fList.forEach(f=>{
+        const fTxs = filtered.filter(t=>t.fundId===f.id)
+          .sort((a,b)=>(a.date||"").localeCompare(b.date||""));
+        if(!fTxs.length) return;
+        let n=0, runDin=0;
+        const rows = fTxs.map(t=>{
+          n++;const isIn=t.type==="إيداع";
+          const d=t.din||0;runDin+=isIn?d:-d;
+          return `<tr style="background:${n%2===0?"#F8FAFC":"#fff"}">
+            <td>${n}</td><td>${t.date||""}</td>
+            <td style="color:${isIn?"#16A34A":"#DC2626"}">${isIn?"↓ إيداع":"↑ صرف"}</td>
+            <td style="text-align:right">${t.note||"—"}</td>
+            <td style="color:${isIn?"#16A34A":"#DC2626"};font-weight:700">${isIn?"+":"-"}${fNum(d)} د.ع</td>
+            <td style="font-weight:700;color:#D97706">${fNum(runDin)} د.ع</td>
+          </tr>`;
+        }).join("");
+        const bal = funds[f.id]||{din:0,dol:0};
+        secHtml += `<h3>${f.icon} ${f.label} — الرصيد: ${fNum(bal.din)} د.ع</h3>
+<table><thead><tr><th>#</th><th>التاريخ</th><th>النوع</th><th style="text-align:right">البيان</th><th>المبلغ</th><th>الميزان</th></tr></thead>
+<tbody>${rows}</tbody></table>`;
+      });
+
+      html = `<!DOCTYPE html><html dir="rtl"><head><meta charset="utf-8"/>${STYLE}</head><body>
+${HDR}
+<div class="title">💎 تقرير الصناديق</div>
+<div class="info">الفترة: ${period} · ${filtered.length} حركة</div>
+${secHtml}
+<div class="ft"><span>شركة باب المشاريع</span><span>طُبع: ${today}</span></div>
+</body></html>`;
+
+    } else if (reportType === "partners") {
+      const pList = filters.partnerId==="all" ? PARTNERS_LIST
+        : PARTNERS_LIST.filter(p=>p.id===filters.partnerId);
+      const filtered = partnerTxs.filter(filterDate);
+
+      let secHtml = "";
+      pList.forEach(p=>{
+        const pTxs = filtered.filter(t=>t.partnerId===p.id)
+          .sort((a,b)=>(a.date||"").localeCompare(b.date||""));
+        const pf = funds[p.id]||{din:0,dol:0};
+        let n=0, runDin=0;
+        const rows = pTxs.map(t=>{
+          n++;const isIn=t.type==="إيداع";
+          const d=t.din||0;runDin+=isIn?d:-d;
+          return `<tr style="background:${n%2===0?"#F8FAFC":"#fff"}">
+            <td>${n}</td><td>${t.date||""}</td>
+            <td style="color:${isIn?"#16A34A":"#DC2626"}">${isIn?"↓ إيداع":"↑ سحب"}</td>
+            <td style="text-align:right">${t.note||"—"}</td>
+            <td style="color:${isIn?"#16A34A":"#DC2626"};font-weight:700">${isIn?"+":"-"}${fNum(d)} د.ع</td>
+            <td style="font-weight:700;color:#9333EA">${fNum(runDin)} د.ع</td>
+          </tr>`;
+        }).join("");
+        secHtml += `<h3>👤 ${p.name} — الرصيد: ${fNum(pf.din)} د.ع${pf.dol>0?" | "+fNum(pf.dol)+" $":""}</h3>
+${pTxs.length?`<table><thead><tr><th>#</th><th>التاريخ</th><th>النوع</th><th style="text-align:right">البيان</th><th>المبلغ</th><th>الميزان</th></tr></thead><tbody>${rows}</tbody></table>`:"<p style='color:#94A3B8;font-size:11px'>ما في حركات في هذه الفترة</p>"}`;
+      });
+
+      html = `<!DOCTYPE html><html dir="rtl"><head><meta charset="utf-8"/>${STYLE}</head><body>
+${HDR}
+<div class="title">👥 تقرير الشركاء</div>
+<div class="info">الفترة: ${period}</div>
+${secHtml}
+<div class="ft"><span>شركة باب المشاريع</span><span>طُبع: ${today}</span></div>
+</body></html>`;
+
+    } else if (reportType === "summary") {
+      const fundsDin  = ALL_FUNDS.reduce((s,f)=>s+(funds[f.id]?.din||0),0);
+      const fundsDol  = ALL_FUNDS.reduce((s,f)=>s+(funds[f.id]?.dol||0),0);
+      const activeDin = projects.filter(p=>p.status==="active").reduce((s,p)=>s+(p.balDin||0),0);
+      const activeDol = projects.filter(p=>p.status==="active").reduce((s,p)=>s+(p.balDol||0),0);
+      const totalDin  = fundsDin + activeDin;
+      const totalDol  = fundsDol + activeDol;
+
+      const fundRows = ALL_FUNDS.map((f,i)=>{
+        const b=funds[f.id]||{din:0,dol:0};
+        return `<tr style="background:${i%2===0?"#fff":"#F8FAFC"}">
+          <td>${f.icon} ${f.label}</td>
+          <td style="color:#D97706;font-weight:700">${fNum(b.din)} د.ع</td>
+          <td style="color:#2563EB;font-weight:700">${fNum(b.dol)} $</td>
+        </tr>`;
+      }).join("");
+
+      const projRows = projects.filter(p=>p.status==="active").map((p,i)=>`
+        <tr style="background:${i%2===0?"#fff":"#F8FAFC"}">
+          <td style="text-align:right">${p.name}</td>
+          <td>${p.type||""}</td>
+          <td>${p.province||""}</td>
+          <td style="color:#16A34A;font-weight:700">${fNum(p.balDin||0)} د.ع</td>
+          <td style="color:#2563EB;font-weight:700">${fNum(p.balDol||0)} $</td>
+        </tr>`).join("");
+
+      html = `<!DOCTYPE html><html dir="rtl"><head><meta charset="utf-8"/>${STYLE}</head><body>
+${HDR}
+<div class="title">📊 التقرير الشامل</div>
+<div class="info">تاريخ: ${today}</div>
+<div class="sg" style="grid-template-columns:1fr 1fr">
+  <div class="sb" style="background:linear-gradient(135deg,#D97706,#F59E0B);color:#fff">
+    <div class="sl" style="color:#FEF3C7">🇮🇶 إجمالي الدينار الكلي</div>
+    <div class="sv" style="color:#fff;font-size:18px">${fNum(totalDin)} د.ع</div>
+  </div>
+  <div class="sb" style="background:linear-gradient(135deg,#1D4ED8,#3B82F6)">
+    <div class="sl" style="color:#DBEAFE">🇺🇸 إجمالي الدولار الكلي</div>
+    <div class="sv" style="color:#fff;font-size:18px">${fNum(totalDol)} $</div>
+  </div>
+</div>
+<h3>💎 الصناديق السبعة</h3>
+<table><thead><tr><th style="text-align:right">الصندوق</th><th>رصيد الدينار</th><th>رصيد الدولار</th></tr></thead>
+<tbody>${fundRows}</tbody>
+<tr class="tot"><td>إجمالي الصناديق</td><td style="color:#D97706">${fNum(fundsDin)} د.ع</td><td style="color:#2563EB">${fNum(fundsDol)} $</td></tr>
+</table>
+<h3>🏗️ المشاريع قيد التنفيذ (${projects.filter(p=>p.status==="active").length})</h3>
+<table><thead><tr><th style="text-align:right">المشروع</th><th>النوع</th><th>المحافظة</th><th>ميزان دينار</th><th>ميزان دولار</th></tr></thead>
+<tbody>${projRows}</tbody>
+<tr class="tot"><td colspan="2">إجمالي المشاريع النشطة</td><td></td><td style="color:#16A34A">${fNum(activeDin)} د.ع</td><td style="color:#2563EB">${fNum(activeDol)} $</td></tr>
+</table>
+<div class="ft"><span>شركة باب المشاريع</span><span>طُبع: ${today}</span></div>
+</body></html>`;
+    }
+
+    if (!html) return;
+    const w = window.open("","_blank","width=1000,height=750");
+    if(!w){alert("السماح بالنوافذ المنبثقة");return;}
+    w.document.write(html);w.document.close();w.focus();
+    setTimeout(()=>w.print(),700);
+  };
+
+  const rt = REPORT_TYPES.find(r=>r.id===reportType);
+
+  return (
+    <div style={{ minHeight:"100vh", background:"#F1F5F9",
+      fontFamily:"Tahoma", direction:"rtl" }}>
+      <div style={{ maxWidth:560, margin:"0 auto", padding:"22px 16px" }}>
+
+        <button onClick={onBack} style={{ background:"#fff", border:"1px solid #E2E8F0",
+          borderRadius:10, padding:"8px 16px", fontSize:13, color:"#475569",
+          cursor:"pointer", marginBottom:16, fontFamily:"Tahoma",
+          display:"flex", alignItems:"center", gap:6 }}>← رجوع</button>
+
+        <div style={{ fontSize:18, fontWeight:700, color:"#1E293B", marginBottom:16 }}>
+          📊 مركز التقارير
+        </div>
+
+        {/* اختيار نوع التقرير */}
+        <div style={{ background:"#fff", borderRadius:14, padding:16,
+          border:"1px solid #E2E8F0", marginBottom:14 }}>
+          <div style={{ fontSize:13, fontWeight:700, color:"#1E293B", marginBottom:12 }}>
+            ١. اختر نوع التقرير
+          </div>
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
+            {REPORT_TYPES.map(r=>(
+              <button key={r.id} onClick={()=>setReportType(r.id)} style={{
+                background: reportType===r.id ? r.bg : "#fff",
+                border:"2px solid "+(reportType===r.id?r.color:"#E2E8F0"),
+                borderRadius:12, padding:"12px", cursor:"pointer",
+                fontFamily:"Tahoma", textAlign:"right" }}>
+                <div style={{ fontSize:20, marginBottom:5 }}>{r.icon}</div>
+                <div style={{ fontSize:12, fontWeight:700,
+                  color:reportType===r.id?r.color:"#1E293B" }}>{r.label}</div>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* الفلاتر */}
+        {reportType && (
+          <div style={{ background:"#fff", borderRadius:14, padding:16,
+            border:"1px solid #E2E8F0", marginBottom:14 }}>
+            <div style={{ fontSize:13, fontWeight:700, color:"#1E293B", marginBottom:12 }}>
+              ٢. الفلاتر
+            </div>
+
+            {/* فلتر التاريخ - لكل التقارير */}
+            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, marginBottom:12 }}>
               <div>
-                <span style={{ fontSize:13, fontWeight:700, color:partner.color }}>
-                  {fNum(pf.din)} د.ع
-                </span>
-                {pf.dol > 0 && (
-                  <span style={{ fontSize:12, fontWeight:700, color:"#2563EB", marginRight:10 }}>
-                    {" | "}{fNum(pf.dol)} $
-                  </span>
-                )}
+                <div style={{ fontSize:11, color:"#64748B", fontWeight:600, marginBottom:5 }}>من تاريخ</div>
+                <input type="date" value={filters.fromDate} onChange={e=>sf("fromDate")(e.target.value)}
+                  style={{ width:"100%", border:"1px solid #CBD5E1", borderRadius:9,
+                    padding:"9px 12px", fontSize:13, outline:"none", fontFamily:"Tahoma",
+                    boxSizing:"border-box", background:"#F8FAFC" }}/>
+              </div>
+              <div>
+                <div style={{ fontSize:11, color:"#64748B", fontWeight:600, marginBottom:5 }}>إلى تاريخ</div>
+                <input type="date" value={filters.toDate} onChange={e=>sf("toDate")(e.target.value)}
+                  style={{ width:"100%", border:"1px solid #CBD5E1", borderRadius:9,
+                    padding:"9px 12px", fontSize:13, outline:"none", fontFamily:"Tahoma",
+                    boxSizing:"border-box", background:"#F8FAFC" }}/>
               </div>
             </div>
-          )}
+
+            {/* فلاتر خاصة بالمشاريع */}
+            {reportType === "projects" && (
+              <>
+                <div style={{ marginBottom:10 }}>
+                  <div style={{ fontSize:11, color:"#64748B", fontWeight:600, marginBottom:5 }}>
+                    الحالة
+                  </div>
+                  <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:6 }}>
+                    {[{v:"all",l:"الكل"},{v:"active",l:"● نشطة"},{v:"done",l:"✓ منتهية"}].map(({v,l})=>(
+                      <button key={v} onClick={()=>sf("status")(v)} style={{
+                        border:"1.5px solid "+(filters.status===v?"#D97706":"#E2E8F0"),
+                        borderRadius:8, padding:"8px 6px", cursor:"pointer",
+                        fontFamily:"Tahoma", fontSize:11, fontWeight:600,
+                        background:filters.status===v?"#FFFBEB":"#fff",
+                        color:filters.status===v?"#D97706":"#64748B"
+                      }}>{l}</button>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <div style={{ fontSize:11, color:"#64748B", fontWeight:600, marginBottom:5 }}>النوع</div>
+                  <select value={filters.projType} onChange={e=>sf("projType")(e.target.value)}
+                    style={{ width:"100%", border:"1px solid #CBD5E1", borderRadius:9,
+                      padding:"9px 12px", fontSize:13, outline:"none", fontFamily:"Tahoma",
+                      direction:"rtl", boxSizing:"border-box", background:"#F8FAFC",
+                      appearance:"none" }}>
+                    <option value="all">كل الأنواع</option>
+                    {PROJ_TYPES.map(t=><option key={t} value={t}>{t}</option>)}
+                  </select>
+                </div>
+              </>
+            )}
+
+            {/* فلاتر خاصة بالصناديق */}
+            {reportType === "funds" && (
+              <div>
+                <div style={{ fontSize:11, color:"#64748B", fontWeight:600, marginBottom:5 }}>الصندوق</div>
+                <select value={filters.fundId} onChange={e=>sf("fundId")(e.target.value)}
+                  style={{ width:"100%", border:"1px solid #CBD5E1", borderRadius:9,
+                    padding:"9px 12px", fontSize:13, outline:"none", fontFamily:"Tahoma",
+                    direction:"rtl", boxSizing:"border-box", background:"#F8FAFC",
+                    appearance:"none" }}>
+                  <option value="all">كل الصناديق</option>
+                  {ALL_FUNDS.map(f=><option key={f.id} value={f.id}>{f.icon} {f.label}</option>)}
+                </select>
+              </div>
+            )}
+
+            {/* فلاتر خاصة بالشركاء */}
+            {reportType === "partners" && (
+              <div>
+                <div style={{ fontSize:11, color:"#64748B", fontWeight:600, marginBottom:5 }}>الشريك</div>
+                <select value={filters.partnerId} onChange={e=>sf("partnerId")(e.target.value)}
+                  style={{ width:"100%", border:"1px solid #CBD5E1", borderRadius:9,
+                    padding:"9px 12px", fontSize:13, outline:"none", fontFamily:"Tahoma",
+                    direction:"rtl", boxSizing:"border-box", background:"#F8FAFC",
+                    appearance:"none" }}>
+                  <option value="all">كل الشركاء</option>
+                  {PARTNERS_LIST.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}
+                </select>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* زر الطباعة */}
+        {reportType && (
+          <button onClick={buildReport} style={{
+            width:"100%", border:"none", borderRadius:12, padding:"15px",
+            fontSize:15, fontWeight:700, fontFamily:"Tahoma",
+            background: rt?.color || "#1E293B", color:"#fff", cursor:"pointer" }}>
+            🖨️ طباعة {rt?.label}
+          </button>
+        )}
+
+      </div>
+    </div>
+  );
+}
+
+// ─── صفحة الأصول الثابتة ─────────────────────────────
+const ASSET_TYPES = ["معدات","مركبات","عقارات","أثاث","أجهزة","أخرى"];
+const ASSET_FUNDS = ["عام","إشراف","ديكور","مقاولات","واجهات"];
+
+function AssetsPage({ funds, onBack }) {
+  const [assets, setAssets]     = useState([]);
+  const [tab, setTab]           = useState("active"); // active | sold
+  const [showAdd, setShowAdd]   = useState(false);
+  const [sellAsset, setSellAsset] = useState(null);
+  const [form, setForm] = useState({
+    name:"", type:"معدات", fund:"عام",
+    valueDin:"", valueDol:"", date: new Date().toISOString().split("T")[0],
+    note:"", currency:"دينار"
+  });
+  const [sellForm, setSellForm] = useState({
+    priceDin:"", priceDol:"", date: new Date().toISOString().split("T")[0], note:""
+  });
+  const sf  = k => v => setForm(f=>({...f,[k]:v}));
+  const ssf = k => v => setSellForm(f=>({...f,[k]:v}));
+
+  useEffect(()=>{
+    return onSnapshot(collection(db,"assets"), snap=>{
+      const list = snap.docs.map(d=>({id:d.id,...d.data()}));
+      list.sort((a,b)=>(b.createdAt||"").localeCompare(a.createdAt||""));
+      setAssets(list);
+    });
+  },[]);
+
+  const addAsset = async () => {
+    const din = Number(form.valueDin)||0;
+    const dol = Number(form.valueDol)||0;
+    if (!form.name.trim() || (!din && !dol)) return;
+    const pw = window.prompt("🔒 أدخل الباسورد:");
+    if (!pw) return;
+    if (pw !== PASS) { alert("❌ باسورد غلط"); return; }
+
+    // خصم من الصندوق
+    const bal = funds[form.fund] || {din:0,dol:0};
+    if (din > bal.din) { alert("⛔ رصيد الدينار غير كافٍ في الصندوق\nالمتاح: "+fNum(bal.din)+" د.ع"); return; }
+    if (dol > bal.dol) { alert("⛔ رصيد الدولار غير كافٍ في الصندوق\nالمتاح: "+fNum(bal.dol)+" $"); return; }
+
+    await addDoc(collection(db,"assets"), {
+      name: form.name.trim(), type: form.type,
+      fund: form.fund, valueDin: din, valueDol: dol,
+      date: form.date, note: form.note.trim(),
+      status: "active",
+      createdAt: new Date().toISOString()
+    });
+
+    await setDoc(doc(db,"funds",form.fund),
+      { din: bal.din-din, dol: bal.dol-dol }, {merge:true});
+
+    // تسجيل حركة الصندوق
+    await addDoc(collection(db,"fund_txs"), {
+      fundId: form.fund, fundLabel: form.fund,
+      type:"صرف", din, dol,
+      note:"شراء أصل: "+form.name.trim(),
+      date: form.date, createdAt: new Date().toISOString()
+    });
+
+    setForm({name:"",type:"معدات",fund:"عام",valueDin:"",valueDol:"",
+      date:new Date().toISOString().split("T")[0],note:"",currency:"دينار"});
+    setShowAdd(false);
+  };
+
+  const doSell = async () => {
+    if (!sellAsset) return;
+    const pDin = Number(sellForm.priceDin)||0;
+    const pDol = Number(sellForm.priceDol)||0;
+    if (!pDin && !pDol) return;
+    const pw = window.prompt("🔒 أدخل الباسورد:");
+    if (!pw) return;
+    if (pw !== PASS) { alert("❌ باسورد غلط"); return; }
+
+    const profitDin = pDin - (sellAsset.valueDin||0);
+    const profitDol = pDol - (sellAsset.valueDol||0);
+    const bal = funds[sellAsset.fund] || {din:0,dol:0};
+
+    // إضافة لقيمة البيع للصندوق
+    await setDoc(doc(db,"funds",sellAsset.fund),
+      { din: bal.din+pDin, dol: bal.dol+pDol }, {merge:true});
+
+    // تسجيل حركة الصندوق
+    await addDoc(collection(db,"fund_txs"), {
+      fundId: sellAsset.fund, fundLabel: sellAsset.fund,
+      type:"إيداع", din:pDin, dol:pDol,
+      note:"بيع أصل: "+sellAsset.name,
+      date: sellForm.date, createdAt: new Date().toISOString()
+    });
+
+    // تحديث الأصل
+    await updateDoc(doc(db,"assets",sellAsset.id), {
+      status:"sold",
+      sellPriceDin: pDin, sellPriceDol: pDol,
+      profitDin, profitDol,
+      sellDate: sellForm.date,
+      sellNote: sellForm.note.trim()
+    });
+
+    setSellAsset(null);
+    setSellForm({priceDin:"",priceDol:"",date:new Date().toISOString().split("T")[0],note:""});
+  };
+
+  const list = assets.filter(a => a.status===(tab==="active"?"active":"sold"));
+  const totalBuyDin = list.reduce((s,a)=>s+(a.valueDin||0),0);
+  const soldProfitDin = assets.filter(a=>a.status==="sold").reduce((s,a)=>s+(a.profitDin||0),0);
+
+  return (
+    <div style={{ minHeight:"100vh", background:"#F1F5F9",
+      fontFamily:"Tahoma", direction:"rtl" }}>
+      <div style={{ maxWidth:560, margin:"0 auto", padding:"22px 16px" }}>
+
+        <button onClick={onBack} style={{ background:"#fff", border:"1px solid #E2E8F0",
+          borderRadius:10, padding:"8px 16px", fontSize:13, color:"#475569",
+          cursor:"pointer", marginBottom:16, fontFamily:"Tahoma",
+          display:"flex", alignItems:"center", gap:6 }}>← رجوع</button>
+
+        {/* هيدر */}
+        <div style={{ background:"linear-gradient(135deg,#0891B2,#06B6D4)",
+          borderRadius:16, padding:"18px 20px", marginBottom:16 }}>
+          <div style={{ fontSize:18, fontWeight:700, color:"#fff", marginBottom:6 }}>
+            📦 الأصول الثابتة
+          </div>
+          <div style={{ display:"flex", gap:16 }}>
+            <span style={{ fontSize:12, color:"#CFFAFE" }}>
+              ● {assets.filter(a=>a.status==="active").length} نشط
+            </span>
+            <span style={{ fontSize:12, color:"#CFFAFE" }}>
+              ✓ {assets.filter(a=>a.status==="sold").length} مباع
+            </span>
+            {soldProfitDin !== 0 && (
+              <span style={{ fontSize:12, color:"#CFFAFE", fontWeight:700 }}>
+                {soldProfitDin>=0?"📈 ربح":"📉 خسارة"}: {fNum(Math.abs(soldProfitDin))} د.ع
+              </span>
+            )}
+          </div>
         </div>
+
+        {/* تبويبات */}
+        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, marginBottom:14 }}>
+          {[{v:"active",l:"● النشطة"},{v:"sold",l:"✓ المباعة"}].map(({v,l})=>(
+            <button key={v} onClick={()=>setTab(v)} style={{
+              border:"none", borderRadius:10, padding:"12px", cursor:"pointer",
+              fontFamily:"Tahoma", fontSize:13, fontWeight:700,
+              background:tab===v?"#0891B2":"#fff",
+              color:tab===v?"#fff":"#64748B" }}>{l}</button>
+          ))}
+        </div>
+
+        {/* زر إضافة */}
+        {tab==="active" && (
+          <button onClick={()=>setShowAdd(v=>!v)} style={{
+            width:"100%", border:"none", borderRadius:12, padding:"13px",
+            fontSize:14, fontWeight:700, fontFamily:"Tahoma", marginBottom:14,
+            background:showAdd?"#475569":"#0891B2", color:"#fff", cursor:"pointer" }}>
+            {showAdd?"✕ إلغاء":"+ إضافة أصل جديد"}
+          </button>
+        )}
+
+        {/* فورم الإضافة */}
+        {showAdd && (
+          <div style={{ background:"#fff", borderRadius:14, padding:16,
+            border:"1px solid #E2E8F0", marginBottom:14 }}>
+
+            {/* الاسم */}
+            <div style={{ marginBottom:12 }}>
+              <div style={{ fontSize:12, color:"#64748B", fontWeight:600, marginBottom:5 }}>
+                اسم الأصل *
+              </div>
+              <input placeholder="مثال: مكينة حفر، كرفان، سيارة..." value={form.name}
+                onChange={e=>sf("name")(e.target.value)}
+                style={{ width:"100%", border:"1px solid #CBD5E1", borderRadius:9,
+                  padding:"11px 13px", fontSize:14, outline:"none", fontFamily:"Tahoma",
+                  direction:"rtl", boxSizing:"border-box", background:"#F8FAFC" }}/>
+            </div>
+
+            {/* النوع */}
+            <div style={{ marginBottom:12 }}>
+              <div style={{ fontSize:12, color:"#64748B", fontWeight:600, marginBottom:5 }}>النوع</div>
+              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:6 }}>
+                {ASSET_TYPES.map(t=>(
+                  <button key={t} onClick={()=>sf("type")(t)} style={{
+                    border:"1.5px solid "+(form.type===t?"#0891B2":"#E2E8F0"),
+                    borderRadius:8, padding:"7px 4px", cursor:"pointer",
+                    fontFamily:"Tahoma", fontSize:11, fontWeight:600,
+                    background:form.type===t?"#ECFEFF":"#fff",
+                    color:form.type===t?"#0891B2":"#64748B" }}>{t}</button>
+                ))}
+              </div>
+            </div>
+
+            {/* الصندوق */}
+            <div style={{ marginBottom:12 }}>
+              <div style={{ fontSize:12, color:"#64748B", fontWeight:600, marginBottom:5 }}>
+                الصندوق المصدر *
+              </div>
+              <select value={form.fund} onChange={e=>sf("fund")(e.target.value)}
+                style={{ width:"100%", border:"1px solid #CBD5E1", borderRadius:9,
+                  padding:"10px 12px", fontSize:13, outline:"none", fontFamily:"Tahoma",
+                  direction:"rtl", boxSizing:"border-box", background:"#F8FAFC",
+                  appearance:"none" }}>
+                {ASSET_FUNDS.map(f=>{
+                  const b = funds[f]||{din:0,dol:0};
+                  return <option key={f} value={f}>{f} — {fNum(b.din)} د.ع</option>;
+                })}
+              </select>
+            </div>
+
+            {/* القيمة */}
+            {[{k:"valueDin",l:"قيمة الشراء دينار",c:"#D97706",sym:"د.ع"},
+              {k:"valueDol",l:"قيمة الشراء دولار",c:"#2563EB",sym:"$"}].map(({k,l,c,sym})=>(
+              <div key={k} style={{ marginBottom:10 }}>
+                <div style={{ fontSize:12, color:c, fontWeight:600, marginBottom:5 }}>{l}</div>
+                <input type="text" inputMode="numeric" placeholder="٠" value={form[k]}
+                  onChange={e=>sf(k)(e.target.value.replace(/[^0-9]/g,""))}
+                  style={{ width:"100%", border:"1px solid #CBD5E1", borderRadius:9,
+                    padding:"11px 13px", fontSize:14, outline:"none", fontFamily:"Tahoma",
+                    direction:"rtl", boxSizing:"border-box", background:"#F8FAFC" }}/>
+                {Number(form[k])>0 && (
+                  <div style={{ fontSize:11, color:c, fontWeight:600, marginTop:3 }}>
+                    ✍️ {w2(Number(form[k]))} {k==="valueDin"?"دينار عراقي":"دولار أمريكي"}
+                  </div>
+                )}
+              </div>
+            ))}
+
+            {/* التاريخ والملاحظة */}
+            <div style={{ marginBottom:10 }}>
+              <div style={{ fontSize:12, color:"#64748B", fontWeight:600, marginBottom:5 }}>
+                تاريخ الشراء
+              </div>
+              <input type="date" value={form.date} onChange={e=>sf("date")(e.target.value)}
+                style={{ width:"100%", border:"1px solid #CBD5E1", borderRadius:9,
+                  padding:"11px 13px", fontSize:14, outline:"none", fontFamily:"Tahoma",
+                  boxSizing:"border-box", background:"#F8FAFC" }}/>
+            </div>
+            <div style={{ marginBottom:16 }}>
+              <div style={{ fontSize:12, color:"#64748B", fontWeight:600, marginBottom:5 }}>
+                ملاحظة
+              </div>
+              <input placeholder="وصف إضافي..." value={form.note}
+                onChange={e=>sf("note")(e.target.value)}
+                style={{ width:"100%", border:"1px solid #CBD5E1", borderRadius:9,
+                  padding:"11px 13px", fontSize:14, outline:"none", fontFamily:"Tahoma",
+                  direction:"rtl", boxSizing:"border-box", background:"#F8FAFC" }}/>
+            </div>
+
+            <button onClick={addAsset}
+              disabled={!form.name.trim()||(!Number(form.valueDin)&&!Number(form.valueDol))}
+              style={{ width:"100%", border:"none", borderRadius:10, padding:"13px",
+                fontSize:14, fontWeight:700, fontFamily:"Tahoma", cursor:"pointer",
+                background:form.name.trim()&&(Number(form.valueDin)||Number(form.valueDol))
+                  ?"#0891B2":"#E2E8F0",
+                color:form.name.trim()&&(Number(form.valueDin)||Number(form.valueDol))
+                  ?"#fff":"#94A3B8" }}>
+              ✅ تسجيل الأصل وخصمه من الصندوق
+            </button>
+          </div>
+        )}
+
+        {/* قائمة الأصول */}
+        {list.length===0 ? (
+          <div style={{ background:"#fff", borderRadius:14, padding:30,
+            textAlign:"center", color:"#94A3B8", border:"1px solid #E2E8F0" }}>
+            <div style={{ fontSize:36, marginBottom:8 }}>📦</div>
+            <div>{tab==="active"?"ما في أصول نشطة":"ما في أصول مباعة"}</div>
+          </div>
+        ) : list.map(a=>(
+          <div key={a.id} style={{ background:"#fff", borderRadius:14, padding:16,
+            marginBottom:10, border:"1px solid #E2E8F0",
+            borderRight:"5px solid "+(a.status==="active"?"#0891B2":"#64748B") }}>
+            <div style={{ display:"flex", justifyContent:"space-between", marginBottom:8 }}>
+              <div>
+                <div style={{ fontSize:15, fontWeight:700, color:"#1E293B" }}>{a.name}</div>
+                <div style={{ fontSize:11, color:"#64748B", marginTop:3 }}>
+                  📂 {a.type} · 🏦 {a.fund} · 📅 {a.date}
+                </div>
+                {a.note && <div style={{ fontSize:11, color:"#475569", marginTop:2 }}>{a.note}</div>}
+              </div>
+              {a.status==="active" && (
+                <button onClick={()=>setSellAsset(a)} style={{
+                  background:"#FFF7ED", border:"1px solid #F97316",
+                  borderRadius:8, padding:"6px 12px", cursor:"pointer",
+                  fontSize:11, fontFamily:"Tahoma", fontWeight:700, color:"#F97316",
+                  alignSelf:"flex-start" }}>
+                  💰 بيع
+                </button>
+              )}
+            </div>
+
+            {/* القيمة */}
+            <div style={{ display:"flex", gap:10, flexWrap:"wrap" }}>
+              {(a.valueDin||0)>0 && (
+                <span style={{ background:"#FFFBEB", borderRadius:7, padding:"5px 10px",
+                  fontSize:12, fontWeight:700, color:"#D97706" }}>
+                  شراء: {fNum(a.valueDin)} د.ع
+                </span>
+              )}
+              {(a.valueDol||0)>0 && (
+                <span style={{ background:"#EFF6FF", borderRadius:7, padding:"5px 10px",
+                  fontSize:12, fontWeight:700, color:"#2563EB" }}>
+                  شراء: {fNum(a.valueDol)} $
+                </span>
+              )}
+              {a.status==="sold" && (
+                <>
+                  {(a.sellPriceDin||0)>0 && (
+                    <span style={{ background:"#F0FDF4", borderRadius:7, padding:"5px 10px",
+                      fontSize:12, fontWeight:700, color:"#16A34A" }}>
+                      بيع: {fNum(a.sellPriceDin)} د.ع
+                    </span>
+                  )}
+                  {(a.profitDin||0)!==0 && (
+                    <span style={{ background:(a.profitDin||0)>=0?"#ECFDF5":"#FFF1F2",
+                      borderRadius:7, padding:"5px 10px",
+                      fontSize:12, fontWeight:700,
+                      color:(a.profitDin||0)>=0?"#16A34A":"#DC2626" }}>
+                      {(a.profitDin||0)>=0?"📈 ربح":"📉 خسارة"}: {fNum(Math.abs(a.profitDin||0))} د.ع
+                    </span>
+                  )}
+                  <span style={{ background:"#F1F5F9", borderRadius:7, padding:"5px 10px",
+                    fontSize:11, color:"#64748B" }}>
+                    تاريخ البيع: {a.sellDate}
+                  </span>
+                </>
+              )}
+            </div>
+          </div>
+        ))}
+
+        {/* نافذة البيع */}
+        {sellAsset && (
+          <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.5)",
+            zIndex:999, display:"flex", alignItems:"center", justifyContent:"center", padding:16 }}>
+            <div style={{ background:"#fff", borderRadius:18, width:"100%", maxWidth:420,
+              boxShadow:"0 20px 60px rgba(0,0,0,0.25)" }}>
+              <div style={{ padding:"16px 20px", borderBottom:"1px solid #E2E8F0",
+                display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+                <div style={{ fontSize:15, fontWeight:700, color:"#F97316" }}>
+                  💰 بيع — {sellAsset.name}
+                </div>
+                <button onClick={()=>setSellAsset(null)} style={{ background:"none",
+                  border:"none", fontSize:20, cursor:"pointer", color:"#64748B" }}>✕</button>
+              </div>
+              <div style={{ padding:"18px 20px" }}>
+                {/* القيمة الأصلية */}
+                <div style={{ background:"#FFF7ED", borderRadius:10, padding:12,
+                  marginBottom:16, fontSize:12 }}>
+                  <div style={{ fontWeight:700, color:"#F97316", marginBottom:4 }}>
+                    القيمة الأصلية:
+                  </div>
+                  {(sellAsset.valueDin||0)>0 &&
+                    <div>🇮🇶 {fNum(sellAsset.valueDin)} د.ع</div>}
+                  {(sellAsset.valueDol||0)>0 &&
+                    <div>🇺🇸 {fNum(sellAsset.valueDol)} $</div>}
+                </div>
+
+                {[{k:"priceDin",l:"سعر البيع دينار",c:"#16A34A"},
+                  {k:"priceDol",l:"سعر البيع دولار",c:"#2563EB"}].map(({k,l,c})=>(
+                  <div key={k} style={{ marginBottom:12 }}>
+                    <div style={{ fontSize:12, color:c, fontWeight:600, marginBottom:5 }}>{l}</div>
+                    <input type="text" inputMode="numeric" placeholder="٠" value={sellForm[k]}
+                      onChange={e=>ssf(k)(e.target.value.replace(/[^0-9]/g,""))}
+                      style={{ width:"100%", border:"1px solid #CBD5E1", borderRadius:9,
+                        padding:"11px 13px", fontSize:14, outline:"none", fontFamily:"Tahoma",
+                        direction:"rtl", boxSizing:"border-box", background:"#F8FAFC" }}/>
+                    {Number(sellForm[k])>0 && (
+                      <div style={{ fontSize:11, color:c, fontWeight:600, marginTop:3 }}>
+                        ✍️ {w2(Number(sellForm[k]))} {k==="priceDin"?"دينار":"دولار"}
+                        {k==="priceDin" && sellAsset.valueDin && (
+                          <span style={{ color: Number(sellForm.priceDin)>=sellAsset.valueDin?"#16A34A":"#DC2626",
+                            marginRight:8 }}>
+                            {Number(sellForm.priceDin)>=sellAsset.valueDin?"📈":"📉"}
+                            {Number(sellForm.priceDin)>=sellAsset.valueDin?"ربح":"خسارة"}:
+                            {fNum(Math.abs(Number(sellForm.priceDin)-(sellAsset.valueDin||0)))} د.ع
+                          </span>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                ))}
+
+                <div style={{ marginBottom:12 }}>
+                  <div style={{ fontSize:12, color:"#64748B", fontWeight:600, marginBottom:5 }}>
+                    تاريخ البيع
+                  </div>
+                  <input type="date" value={sellForm.date}
+                    onChange={e=>ssf("date")(e.target.value)}
+                    style={{ width:"100%", border:"1px solid #CBD5E1", borderRadius:9,
+                      padding:"11px 13px", fontSize:14, outline:"none", fontFamily:"Tahoma",
+                      boxSizing:"border-box", background:"#F8FAFC" }}/>
+                </div>
+                <div style={{ marginBottom:16 }}>
+                  <div style={{ fontSize:12, color:"#64748B", fontWeight:600, marginBottom:5 }}>
+                    ملاحظة
+                  </div>
+                  <input placeholder="اسم المشتري أو ملاحظة..." value={sellForm.note}
+                    onChange={e=>ssf("note")(e.target.value)}
+                    style={{ width:"100%", border:"1px solid #CBD5E1", borderRadius:9,
+                      padding:"11px 13px", fontSize:14, outline:"none", fontFamily:"Tahoma",
+                      direction:"rtl", boxSizing:"border-box", background:"#F8FAFC" }}/>
+                </div>
+                <button onClick={doSell}
+                  disabled={!Number(sellForm.priceDin)&&!Number(sellForm.priceDol)}
+                  style={{ width:"100%", border:"none", borderRadius:10, padding:"13px",
+                    fontSize:14, fontWeight:700, fontFamily:"Tahoma", cursor:"pointer",
+                    background:Number(sellForm.priceDin)||Number(sellForm.priceDol)
+                      ?"#F97316":"#E2E8F0",
+                    color:Number(sellForm.priceDin)||Number(sellForm.priceDol)
+                      ?"#fff":"#94A3B8" }}>
+                  ✅ تأكيد البيع وإضافة للصندوق
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
       </div>
     </div>
   );
