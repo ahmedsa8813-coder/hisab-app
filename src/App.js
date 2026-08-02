@@ -64,7 +64,6 @@ export default function App() {
   const [tab, setTab]     = useState("active");
   const [form, setForm]   = useState(emptyForm);
   const [showForm, setShowForm] = useState(false);
-  const [saving, setSaving] = useState(false);
   const sf = k => v => setForm(f => ({ ...f, [k]: v }));
 
   useEffect(() => {
@@ -171,17 +170,17 @@ export default function App() {
             <div style={{ fontSize: 13, color: "#64748B", fontWeight: 600, marginBottom: 8 }}>
               نوع المشروع *
             </div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, marginBottom: 16 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 18 }}>
               {TYPES.map(({ val, icon, color, bg }) => (
                 <button key={val} onClick={() => sf("type")(val)} style={{
                   border: "2px solid " + (form.type === val ? color : "#E2E8F0"),
-                  borderRadius: 12, padding: "12px 6px", cursor: "pointer",
-                  fontFamily: "Tahoma", fontSize: 13, fontWeight: 700, textAlign: "center",
+                  borderRadius: 12, padding: "14px 10px", cursor: "pointer",
+                  fontFamily: "Tahoma", fontSize: 14, fontWeight: 700,
+                  display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
                   background: form.type === val ? bg : "#fff",
                   color: form.type === val ? color : "#94A3B8"
                 }}>
-                  <div style={{ fontSize: 22, marginBottom: 4 }}>{icon}</div>
-                  {val}
+                  <span style={{ fontSize: 22 }}>{icon}</span> {val}
                 </button>
               ))}
             </div>
@@ -528,20 +527,20 @@ function AdminPage({ onBack }) {
 
 function ProjectCard({ p, onToggle, onDelete }) {
   const ts = typeStyle(p.type);
-  const pct = p.value > 0 ? Math.min(100, Math.round((p.received || 0) / p.value * 100)) : 0;
-  const sptPct = p.value > 0 ? Math.min(100, Math.round((p.spent || 0) / p.value * 100)) : 0;
-  const cur = p.currency === "دولار" ? "$" : "د.ع";
+  const hasDin = p.valueDin > 0;
+  const hasDol = p.valueDol > 0;
+  const pctDin = hasDin ? Math.min(100, Math.round((p.received || 0) / p.valueDin * 100)) : 0;
+  const pctDol = hasDol ? Math.min(100, Math.round((p.spent    || 0) / p.valueDol * 100)) : 0;
 
   return (
     <div style={{ background: "#fff", borderRadius: 14, padding: "16px 18px",
       marginBottom: 14, border: "1px solid #E2E8F0",
       borderRight: "5px solid " + (ts.color || "#D97706") }}>
 
-      {/* السطر الأول: الاسم + الأزرار */}
+      {/* السطر الأول */}
       <div style={{ display: "flex", justifyContent: "space-between",
         alignItems: "flex-start", marginBottom: 10 }}>
         <div style={{ flex: 1 }}>
-          {/* نوع + حالة */}
           <div style={{ display: "flex", gap: 6, marginBottom: 6, flexWrap: "wrap" }}>
             {p.type && (
               <span style={{ fontSize: 11, fontWeight: 600, padding: "3px 10px",
@@ -558,9 +557,8 @@ function ProjectCard({ p, onToggle, onDelete }) {
           </div>
           <div style={{ fontSize: 16, fontWeight: 700, color: "#1E293B" }}>{p.name}</div>
           <div style={{ display: "flex", gap: 14, marginTop: 5, flexWrap: "wrap" }}>
-            {p.client   && <span style={{ fontSize: 12, color: "#64748B" }}>👤 {p.client}</span>}
-            {p.province && <span style={{ fontSize: 12, color: "#64748B" }}>📍 {p.province}</span>}
-            {p.duration && <span style={{ fontSize: 12, color: "#64748B" }}>⏱️ {p.duration}</span>}
+            {p.startDate && <span style={{ fontSize: 12, color: "#64748B" }}>📅 {p.startDate}</span>}
+            {p.days > 0  && <span style={{ fontSize: 12, color: "#64748B" }}>⏱️ {p.days} يوم</span>}
           </div>
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 6, marginRight: 8 }}>
@@ -581,52 +579,43 @@ function ProjectCard({ p, onToggle, onDelete }) {
         </div>
       </div>
 
-      {/* قيمة المشروع */}
-      {p.value > 0 && (
-        <div style={{ marginBottom: 10 }}>
-          <div style={{ display: "flex", justifyContent: "space-between",
-            alignItems: "center", marginBottom: 6 }}>
-            <span style={{ fontSize: 12, color: "#64748B", fontWeight: 600 }}>
-              قيمة المشروع
-            </span>
-            <span style={{ fontSize: 13, fontWeight: 700, color: "#1E293B" }}>
-              {fNum(p.value)} {p.currency === "دولار" ? "$" : "د.ع"}
-            </span>
-          </div>
-
-          {/* المستلم */}
-          <div style={{ marginBottom: 6 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 3 }}>
-              <span style={{ fontSize: 11, color: "#16A34A", fontWeight: 600 }}>
-                ↓ المستلم
-              </span>
-              <span style={{ fontSize: 11, fontWeight: 700, color: "#16A34A" }}>
-                {fNum(p.received || 0)} {cur} — {pct}%
-              </span>
+      {/* القيم والأشرطة */}
+      {(hasDin || hasDol) && (
+        <div style={{ borderTop: "1px solid #F1F5F9", paddingTop: 10 }}>
+          {hasDin && (
+            <div style={{ marginBottom: 8 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 3 }}>
+                <span style={{ fontSize: 11, color: "#64748B", fontWeight: 600 }}>
+                  🇮🇶 قيمة الدينار
+                </span>
+                <span style={{ fontSize: 11, fontWeight: 700, color: "#D97706" }}>
+                  {fNum(p.valueDin)} د.ع
+                </span>
+              </div>
+              <div style={{ height: 7, background: "#F1F5F9", borderRadius: 99, overflow: "hidden" }}>
+                <div style={{ height: "100%", width: pctDin + "%",
+                  background: "linear-gradient(90deg,#D97706,#F59E0B)",
+                  borderRadius: 99, transition: "width 0.4s" }}/>
+              </div>
             </div>
-            <div style={{ height: 8, background: "#F1F5F9", borderRadius: 99, overflow: "hidden" }}>
-              <div style={{ height: "100%", width: pct + "%",
-                background: "linear-gradient(90deg,#16A34A,#22C55E)",
-                borderRadius: 99, transition: "width 0.4s" }}/>
+          )}
+          {hasDol && (
+            <div>
+              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 3 }}>
+                <span style={{ fontSize: 11, color: "#64748B", fontWeight: 600 }}>
+                  🇺🇸 قيمة الدولار
+                </span>
+                <span style={{ fontSize: 11, fontWeight: 700, color: "#2563EB" }}>
+                  {fNum(p.valueDol)} $
+                </span>
+              </div>
+              <div style={{ height: 7, background: "#F1F5F9", borderRadius: 99, overflow: "hidden" }}>
+                <div style={{ height: "100%", width: pctDol + "%",
+                  background: "linear-gradient(90deg,#2563EB,#60A5FA)",
+                  borderRadius: 99, transition: "width 0.4s" }}/>
+              </div>
             </div>
-          </div>
-
-          {/* المصروف */}
-          <div>
-            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 3 }}>
-              <span style={{ fontSize: 11, color: "#DC2626", fontWeight: 600 }}>
-                ↑ المصروف
-              </span>
-              <span style={{ fontSize: 11, fontWeight: 700, color: "#DC2626" }}>
-                {fNum(p.spent || 0)} {cur} — {sptPct}%
-              </span>
-            </div>
-            <div style={{ height: 8, background: "#F1F5F9", borderRadius: 99, overflow: "hidden" }}>
-              <div style={{ height: "100%", width: sptPct + "%",
-                background: "linear-gradient(90deg,#DC2626,#F87171)",
-                borderRadius: 99, transition: "width 0.4s" }}/>
-            </div>
-          </div>
+          )}
         </div>
       )}
     </div>
