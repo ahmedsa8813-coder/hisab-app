@@ -1133,8 +1133,10 @@ function AssetsPage({ funds, onBack }) {
   };
 
   const list = assets.filter(a => a.status===(tab==="active"?"active":"sold"));
-  const totalBuyDin = list.reduce((s,a)=>s+(a.valueDin||0),0);
+  const totalBuyDin   = list.reduce((s,a)=>s+(a.valueDin||0),0);
+  const totalBuyDol   = list.reduce((s,a)=>s+(a.valueDol||0),0);
   const soldProfitDin = assets.filter(a=>a.status==="sold").reduce((s,a)=>s+(a.profitDin||0),0);
+  const soldProfitDol = assets.filter(a=>a.status==="sold").reduce((s,a)=>s+(a.profitDol||0),0);
 
   return (
     <div style={{ minHeight:"100vh", background:"#F1F5F9",
@@ -1152,7 +1154,7 @@ function AssetsPage({ funds, onBack }) {
           <div style={{ fontSize:18, fontWeight:700, color:"#fff", marginBottom:6 }}>
             📦 الأصول الثابتة
           </div>
-          <div style={{ display:"flex", gap:16 }}>
+          <div style={{ display:"flex", gap:12, flexWrap:"wrap" }}>
             <span style={{ fontSize:12, color:"#CFFAFE" }}>
               ● {assets.filter(a=>a.status==="active").length} نشط
             </span>
@@ -1161,7 +1163,12 @@ function AssetsPage({ funds, onBack }) {
             </span>
             {soldProfitDin !== 0 && (
               <span style={{ fontSize:12, color:"#CFFAFE", fontWeight:700 }}>
-                {soldProfitDin>=0?"📈 ربح":"📉 خسارة"}: {fNum(Math.abs(soldProfitDin))} د.ع
+                {soldProfitDin>=0?"📈":"📉"} {fNum(Math.abs(soldProfitDin))} د.ع
+              </span>
+            )}
+            {soldProfitDol !== 0 && (
+              <span style={{ fontSize:12, color:"#CFFAFE", fontWeight:700 }}>
+                {soldProfitDol>=0?"📈":"📉"} {fNum(Math.abs(soldProfitDol))} $
               </span>
             )}
           </div>
