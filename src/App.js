@@ -819,56 +819,112 @@ function ProjectDetail({ proj, onBack }) {
 
   const doPrint = (filter) => {
     const f = filter || printFilter;
-    const allTxs = (f === "in" ? inTxs : f === "out" ? outTxs : [...inTxs, ...outTxs])
-      .sort((a,b) => (a.date||"").localeCompare(b.date||""));
-    let n = 0;
-    const rows = allTxs.map(t => {
-      n++;
-      const isIn = t.type === "in";
-      const isDol = t.currency === "دولار";
-      return `<tr style="background:${n%2===0?"#F8FAFC":"#fff"}">
-        <td>${n}</td>
-        <td>${t.date||""}</td>
-        <td style="color:${isIn?"#16A34A":"#DC2626"};font-weight:700">${isIn?"↓ مستلم":"↑ مصروف"}</td>
-        <td style="color:${isDol?"#2563EB":"#16A34A"}">${isDol?"🇺🇸 دولار":"🇮🇶 دينار"}</td>
-        <td>${t.receiver||""}</td>
-        <td style="text-align:right">${t.note||"—"}</td>
-        <td style="font-weight:700;color:${isIn?"#16A34A":"#DC2626"}">${isIn?"+":"-"}${fNum(t.amount)} ${isDol?"$":"د.ع"}</td>
-      </tr>`;
-    }).join("");
+    const list = (f==="in"?inTxs:f==="out"?outTxs:[...inTxs,...outTxs])
+      .sort((a,b)=>(a.date||"").localeCompare(b.date||""));
+
+    // بناء الصفوف مع الميزان التراكمي لكل عملة
+    const buildRows = (currency) => {
+      const rows = list.filter(t => !currency || t.currency === currency);
+      let bal = 0;
+      let n = 0;
+      return rows.map(t => {
+        n++;
+        const isIn = t.type === "in";
+        const amt = t.amount || 0;
+        bal = isIn ? bal + amt : bal - amt;
+        const bg = n%2===0?"#F8FAFC":"#fff";
+        const details = [t.receiver, t.note].filter(Boolean).join(" — ") || "—";
+        return `<tr style="background:${bg}">
+          <td style="color:#64748B;font-size:10px">${t.date||""}</td>
+          <td style="text-align:right;padding:7px 10px">${details}</td>
+          <td style="color:#DC2626;font-weight:700;text-align:center">${!isIn?fNum(amt):""}</td>
+          <td style="color:#16A34A;font-weight:700;text-align:center">${isIn?fNum(amt):""}</td>
+          <td style="font-weight:700;text-align:center;color:${bal>=0?"#D97706":"#DC2626"}">${fNum(Math.abs(bal))}</td>
+        </tr>`;
+      }).join("");
+    };
+
+    const rowsDin = buildRows("دينار");
+    const rowsDol = buildRows("دولار");
+    const balDin = totalIn("دينار")-totalOut("دينار");
+    const balDol = totalIn("دولار")-totalOut("دولار");
+
+    const tableStyle = `
+      table{width:100%;border-collapse:collapse;margin-bottom:28px}
+      thead tr{background:#1E3A5F}
+      th{color:#fff;padding:9px 8px;font-size:11px;font-weight:700}
+      td{padding:7px 8px;font-size:11px;border-bottom:1px solid #E2E8F0}
+      .tot td{background:#F1F5F9;font-weight:700;border-top:2px solid #1E3A5F}
+    `;
+
+    const makeTable = (rows, cur, totalIn_, totalOut_, bal_) => {
+      const sym = cur==="دولار"?"$":"د.ع";
+      return `
+      <div style="margin-bottom:6px;font-size:13px;font-weight:700;color:#1E3A5F">
+        ${cur==="دولار"?"🇺🇸 الدولار الأمريكي":"🇮🇶 الدينار العراقي"}
+      </div>
+      <table>
+        <thead><tr>
+          <th style="width:90px">التاريخ</th>
+          <th style="text-align:right">التفاصيل</th>
+          <th style="width:110px">المصاريف</th>
+          <th style="width:110px">المقبوضات</th>
+          <th style="width:110px">الميزان</th>
+        </tr></thead>
+        <tbody>
+          ${rows}
+          <tr class="tot">
+            <td colspan="2" style="text-align:center">الإجمالي</td>
+            <td style="color:#DC2626;text-align:center">${fNum(totalOut_)} ${sym}</td>
+            <td style="color:#16A34A;text-align:center">${fNum(totalIn_)} ${sym}</td>
+            <td style="color:${bal_>=0?"#D97706":"#DC2626"};text-align:center">${fNum(Math.abs(bal_))} ${sym}</td>
+          </tr>
+        </tbody>
+      </table>`;
+    };
+
     const html = `<!DOCTYPE html><html dir="rtl"><head><meta charset="utf-8"/>
-<style>*{font-family:Tahoma}body{margin:22px;direction:rtl}
-.co{font-size:20px;font-weight:700;color:#1E293B}.ca{font-size:11px;color:#64748B}
-hr{border-color:#E2E8F0;margin:10px 0}
-.pt{font-size:17px;font-weight:700;color:#D97706;margin:10px 0 4px}
-.sg{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px}
-.sb{border-radius:9px;padding:12px;text-align:center}
-.sl{font-size:10px;color:#64748B;margin-bottom:4px}.sv{font-size:15px;font-weight:700}
-table{width:100%;border-collapse:collapse}
-thead tr{background:#D97706}th{color:#fff;padding:9px;font-size:11px;text-align:center}
-td{padding:8px;font-size:11px;text-align:center;border-bottom:1px solid #F1F5F9}
-.ft{margin-top:14px;font-size:10px;color:#94A3B8;display:flex;justify-content:space-between}
+<style>
+  *{font-family:Tahoma,Arial,sans-serif;box-sizing:border-box}
+  body{margin:0;padding:20px;direction:rtl;color:#1E293B}
+  .header{text-align:center;border-bottom:3px solid #1E3A5F;padding-bottom:12px;margin-bottom:16px}
+  .co{font-size:22px;font-weight:700;letter-spacing:1px}
+  .sub{font-size:13px;color:#64748B;margin-top:4px}
+  .proj-title{font-size:16px;font-weight:700;margin:12px 0 4px;color:#1E3A5F}
+  .proj-info{font-size:11px;color:#64748B;margin-bottom:14px}
+  ${tableStyle}
+  .footer{margin-top:16px;font-size:10px;color:#94A3B8;
+    display:flex;justify-content:space-between;border-top:1px solid #E2E8F0;padding-top:8px}
+  @media print{body{padding:12px}}
 </style></head><body>
-<div class="co">شركة باب المشاريع</div><div class="ca">بغداد</div><hr/>
-<div class="pt">📋 ${f==="in"?"كشف المستلمات":f==="out"?"كشف المصروفات":"الكشف الشامل"} — ${proj.name}</div>
-<p style="font-size:11px;color:#64748B">
-  ${proj.type?" النوع: "+proj.type+" ·":""} 
-  ${proj.startDate?" بداية: "+proj.startDate+" ·":""}
-  ${proj.days?" مدة: "+proj.days+" يوم":""}
-</p>
-<div class="sg">
-  <div class="sb" style="background:#F0FDF4"><div class="sl">↓ مستلم دينار</div><div class="sv" style="color:#16A34A">${fNum(totalIn("دينار"))} د.ع</div></div>
-  <div class="sb" style="background:#FFF1F2"><div class="sl">↑ مصروف دينار</div><div class="sv" style="color:#DC2626">${fNum(totalOut("دينار"))} د.ع</div></div>
-  <div class="sb" style="background:#FFFBEB;border:2px solid #D97706"><div class="sl">⚖️ ميزان دينار</div><div class="sv" style="color:#D97706">${fNum(totalIn("دينار")-totalOut("دينار"))} د.ع</div></div>
-  <div class="sb" style="background:#EFF6FF"><div class="sl">↓ مستلم دولار</div><div class="sv" style="color:#2563EB">${fNum(totalIn("دولار"))} $</div></div>
-  <div class="sb" style="background:#FEF2F2"><div class="sl">↑ مصروف دولار</div><div class="sv" style="color:#DC2626">${fNum(totalOut("دولار"))} $</div></div>
-  <div class="sb" style="background:#EFF6FF;border:2px solid #2563EB"><div class="sl">⚖️ ميزان دولار</div><div class="sv" style="color:#2563EB">${fNum(totalIn("دولار")-totalOut("دولار"))} $</div></div>
+
+<div class="header">
+  <div class="co">شركة باب المشاريع</div>
+  <div class="sub">بغداد — العرصات</div>
 </div>
-<table><thead><tr><th>#</th><th>التاريخ</th><th>النوع</th><th>العملة</th><th>المستلم / صُرف على</th><th>الملاحظة</th><th>المبلغ</th></tr></thead>
-<tbody>${rows}</tbody></table>
-<div class="ft"><span>شركة باب المشاريع</span><span>طُبع: ${new Date().toISOString().split("T")[0]}</span></div>
+
+<div class="proj-title">
+  ${f==="in"?"كشف المقبوضات":f==="out"?"كشف المصاريف":"الكشف الشامل"} — ${proj.name}
+</div>
+<div class="proj-info">
+  ${proj.type?"النوع: "+proj.type+"   ·   ":""}
+  ${proj.province?proj.province+(proj.city?" — "+proj.city:"")+"   ·   ":""}
+  ${proj.startDate?"بداية: "+proj.startDate+"   ·   ":""}
+  ${proj.days?"مدة: "+proj.days+" يوم":""}
+</div>
+
+${(f!=="out"&&totalIn("دينار")+totalOut("دينار")>0)||f==="all"?
+  makeTable(rowsDin,"دينار",totalIn("دينار"),totalOut("دينار"),balDin):""}
+${(f!=="in"&&totalIn("دولار")+totalOut("دولار")>0)||f==="all"?
+  makeTable(rowsDol,"دولار",totalIn("دولار"),totalOut("دولار"),balDol):""}
+
+<div class="footer">
+  <span>شركة باب المشاريع</span>
+  <span>تاريخ الطباعة: ${new Date().toISOString().split("T")[0]}</span>
+</div>
 </body></html>`;
-    const w = window.open("","_blank","width=900,height=700");
+
+    const w = window.open("","_blank","width=920,height=750");
     if(!w){alert("السماح بالنوافذ المنبثقة");return;}
     w.document.write(html);w.document.close();w.focus();
     setTimeout(()=>w.print(),700);
