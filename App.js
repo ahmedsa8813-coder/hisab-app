@@ -1,13 +1,15 @@
 import React, { useState, useEffect } from "react";
 import { initializeApp } from "firebase/app";
 import { getFirestore, collection, addDoc, onSnapshot,
-  deleteDoc, doc, updateDoc, query, where, getDocs } from "firebase/firestore";
+  deleteDoc, doc, updateDoc, query, where, getDocs, getDoc } from "firebase/firestore";
 
 const app = initializeApp({
-  apiKey: "AIzaSyD_h8oJKVRpzfhi47q-EAsK1Ct_mRT5CIw",
-  authDomain: "hisab-app-e4616.firebaseapp.com",
-  projectId: "hisab-app-e4616",
-  storageBucket: "hisab-app-e4616.appspot.com"
+  apiKey: "AIzaSyCBGovCJ_Bx64dOjC0UWzJsBPgXEuJaizI",
+  authDomain: "bab-projects-b7d04.firebaseapp.com",
+  projectId: "bab-projects-b7d04",
+  storageBucket: "bab-projects-b7d04.firebasestorage.app",
+  messagingSenderId: "982434748534",
+  appId: "1:982434748534:web:ca0e52ef0115ecfc346757"
 });
 const db = getFirestore(app);
 
@@ -89,7 +91,7 @@ export default function App() {
     if (!valid || saving) return;
     setSaving(true);
     try {
-      const ref = await addDoc(collection(db, "projects"), {
+      const data = {
         type:      form.type,
         name:      form.name.trim(),
         days:      Number(form.days),
@@ -100,13 +102,15 @@ export default function App() {
         spent:     0,
         status:    "active",
         createdAt: new Date().toISOString()
-      });
-      if (ref && ref.id) {
-        // تم الحفظ بنجاح
+      };
+      const ref = await addDoc(collection(db, "projects"), data);
+      // تحقق فعلي إن البيانات وصلت Firebase
+      const saved = await getDoc(ref);
+      if (saved.exists()) {
         setForm(emptyForm);
         setShowForm(false);
       } else {
-        alert("لم يتم الحفظ، حاول مرة أخرى");
+        alert("⚠️ لم يتم الحفظ في Firebase، تحقق من الاتصال");
       }
     } catch(e) {
       alert("خطأ في الحفظ: " + e.code + " — " + e.message);
