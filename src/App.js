@@ -2091,8 +2091,6 @@ ${note ? `<div class="row"><span class="lbl">ملاحظة</span><span class="val
 
   const doWithdraw = async () => {
     if (!valid || saving) return;
-    // طباعة الإيصال أولاً
-    printReceipt(amtDin, amtDol, wNote);
     setSaving(true);
     await onWithdraw(partner.id, amtDin, amtDol, wNote);
     setSaving(false);
@@ -2193,14 +2191,25 @@ ${note ? `<div class="row"><span class="lbl">ملاحظة</span><span class="val
                     padding:"12px 14px", fontSize:14, outline:"none", fontFamily:"Tahoma",
                     direction:"rtl", boxSizing:"border-box", background:"#F8FAFC" }}/>
               </div>
-              <button onClick={doWithdraw} disabled={!valid||saving} style={{
-                width:"100%", border:"none", borderRadius:12, padding:"14px",
-                fontSize:15, fontWeight:700, fontFamily:"Tahoma",
-                cursor:valid&&!saving?"pointer":"not-allowed",
-                background:valid?partner.color:"#E2E8F0",
-                color:valid?"#fff":"#94A3B8" }}>
-                {saving?"جاري...":"🖨️ سحب وطباعة الإيصال"}
-              </button>
+              <div style={{ display:"grid", gridTemplateColumns:"1fr auto", gap:8 }}>
+                <button onClick={doWithdraw} disabled={!valid||saving} style={{
+                  border:"none", borderRadius:12, padding:"14px",
+                  fontSize:15, fontWeight:700, fontFamily:"Tahoma",
+                  cursor:valid&&!saving?"pointer":"not-allowed",
+                  background:valid?partner.color:"#E2E8F0",
+                  color:valid?"#fff":"#94A3B8" }}>
+                  {saving?"جاري...":"✅ تأكيد السحب"}
+                </button>
+                {valid && (
+                  <button onClick={()=>printReceipt(amtDin,amtDol,wNote)}
+                    style={{ border:"1px solid "+partner.color, borderRadius:12,
+                      padding:"14px 16px", fontSize:14, fontWeight:700,
+                      fontFamily:"Tahoma", background:"#fff",
+                      color:partner.color, cursor:"pointer", whiteSpace:"nowrap" }}>
+                    🖨️ إيصال
+                  </button>
+                )}
+              </div>
             </>
           )}
         </div>
