@@ -102,7 +102,7 @@ export default function App2({ onBack }) {
       onBack={() => { setPage("home"); setSelFund(null); }}/>;
 
   if (page === "employees")
-    return <EmployeesPage employees={employees}
+    return <EmployeesPage funds={funds}
       onBack={() => setPage("home")}/>;
 
   if (page === "reports")
@@ -677,24 +677,513 @@ td{padding:7px 6px;font-size:10px;text-align:center;border-bottom:1px solid #F1F
   );
 }
 
-// ─── صفحة الموظفين ───────────────────────────────────
-function EmployeesPage({ employees, onBack }) {
+// ─── نظام الرواتب والموظفين ──────────────────────────
+const EMP_BRANCHES = ["إشراف","ديكور","مقاولات","واجهات"];
+const EMP_ROLES    = ["مهندس","مشرف","فني","عامل","سائق","إداري","أخرى"];
+
+function EmployeesPage({ funds, onBack }) {
+  const [employees, setEmployees] = useState([]);
+  const [salaries,  setSalaries]  = useState([]);
+  const [advances,  setAdvances]  = useState([]);
+
+  const [tab,       setTab]       = useState("list");
+  // list | add_emp | salary | advance | report
+  const [filter,    setFilter]    = useState("all");
+  const [selEmp,    setSelEmp]    = useState(null);
+
+  const [empForm,   setEmpForm]   = useState({
+    name:"", branch:"إشراف", role:"عامل",
+    baseDin:"", baseDol:"", hireDate: new Date().toISOString().split("T")[0], note:""
+  });
+  const [salForm,   setSalForm]   = useState({
+    month: new Date().toISOString().slice(0,7),
+    extraDin:"0", extraDol:"0",
+    deductDin:"0", deductDol:"0",
+    absenceDays:"0", note:""
+  });
+  const [advForm,   setAdvForm]   = useState({
+    din:"", dol:"", date: new Date().toISOString().split("T")[0], note:""
+  });
+
+  const ef  = k => v => setEmpForm(f=>({...f,[k]:v}));
+  const sf  = k => v => setSalForm(f=>({...f,[k]:v}));
+  const af  = k => v => setAdvForm(f=>({...f,[k]:v}));
+
+  useEffect(()=>{
+    const u1=onSnapshot(collection(db,"employees"), s=>{
+      const list=s.docs.map(d=>({id:d.id,...d.data()}));
+      list.sort((a,b)=>(a.branch||"").localeCompare(b.branch||"")||(a.name||"").localeCompare(b.name||""));
+      setEmployees(list);
+    });
+    const u2=onSnapshot(collection(db,"salaries"), s=>{
+      setSalaries(s.docs.map(d=>({id:d.id,...d.data()})));
+    });
+    const u3=onSnapshot(collection(db,"advances"), s=>{
+      setAdvances(s.docs.map(d=>({id:d.id,...d.data()})));
+    });
+    return()=>{u1();u2();u3();};
+  },[]);
+
+  // ── إضافة موظف ──────────────────────────────────────
+  const addEmployee = async () => {
+    if (!empForm.name.trim()||(!Number(empForm.baseDin)&&!Number(empForm.baseDol))) return;
+    const pw=window.prompt("🔒 أدخل الباسورد:");
+    if(!pw)return; if(pw!==PASS){alert("❌ باسورد غلط");return;}
+    await addDoc(collection(db,"employees"),{
+      name:empForm.name.trim(), branch:empForm.branch, role:empForm.role,
+      baseDin:Number(empForm.baseDin)||0, baseDol:Number(empForm.baseDol)||0,
+      hireDate:empForm.hireDate, note:empForm.note.trim(),
+      status:"active", createdAt:new Date().toISOString()
+    });
+    setEmpForm({name:"",branch:"إشراف",role:"عامل",baseDin:"",baseDol:"",
+      hireDate:new Date().toISOString().split("T")[0],note:""});
+    setTab("list");
+  };
+
+  // ── صرف راتب ─────────────────────────────────────────
+  const paySalary = async () => {
+    if (!selEmp) return;
+    const extra   = Number(salForm.extraDin)||0;
+    const deduct  = Number(salForm.deductDin)||0;
+    const absence = Number(salForm.absenceDays)||0;
+    const dayRate = selEmp.baseDin ? Math.round(selEmp.baseDin/30) : 0;
+    const absAmt  = dayRate * absence;
+    const netDin  = Math.max(0, (selEmp.baseDin||0) + extra - deduct - absAmt);
+    const netDol  = selEmp.baseDol||0;
+
+    // التحقق من رصيد الصندوق
+    const bal = funds[selEmp.branch]||{din:0,dol:0};
+    if(netDin > bal.din){alert("⛔ رصيد صندوق "+selEmp.branch+" غير كافٍ — المتاح: "+fNum(bal.din)+" د.ع");return;}
+
+    const pw=window.prompt("🔒 صرف راتب "+selEmp.name+" — أدخل الباسورد:");
+    if(!pw)return; if(pw!==PASS){alert("❌ باسورد غلط");return;}
+
+    // خصم من الصندوق
+    await setDoc(doc(db,"funds",selEmp.branch),
+      {din:bal.din-netDin, dol:Math.max(0,bal.dol-netDol)},{merge:true});
+
+    // تسجيل حركة الصندوق
+    await addDoc(collection(db,"fund_txs"),{
+      fundId:selEmp.branch, fundLabel:selEmp.branch, type:"صرف",
+      din:netDin, dol:netDol,
+      note:"راتب "+selEmp.name+" — "+salForm.month,
+      date:salForm.month+"-01", createdAt:new Date().toISOString()
+    });
+
+    // تسجيل الراتب
+    await addDoc(collection(db,"salaries"),{
+      empId:selEmp.id, empName:selEmp.name, branch:selEmp.branch,
+      month:salForm.month,
+      baseDin:selEmp.baseDin||0, baseDol:selEmp.baseDol||0,
+      extraDin:extra, deductDin:deduct,
+      absenceDays:absence, absenceAmtDin:absAmt,
+      netDin, netDol,
+      note:salForm.note,
+      createdAt:new Date().toISOString()
+    });
+
+    alert("✅ تم صرف راتب "+selEmp.name+" — الصافي: "+fNum(netDin)+" د.ع");
+    setSelEmp(null); setTab("list");
+    setSalForm({month:new Date().toISOString().slice(0,7),
+      extraDin:"0",extraDol:"0",deductDin:"0",deductDol:"0",absenceDays:"0",note:""});
+  };
+
+  // ── سلفة ─────────────────────────────────────────────
+  const payAdvance = async () => {
+    if(!selEmp) return;
+    const din=Number(advForm.din)||0, dol=Number(advForm.dol)||0;
+    if(!din&&!dol) return;
+    const bal=funds[selEmp.branch]||{din:0,dol:0};
+    if(din>bal.din){alert("⛔ رصيد الصندوق غير كافٍ — المتاح: "+fNum(bal.din)+" د.ع");return;}
+    const pw=window.prompt("🔒 أدخل الباسورد:");
+    if(!pw)return; if(pw!==PASS){alert("❌ باسورد غلط");return;}
+    await setDoc(doc(db,"funds",selEmp.branch),
+      {din:bal.din-din,dol:bal.dol-dol},{merge:true});
+    await addDoc(collection(db,"fund_txs"),{
+      fundId:selEmp.branch, fundLabel:selEmp.branch, type:"صرف",
+      din, dol, note:"سلفة: "+selEmp.name,
+      date:advForm.date, createdAt:new Date().toISOString()
+    });
+    await addDoc(collection(db,"advances"),{
+      empId:selEmp.id, empName:selEmp.name, branch:selEmp.branch,
+      din, dol, date:advForm.date, note:advForm.note,
+      status:"pending", createdAt:new Date().toISOString()
+    });
+    alert("✅ تم صرف السلفة — "+fNum(din)+" د.ع");
+    setSelEmp(null); setTab("list");
+    setAdvForm({din:"",dol:"",date:new Date().toISOString().split("T")[0],note:""});
+  };
+
+  const filtered = filter==="all" ? employees : employees.filter(e=>e.branch===filter);
+  const totalBaseDin = filtered.reduce((s,e)=>s+(e.baseDin||0),0);
+
+  // ── واجهة الموظفين ────────────────────────────────────
+  const getEmpAdvances = id => advances.filter(a=>a.empId===id&&a.status==="pending");
+  const getEmpSalaries = id => salaries.filter(s=>s.empId===id);
+
   return (
-    <div style={{ minHeight:"100vh", background:"#F1F5F9",
-      fontFamily:"Tahoma", direction:"rtl" }}>
-      <div style={{ maxWidth:540, margin:"0 auto", padding:"22px 16px" }}>
-        <button onClick={onBack} style={{ background:"#fff", border:"1px solid #E2E8F0",
-          borderRadius:10, padding:"8px 16px", fontSize:13, color:"#475569",
-          cursor:"pointer", marginBottom:16, fontFamily:"Tahoma",
-          display:"flex", alignItems:"center", gap:6 }}>← رجوع</button>
-        <div style={{ background:"#fff", borderRadius:14, padding:"20px",
-          border:"1px solid #E2E8F0", textAlign:"center", color:"#64748B" }}>
-          <div style={{ fontSize:40, marginBottom:10 }}>👷</div>
-          <div style={{ fontSize:16, fontWeight:700, color:"#1E293B", marginBottom:6 }}>
-            قريباً — إدارة الموظفين
+    <div style={{minHeight:"100vh",background:"#F1F5F9",fontFamily:"Tahoma",direction:"rtl"}}>
+      <div style={{maxWidth:900,margin:"0 auto",padding:"22px 16px"}}>
+
+        <button onClick={onBack} style={{background:"#fff",border:"1px solid #E2E8F0",
+          borderRadius:10,padding:"8px 16px",fontSize:13,color:"#475569",cursor:"pointer",
+          marginBottom:16,fontFamily:"Tahoma",display:"flex",alignItems:"center",gap:6}}>← رجوع</button>
+
+        {/* هيدر */}
+        <div style={{background:"linear-gradient(135deg,#0F172A,#1E293B)",
+          borderRadius:16,padding:"20px 24px",marginBottom:16}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
+            <div style={{fontSize:18,fontWeight:700,color:"#fff"}}>👷 نظام الرواتب والموظفين</div>
+            <button onClick={()=>setTab(tab==="add_emp"?"list":"add_emp")} style={{
+              background:tab==="add_emp"?"#475569":"#3B82F6",border:"none",borderRadius:10,
+              padding:"9px 18px",color:"#fff",cursor:"pointer",fontFamily:"Tahoma",
+              fontSize:13,fontWeight:700}}>
+              {tab==="add_emp"?"✕ إلغاء":"+ موظف جديد"}
+            </button>
           </div>
-          <div style={{ fontSize:13 }}>سيتم إضافة هذا القسم قريباً</div>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10}}>
+            {EMP_BRANCHES.map(b=>{
+              const list=employees.filter(e=>e.branch===b);
+              const tot=list.reduce((s,e)=>s+(e.baseDin||0),0);
+              return (
+                <div key={b} style={{background:"rgba(255,255,255,0.08)",
+                  borderRadius:10,padding:"12px",textAlign:"center"}}>
+                  <div style={{fontSize:11,color:"#94A3B8",marginBottom:4}}>{b}</div>
+                  <div style={{fontSize:18,fontWeight:700,color:"#fff"}}>{list.length}</div>
+                  <div style={{fontSize:10,color:"#60A5FA",marginTop:2}}>{fNum(tot)} د.ع/شهر</div>
+                </div>
+              );
+            })}
+          </div>
         </div>
+
+        {/* إضافة موظف */}
+        {tab==="add_emp" && (
+          <div style={{background:"#fff",borderRadius:14,padding:20,
+            border:"1px solid #E2E8F0",marginBottom:16}}>
+            <div style={{fontSize:14,fontWeight:700,color:"#1E293B",marginBottom:16}}>
+              + تسجيل موظف جديد
+            </div>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:12}}>
+              <div>
+                <div style={{fontSize:12,color:"#64748B",fontWeight:600,marginBottom:5}}>الاسم *</div>
+                <input placeholder="اسم الموظف..." value={empForm.name}
+                  onChange={e=>ef("name")(e.target.value)}
+                  style={{width:"100%",border:"1px solid #CBD5E1",borderRadius:9,
+                    padding:"11px 13px",fontSize:14,outline:"none",fontFamily:"Tahoma",
+                    direction:"rtl",boxSizing:"border-box",background:"#F8FAFC"}}/>
+              </div>
+              <div>
+                <div style={{fontSize:12,color:"#64748B",fontWeight:600,marginBottom:5}}>تاريخ التعيين</div>
+                <input type="date" value={empForm.hireDate}
+                  onChange={e=>ef("hireDate")(e.target.value)}
+                  style={{width:"100%",border:"1px solid #CBD5E1",borderRadius:9,
+                    padding:"11px 13px",fontSize:14,outline:"none",fontFamily:"Tahoma",
+                    boxSizing:"border-box",background:"#F8FAFC"}}/>
+              </div>
+            </div>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:12}}>
+              <div>
+                <div style={{fontSize:12,color:"#64748B",fontWeight:600,marginBottom:5}}>الفرع</div>
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6}}>
+                  {EMP_BRANCHES.map(b=>(
+                    <button key={b} onClick={()=>ef("branch")(b)} style={{
+                      border:"1.5px solid "+(empForm.branch===b?"#1E293B":"#E2E8F0"),
+                      borderRadius:8,padding:"8px",cursor:"pointer",fontFamily:"Tahoma",
+                      fontSize:12,fontWeight:600,
+                      background:empForm.branch===b?"#1E293B":"#fff",
+                      color:empForm.branch===b?"#fff":"#64748B"}}>{b}</button>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <div style={{fontSize:12,color:"#64748B",fontWeight:600,marginBottom:5}}>الوظيفة</div>
+                <select value={empForm.role} onChange={e=>ef("role")(e.target.value)}
+                  style={{width:"100%",border:"1px solid #CBD5E1",borderRadius:9,
+                    padding:"11px 13px",fontSize:14,outline:"none",fontFamily:"Tahoma",
+                    direction:"rtl",boxSizing:"border-box",background:"#F8FAFC",appearance:"none"}}>
+                  {EMP_ROLES.map(r=><option key={r} value={r}>{r}</option>)}
+                </select>
+              </div>
+            </div>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:14}}>
+              {[{k:"baseDin",l:"الراتب الأساسي دينار",c:"#D97706"},
+                {k:"baseDol",l:"الراتب الأساسي دولار",c:"#2563EB"}].map(({k,l,c})=>(
+                <div key={k}>
+                  <div style={{fontSize:12,color:c,fontWeight:600,marginBottom:5}}>{l}</div>
+                  <input type="text" inputMode="numeric" placeholder="٠" value={empForm[k]}
+                    onChange={e=>ef(k)(e.target.value.replace(/[^0-9]/g,""))}
+                    style={{width:"100%",border:"1px solid #CBD5E1",borderRadius:9,
+                      padding:"11px 13px",fontSize:14,outline:"none",fontFamily:"Tahoma",
+                      direction:"rtl",boxSizing:"border-box",background:"#F8FAFC"}}/>
+                  {Number(empForm[k])>0&&(
+                    <div style={{fontSize:11,color:c,marginTop:3}}>
+                      ✍️ {w2(Number(empForm[k]))} {k==="baseDin"?"دينار":"دولار"} شهرياً
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+            <button onClick={addEmployee} style={{
+              width:"100%",border:"none",borderRadius:10,padding:"13px",
+              fontSize:14,fontWeight:700,fontFamily:"Tahoma",cursor:"pointer",
+              background:empForm.name.trim()&&(Number(empForm.baseDin)||Number(empForm.baseDol))
+                ?"#1E293B":"#E2E8F0",
+              color:empForm.name.trim()&&(Number(empForm.baseDin)||Number(empForm.baseDol))
+                ?"#fff":"#94A3B8"}}>
+              ✅ تسجيل الموظف
+            </button>
+          </div>
+        )}
+
+        {/* فورم الراتب */}
+        {tab==="salary" && selEmp && (
+          <div style={{background:"#fff",borderRadius:14,padding:20,
+            border:"2px solid #16A34A",marginBottom:16}}>
+            <div style={{display:"flex",justifyContent:"space-between",marginBottom:16}}>
+              <div style={{fontSize:14,fontWeight:700,color:"#16A34A"}}>
+                💰 صرف راتب — {selEmp.name}
+              </div>
+              <button onClick={()=>{setTab("list");setSelEmp(null);}} style={{
+                background:"none",border:"none",cursor:"pointer",fontSize:18,color:"#64748B"}}>✕</button>
+            </div>
+
+            {/* ملخص الراتب */}
+            <div style={{background:"#F0FDF4",borderRadius:12,padding:14,marginBottom:16}}>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10,fontSize:12}}>
+                <div style={{textAlign:"center"}}>
+                  <div style={{color:"#64748B",marginBottom:3}}>الراتب الأساسي</div>
+                  <div style={{fontWeight:700,fontSize:16,color:"#16A34A"}}>{fNum(selEmp.baseDin||0)} د.ع</div>
+                </div>
+                <div style={{textAlign:"center"}}>
+                  <div style={{color:"#64748B",marginBottom:3}}>+ إضافي</div>
+                  <div style={{fontWeight:700,fontSize:16,color:"#2563EB"}}>
+                    {fNum(Number(salForm.extraDin)||0)} د.ع
+                  </div>
+                </div>
+                <div style={{textAlign:"center"}}>
+                  <div style={{color:"#64748B",marginBottom:3}}>= الصافي</div>
+                  <div style={{fontWeight:700,fontSize:16,color:"#1E293B"}}>
+                    {fNum(Math.max(0,(selEmp.baseDin||0)+(Number(salForm.extraDin)||0)
+                      -(Number(salForm.deductDin)||0)
+                      -Math.round((selEmp.baseDin||0)/30*(Number(salForm.absenceDays)||0))))} د.ع
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:12}}>
+              <div>
+                <div style={{fontSize:12,color:"#64748B",fontWeight:600,marginBottom:5}}>الشهر</div>
+                <input type="month" value={salForm.month}
+                  onChange={e=>sf("month")(e.target.value)}
+                  style={{width:"100%",border:"1px solid #CBD5E1",borderRadius:9,
+                    padding:"10px 12px",fontSize:14,outline:"none",fontFamily:"Tahoma",
+                    boxSizing:"border-box",background:"#F8FAFC"}}/>
+              </div>
+              <div>
+                <div style={{fontSize:12,color:"#DC2626",fontWeight:600,marginBottom:5}}>
+                  أيام الغياب
+                </div>
+                <input type="text" inputMode="numeric" placeholder="٠" value={salForm.absenceDays}
+                  onChange={e=>sf("absenceDays")(e.target.value.replace(/[^0-9]/g,""))}
+                  style={{width:"100%",border:"1px solid #CBD5E1",borderRadius:9,
+                    padding:"10px 12px",fontSize:14,outline:"none",fontFamily:"Tahoma",
+                    direction:"rtl",boxSizing:"border-box",background:"#F8FAFC"}}/>
+                {Number(salForm.absenceDays)>0&&(
+                  <div style={{fontSize:11,color:"#DC2626",marginTop:3}}>
+                    خصم: {fNum(Math.round((selEmp.baseDin||0)/30*Number(salForm.absenceDays)))} د.ع
+                  </div>
+                )}
+              </div>
+              <div>
+                <div style={{fontSize:12,color:"#16A34A",fontWeight:600,marginBottom:5}}>
+                  بدل إضافي دينار
+                </div>
+                <input type="text" inputMode="numeric" placeholder="٠" value={salForm.extraDin}
+                  onChange={e=>sf("extraDin")(e.target.value.replace(/[^0-9]/g,""))}
+                  style={{width:"100%",border:"1px solid #CBD5E1",borderRadius:9,
+                    padding:"10px 12px",fontSize:14,outline:"none",fontFamily:"Tahoma",
+                    direction:"rtl",boxSizing:"border-box",background:"#F8FAFC"}}/>
+              </div>
+              <div>
+                <div style={{fontSize:12,color:"#DC2626",fontWeight:600,marginBottom:5}}>
+                  خصومات دينار
+                </div>
+                <input type="text" inputMode="numeric" placeholder="٠" value={salForm.deductDin}
+                  onChange={e=>sf("deductDin")(e.target.value.replace(/[^0-9]/g,""))}
+                  style={{width:"100%",border:"1px solid #CBD5E1",borderRadius:9,
+                    padding:"10px 12px",fontSize:14,outline:"none",fontFamily:"Tahoma",
+                    direction:"rtl",boxSizing:"border-box",background:"#F8FAFC"}}/>
+              </div>
+            </div>
+            <div style={{marginBottom:14}}>
+              <div style={{fontSize:12,color:"#64748B",fontWeight:600,marginBottom:5}}>ملاحظة</div>
+              <input placeholder="أي ملاحظة..." value={salForm.note}
+                onChange={e=>sf("note")(e.target.value)}
+                style={{width:"100%",border:"1px solid #CBD5E1",borderRadius:9,
+                  padding:"10px 12px",fontSize:13,outline:"none",fontFamily:"Tahoma",
+                  direction:"rtl",boxSizing:"border-box",background:"#F8FAFC"}}/>
+            </div>
+            <button onClick={paySalary} style={{
+              width:"100%",border:"none",borderRadius:10,padding:"13px",
+              fontSize:14,fontWeight:700,fontFamily:"Tahoma",cursor:"pointer",
+              background:"#16A34A",color:"#fff"}}>
+              ✅ تأكيد صرف الراتب من صندوق {selEmp.branch}
+            </button>
+          </div>
+        )}
+
+        {/* فورم السلفة */}
+        {tab==="advance" && selEmp && (
+          <div style={{background:"#fff",borderRadius:14,padding:20,
+            border:"2px solid #F97316",marginBottom:16}}>
+            <div style={{display:"flex",justifyContent:"space-between",marginBottom:16}}>
+              <div style={{fontSize:14,fontWeight:700,color:"#F97316"}}>
+                📤 سلفة — {selEmp.name}
+              </div>
+              <button onClick={()=>{setTab("list");setSelEmp(null);}} style={{
+                background:"none",border:"none",cursor:"pointer",fontSize:18,color:"#64748B"}}>✕</button>
+            </div>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:12}}>
+              {[{k:"din",l:"المبلغ دينار",c:"#D97706"},{k:"dol",l:"المبلغ دولار",c:"#2563EB"}].map(({k,l,c})=>(
+                <div key={k}>
+                  <div style={{fontSize:12,color:c,fontWeight:600,marginBottom:5}}>{l}</div>
+                  <input type="text" inputMode="numeric" placeholder="٠" value={advForm[k]}
+                    onChange={e=>af(k)(e.target.value.replace(/[^0-9]/g,""))}
+                    style={{width:"100%",border:"1px solid #CBD5E1",borderRadius:9,
+                      padding:"11px 13px",fontSize:14,outline:"none",fontFamily:"Tahoma",
+                      direction:"rtl",boxSizing:"border-box",background:"#F8FAFC"}}/>
+                  {Number(advForm[k])>0&&(
+                    <div style={{fontSize:11,color:c,marginTop:3}}>
+                      ✍️ {w2(Number(advForm[k]))} {k==="din"?"دينار":"دولار"}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:14}}>
+              <div>
+                <div style={{fontSize:12,color:"#64748B",fontWeight:600,marginBottom:5}}>التاريخ</div>
+                <input type="date" value={advForm.date} onChange={e=>af("date")(e.target.value)}
+                  style={{width:"100%",border:"1px solid #CBD5E1",borderRadius:9,
+                    padding:"10px",fontSize:13,outline:"none",fontFamily:"Tahoma",
+                    boxSizing:"border-box",background:"#F8FAFC"}}/>
+              </div>
+              <div>
+                <div style={{fontSize:12,color:"#64748B",fontWeight:600,marginBottom:5}}>ملاحظة</div>
+                <input placeholder="سبب السلفة..." value={advForm.note}
+                  onChange={e=>af("note")(e.target.value)}
+                  style={{width:"100%",border:"1px solid #CBD5E1",borderRadius:9,
+                    padding:"10px",fontSize:13,outline:"none",fontFamily:"Tahoma",
+                    direction:"rtl",boxSizing:"border-box",background:"#F8FAFC"}}/>
+              </div>
+            </div>
+            <button onClick={payAdvance} style={{
+              width:"100%",border:"none",borderRadius:10,padding:"13px",
+              fontSize:14,fontWeight:700,fontFamily:"Tahoma",cursor:"pointer",
+              background:"#F97316",color:"#fff"}}>
+              ✅ صرف السلفة من صندوق {selEmp.branch}
+            </button>
+          </div>
+        )}
+
+        {/* فلاتر الأفرع */}
+        {tab==="list" && (
+          <>
+            <div style={{display:"flex",gap:8,marginBottom:14,flexWrap:"wrap"}}>
+              {["all",...EMP_BRANCHES].map(b=>(
+                <button key={b} onClick={()=>setFilter(b)} style={{
+                  border:"1.5px solid "+(filter===b?"#1E293B":"#E2E8F0"),
+                  borderRadius:9,padding:"8px 14px",cursor:"pointer",
+                  fontFamily:"Tahoma",fontSize:12,fontWeight:600,
+                  background:filter===b?"#1E293B":"#fff",
+                  color:filter===b?"#fff":"#64748B"}}>
+                  {b==="all"?"الكل":b}
+                  <span style={{marginRight:4,fontSize:11,opacity:0.7}}>
+                    ({b==="all"?employees.length:employees.filter(e=>e.branch===b).length})
+                  </span>
+                </button>
+              ))}
+              <div style={{marginRight:"auto",fontSize:12,color:"#64748B",
+                padding:"8px 14px",background:"#fff",borderRadius:9,border:"1px solid #E2E8F0"}}>
+                إجمالي: <strong style={{color:"#D97706"}}>{fNum(totalBaseDin)} د.ع/شهر</strong>
+              </div>
+            </div>
+
+            {/* قائمة الموظفين */}
+            {filtered.length===0 ? (
+              <div style={{background:"#fff",borderRadius:14,padding:40,
+                textAlign:"center",color:"#94A3B8",border:"1px solid #E2E8F0"}}>
+                <div style={{fontSize:40,marginBottom:8}}>👷</div>
+                <div>ما في موظفين في هذا الفرع</div>
+              </div>
+            ) : (
+              <div style={{display:"grid",gap:10}}>
+                {filtered.map(emp=>{
+                  const empAdv = getEmpAdvances(emp.id);
+                  const empSal = getEmpSalaries(emp.id);
+                  const totalAdvDin = empAdv.reduce((s,a)=>s+(a.din||0),0);
+                  return (
+                    <div key={emp.id} style={{background:"#fff",borderRadius:14,
+                      padding:"16px 18px",border:"1px solid #E2E8F0",
+                      borderRight:"5px solid #1E293B"}}>
+                      <div style={{display:"grid",gridTemplateColumns:"1fr auto",
+                        gap:12,alignItems:"start"}}>
+                        <div>
+                          <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:6}}>
+                            <span style={{fontSize:15,fontWeight:700,color:"#1E293B"}}>{emp.name}</span>
+                            <span style={{fontSize:11,color:"#fff",background:"#1E293B",
+                              borderRadius:20,padding:"2px 10px"}}>{emp.branch}</span>
+                            <span style={{fontSize:11,color:"#64748B"}}>{emp.role}</span>
+                          </div>
+                          <div style={{display:"flex",gap:12,fontSize:12,flexWrap:"wrap"}}>
+                            {(emp.baseDin||0)>0&&(
+                              <span style={{color:"#D97706",fontWeight:700}}>
+                                💰 {fNum(emp.baseDin)} د.ع/شهر
+                              </span>
+                            )}
+                            {(emp.baseDol||0)>0&&(
+                              <span style={{color:"#2563EB",fontWeight:700}}>
+                                💰 {fNum(emp.baseDol)} $/شهر
+                              </span>
+                            )}
+                            {totalAdvDin>0&&(
+                              <span style={{color:"#F97316",fontWeight:600}}>
+                                📤 سلف: {fNum(totalAdvDin)} د.ع
+                              </span>
+                            )}
+                            {empSal.length>0&&(
+                              <span style={{color:"#64748B"}}>
+                                ✅ {empSal.length} راتب مصروف
+                              </span>
+                            )}
+                            <span style={{color:"#94A3B8"}}>📅 {emp.hireDate}</span>
+                          </div>
+                        </div>
+                        <div style={{display:"flex",gap:8}}>
+                          <button onClick={()=>{setSelEmp(emp);setTab("salary");}} style={{
+                            background:"#F0FDF4",border:"1px solid #16A34A",
+                            borderRadius:9,padding:"7px 14px",cursor:"pointer",
+                            fontSize:12,fontFamily:"Tahoma",fontWeight:700,color:"#16A34A"}}>
+                            💰 راتب
+                          </button>
+                          <button onClick={()=>{setSelEmp(emp);setTab("advance");}} style={{
+                            background:"#FFF7ED",border:"1px solid #F97316",
+                            borderRadius:9,padding:"7px 14px",cursor:"pointer",
+                            fontSize:12,fontFamily:"Tahoma",fontWeight:700,color:"#F97316"}}>
+                            📤 سلفة
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </>
+        )}
+
       </div>
     </div>
   );
