@@ -53,6 +53,13 @@ const PROVINCES = [
   "المثنى","القادسية","بابل","كربلاء","النجف"
 ];
 
+const PARTNERS = [
+  { id: "إيهاب",  name: "م. إيهاب",  pct: 30, color: "#2563EB", bg: "#EFF6FF" },
+  { id: "أحمد",   name: "م. أحمد",   pct: 10, color: "#D97706", bg: "#FFFBEB" },
+  { id: "نور",    name: "م. نور",    pct: 30, color: "#059669", bg: "#ECFDF5" },
+  { id: "محمد",   name: "م. محمد",   pct: 30, color: "#7C3AED", bg: "#F5F3FF" },
+];
+
 const TYPES = [
   { val: "إشراف",   icon: "👷", color: "#059669", bg: "#ECFDF5" },
   { val: "ديكور",   icon: "🎨", color: "#7C3AED", bg: "#F5F3FF" },
@@ -80,6 +87,7 @@ export default function App() {
 
   const [funds, setFunds] = useState({});
   const [closingProj, setClosingProj] = useState(null);
+  const [partnerPage, setPartnerPage] = useState(null); // {partner, mode:"view"|"withdraw"}
 
   useEffect(() => {
     return onSnapshot(collection(db, "funds"), snap => {
@@ -188,6 +196,17 @@ export default function App() {
           { din: Math.max(0, cur.din - (d.din||0)),
             dol: Math.max(0, cur.dol - (d.dol||0)) },
           { merge: true });
+        if (d.fund === "شركاء") {
+          for (const p of PARTNERS) {
+            const pDin = Math.round((d.din||0) * p.pct / 100);
+            const pDol = Math.round((d.dol||0) * p.pct / 100);
+            const pId  = "partner_" + p.id;
+            const pCur = funds[pId] || { din: 0, dol: 0 };
+            await setDoc(doc(db, "funds", pId),
+              { din: Math.max(0, pCur.din - pDin), dol: Math.max(0, pCur.dol - pDol) },
+              { merge: true });
+          }
+        }
       }
       await updateDoc(doc(db, "projects", id),
         { status: "active", distributions: [], closedAt: null });
@@ -195,7 +214,6 @@ export default function App() {
   };
 
   const confirmClose = async (proj, distPcts) => {
-    // distPcts = [{fund, label, pct}, ...]
     const balDin = proj.balDin || 0;
     const balDol = proj.balDol || 0;
     const distributions = [];
@@ -205,13 +223,22 @@ export default function App() {
       const dol = Math.round(balDol * d.pct / 100);
       const cur = funds[d.fund] || { din: 0, dol: 0 };
       await setDoc(doc(db, "funds", d.fund),
-        { din: cur.din + din, dol: cur.dol + dol },
-        { merge: true });
+        { din: cur.din + din, dol: cur.dol + dol }, { merge: true });
       distributions.push({ fund: d.fund, label: d.label, pct: d.pct, din, dol });
+      // توزيع حصص الشركاء
+      if (d.fund === "شركاء") {
+        for (const p of PARTNERS) {
+          const pDin = Math.round(din * p.pct / 100);
+          const pDol = Math.round(dol * p.pct / 100);
+          const pId  = "partner_" + p.id;
+          const pCur = funds[pId] || { din: 0, dol: 0 };
+          await setDoc(doc(db, "funds", pId),
+            { din: pCur.din + pDin, dol: pCur.dol + pDol }, { merge: true });
+        }
+      }
     }
     await updateDoc(doc(db, "projects", proj.id), {
-      status: "done",
-      distributions,
+      status: "done", distributions,
       closedAt: new Date().toISOString().split("T")[0]
     });
     setClosingProj(null);
@@ -242,6 +269,19 @@ export default function App() {
     onConfirm={confirmClose}
     onCancel={() => setClosingProj(null)}/>;
 
+  if (partnerPage) return <PartnerPage
+    partner={partnerPage} funds={funds}
+    onBack={() => setPartnerPage(null)}
+    onWithdraw={async (pid, din, dol) => {
+      const pId = "partner_" + pid;
+      const pf = funds[pId] || { din:0, dol:0 };
+      const sf = funds["شركاء"] || { din:0, dol:0 };
+      await setDoc(doc(db,"funds",pId),
+        { din: Math.max(0,pf.din-din), dol: Math.max(0,pf.dol-dol) }, {merge:true});
+      await setDoc(doc(db,"funds","شركاء"),
+        { din: Math.max(0,sf.din-din), dol: Math.max(0,sf.dol-dol) }, {merge:true});
+    }}/>;
+
   if (page === "home")    return <HomePage onSelect={setPage} />;
   if (page === "admin")   return <AdminPage onBack={() => setPage("home")} />;
   if (page === "proj" && selProj)
@@ -266,7 +306,8 @@ export default function App() {
         {(() => {
           const allFunds = [
             "رأس_المال","عام","شركاء",
-            ...TYPES.map(t=>t.val)
+            ...TYPES.map(t=>t.val),
+            ...PARTNERS.map(p=>"partner_"+p.id)
           ];
           const totalDin = allFunds.reduce((s,f)=>(funds[f]?.din||0)+s, 0);
           const totalDol = allFunds.reduce((s,f)=>(funds[f]?.dol||0)+s, 0);
@@ -1862,6 +1903,154 @@ function ClosingModal({ proj, funds, onConfirm, onCancel }) {
               {loading ? "جاري التوزيع..." : "🏁 تأكيد الإنهاء والتوزيع"}
             </button>
           </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── صفحة الشريك ───────────────────────────────────────
+function PartnerPage({ partner, funds, onBack, onWithdraw }) {
+  const pf = funds["partner_" + partner.id] || { din: 0, dol: 0 };
+  const [wDin, setWDin] = useState("");
+  const [wDol, setWDol] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [ok, setOk] = useState(false);
+  const amtDin = Number(wDin) || 0;
+  const amtDol = Number(wDol) || 0;
+  const valid = (amtDin > 0 || amtDol > 0)
+    && amtDin <= pf.din
+    && amtDol <= pf.dol;
+
+  const doWithdraw = async () => {
+    if (!valid || saving) return;
+    if (amtDin > pf.din) { alert("⛔ رصيد الدينار غير كافٍ\nالمتاح: " + fNum(pf.din) + " د.ع"); return; }
+    if (amtDol > pf.dol) { alert("⛔ رصيد الدولار غير كافٍ\nالمتاح: " + fNum(pf.dol) + "$"); return; }
+    setSaving(true);
+    await onWithdraw(partner.id, amtDin, amtDol);
+    setSaving(false);
+    setOk(true);
+    setTimeout(() => { setOk(false); setWDin(""); setWDol(""); }, 1500);
+  };
+
+  return (
+    <div style={{ minHeight:"100vh", background:"#F1F5F9",
+      fontFamily:"Tahoma", direction:"rtl" }}>
+      <div style={{ maxWidth:480, margin:"0 auto", padding:"22px 16px" }}>
+
+        <button onClick={onBack} style={{ background:"#fff", border:"1px solid #E2E8F0",
+          borderRadius:10, padding:"8px 16px", fontSize:13, color:"#475569",
+          cursor:"pointer", marginBottom:16, fontFamily:"Tahoma",
+          display:"flex", alignItems:"center", gap:6 }}>
+          ← رجوع
+        </button>
+
+        {/* بطاقة الشريك */}
+        <div style={{ background:partner.bg, borderRadius:16, padding:"20px",
+          border:"2px solid "+partner.color+"40", marginBottom:16 }}>
+          <div style={{ display:"flex", justifyContent:"space-between",
+            alignItems:"center", marginBottom:14 }}>
+            <div>
+              <div style={{ fontSize:20, fontWeight:700, color:partner.color }}>
+                {partner.name}
+              </div>
+              <div style={{ fontSize:13, color:"#64748B", marginTop:3 }}>
+                حصة {partner.pct}% من أرباح الشركاء
+              </div>
+            </div>
+            <div style={{ width:50, height:50, borderRadius:14,
+              background:"#fff", display:"flex", alignItems:"center",
+              justifyContent:"center", fontSize:26 }}>👤</div>
+          </div>
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
+            <div style={{ background:"#fff", borderRadius:12, padding:"14px",
+              textAlign:"center", border:"1.5px solid "+partner.color+"30" }}>
+              <div style={{ fontSize:10, color:"#64748B", marginBottom:4 }}>💰 رصيد الدينار</div>
+              <div style={{ fontSize:20, fontWeight:700, color:partner.color }}>
+                {fNum(pf.din)}
+              </div>
+              <div style={{ fontSize:12, color:"#64748B" }}>د.ع</div>
+            </div>
+            <div style={{ background:"#fff", borderRadius:12, padding:"14px",
+              textAlign:"center", border:"1.5px solid #2563EB30" }}>
+              <div style={{ fontSize:10, color:"#64748B", marginBottom:4 }}>💰 رصيد الدولار</div>
+              <div style={{ fontSize:20, fontWeight:700, color:"#2563EB" }}>
+                {fNum(pf.dol)}
+              </div>
+              <div style={{ fontSize:12, color:"#64748B" }}>$</div>
+            </div>
+          </div>
+        </div>
+
+        {/* سحب */}
+        <div style={{ background:"#fff", borderRadius:14, padding:"18px 20px",
+          border:"1px solid #E2E8F0" }}>
+          <div style={{ fontSize:14, fontWeight:700, color:"#1E293B", marginBottom:14 }}>
+            ↑ سحب من الرصيد
+          </div>
+          {ok ? (
+            <div style={{ textAlign:"center", padding:"20px 0" }}>
+              <div style={{ fontSize:40 }}>✅</div>
+              <div style={{ fontSize:16, fontWeight:700, color:"#16A34A", marginTop:8 }}>
+                تم السحب بنجاح
+              </div>
+            </div>
+          ) : (
+            <>
+              {/* دينار */}
+              <div style={{ marginBottom:12 }}>
+                <div style={{ fontSize:12, color:"#16A34A", fontWeight:700, marginBottom:6 }}>
+                  🇮🇶 مبلغ الدينار
+                </div>
+                <input type="text" inputMode="numeric" placeholder="٠"
+                  value={wDin}
+                  onChange={e => setWDin(e.target.value.replace(/[^0-9]/g,""))}
+                  style={{ width:"100%", border:"1px solid #CBD5E1", borderRadius:10,
+                    padding:"12px 14px", fontSize:15, outline:"none", fontFamily:"Tahoma",
+                    direction:"rtl", boxSizing:"border-box",
+                    background:"#F8FAFC", color:"#1E293B",
+                    MozAppearance:"textfield" }}/>
+                {amtDin > 0 && (
+                  <div style={{ fontSize:12, fontWeight:600, marginTop:4,
+                    color: amtDin > pf.din ? "#DC2626" : "#16A34A" }}>
+                    {amtDin > pf.din
+                      ? "⛔ يتجاوز الرصيد! المتاح: " + fNum(pf.din) + " د.ع"
+                      : "✍️ " + w2(amtDin) + " دينار — المتبقي: " + fNum(pf.din - amtDin) + " د.ع"}
+                  </div>
+                )}
+              </div>
+              {/* دولار */}
+              <div style={{ marginBottom:16 }}>
+                <div style={{ fontSize:12, color:"#2563EB", fontWeight:700, marginBottom:6 }}>
+                  🇺🇸 مبلغ الدولار
+                </div>
+                <input type="text" inputMode="numeric" placeholder="٠"
+                  value={wDol}
+                  onChange={e => setWDol(e.target.value.replace(/[^0-9]/g,""))}
+                  style={{ width:"100%", border:"1px solid #CBD5E1", borderRadius:10,
+                    padding:"12px 14px", fontSize:15, outline:"none", fontFamily:"Tahoma",
+                    direction:"rtl", boxSizing:"border-box",
+                    background:"#F8FAFC", color:"#1E293B",
+                    MozAppearance:"textfield" }}/>
+                {amtDol > 0 && (
+                  <div style={{ fontSize:12, fontWeight:600, marginTop:4,
+                    color: amtDol > pf.dol ? "#DC2626" : "#2563EB" }}>
+                    {amtDol > pf.dol
+                      ? "⛔ يتجاوز الرصيد! المتاح: " + fNum(pf.dol) + " $"
+                      : "✍️ " + w2(amtDol) + " دولار — المتبقي: " + fNum(pf.dol - amtDol) + " $"}
+                  </div>
+                )}
+              </div>
+              <button onClick={doWithdraw} disabled={!valid || saving} style={{
+                width:"100%", border:"none", borderRadius:12, padding:"14px",
+                fontSize:15, fontWeight:700, fontFamily:"Tahoma",
+                cursor: valid && !saving ? "pointer" : "not-allowed",
+                background: valid ? partner.color : "#E2E8F0",
+                color: valid ? "#fff" : "#94A3B8" }}>
+                {saving ? "جاري السحب..." : "↑ تأكيد السحب"}
+              </button>
+            </>
+          )}
         </div>
       </div>
     </div>
