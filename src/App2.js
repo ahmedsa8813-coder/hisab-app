@@ -102,6 +102,9 @@ export default function App2({ onBack }) {
     return <ReportsPage funds={funds} projects={projects}
       onBack={() => setPage("home")}/>;
 
+  if (page === "assets")
+    return <AssetsPage funds={funds} onBack={() => setPage("home")}/>;
+
   // الصفحة الرئيسية
   const fundsDin    = ALL_FUNDS.reduce((s,f) => s + (funds[f.id]?.din||0), 0);
   const fundsDol    = ALL_FUNDS.reduce((s,f) => s + (funds[f.id]?.dol||0), 0);
@@ -263,6 +266,28 @@ export default function App2({ onBack }) {
             </div>
             <span style={{ marginRight:"auto", fontSize:12, color:"#7C3AED", fontWeight:600 }}>
               ← فتح
+            </span>
+          </div>
+        </button>
+
+        {/* الأصول */}
+        <button onClick={() => setPage("assets")} style={{
+          width:"100%", background:"#fff", border:"1px solid #E2E8F0",
+          borderTop:"4px solid #0891B2", borderRadius:14, padding:"16px 20px",
+          cursor:"pointer", textAlign:"right", fontFamily:"Tahoma", marginBottom:14 }}>
+          <div style={{ display:"flex", alignItems:"center", gap:12 }}>
+            <div style={{ width:44, height:44, borderRadius:12, background:"#ECFEFF",
+              display:"flex", alignItems:"center", justifyContent:"center", fontSize:22 }}>
+              📦
+            </div>
+            <div>
+              <div style={{ fontSize:15, fontWeight:700, color:"#1E293B" }}>الأصول الثابتة</div>
+              <div style={{ fontSize:12, color:"#64748B", marginTop:2 }}>
+                معدات، مركبات، عقارات وغيرها
+              </div>
+            </div>
+            <span style={{ marginRight:"auto", fontSize:12, color:"#0891B2", fontWeight:600 }}>
+              ← إدارة
             </span>
           </div>
         </button>
@@ -997,6 +1022,428 @@ ${HDR}
             background: rt?.color || "#1E293B", color:"#fff", cursor:"pointer" }}>
             🖨️ طباعة {rt?.label}
           </button>
+        )}
+
+      </div>
+    </div>
+  );
+}
+
+// ─── صفحة الأصول الثابتة ─────────────────────────────
+const ASSET_TYPES = ["معدات","مركبات","عقارات","أثاث","أجهزة","أخرى"];
+const ASSET_FUNDS = ["عام","إشراف","ديكور","مقاولات","واجهات"];
+
+function AssetsPage({ funds, onBack }) {
+  const [assets, setAssets]     = useState([]);
+  const [tab, setTab]           = useState("active"); // active | sold
+  const [showAdd, setShowAdd]   = useState(false);
+  const [sellAsset, setSellAsset] = useState(null);
+  const [form, setForm] = useState({
+    name:"", type:"معدات", fund:"عام",
+    valueDin:"", valueDol:"", date: new Date().toISOString().split("T")[0],
+    note:"", currency:"دينار"
+  });
+  const [sellForm, setSellForm] = useState({
+    priceDin:"", priceDol:"", date: new Date().toISOString().split("T")[0], note:""
+  });
+  const sf  = k => v => setForm(f=>({...f,[k]:v}));
+  const ssf = k => v => setSellForm(f=>({...f,[k]:v}));
+
+  useEffect(()=>{
+    return onSnapshot(collection(db,"assets"), snap=>{
+      const list = snap.docs.map(d=>({id:d.id,...d.data()}));
+      list.sort((a,b)=>(b.createdAt||"").localeCompare(a.createdAt||""));
+      setAssets(list);
+    });
+  },[]);
+
+  const addAsset = async () => {
+    const din = Number(form.valueDin)||0;
+    const dol = Number(form.valueDol)||0;
+    if (!form.name.trim() || (!din && !dol)) return;
+    const pw = window.prompt("🔒 أدخل الباسورد:");
+    if (!pw) return;
+    if (pw !== PASS) { alert("❌ باسورد غلط"); return; }
+
+    // خصم من الصندوق
+    const bal = funds[form.fund] || {din:0,dol:0};
+    if (din > bal.din) { alert("⛔ رصيد الدينار غير كافٍ في الصندوق\nالمتاح: "+fNum(bal.din)+" د.ع"); return; }
+    if (dol > bal.dol) { alert("⛔ رصيد الدولار غير كافٍ في الصندوق\nالمتاح: "+fNum(bal.dol)+" $"); return; }
+
+    await addDoc(collection(db,"assets"), {
+      name: form.name.trim(), type: form.type,
+      fund: form.fund, valueDin: din, valueDol: dol,
+      date: form.date, note: form.note.trim(),
+      status: "active",
+      createdAt: new Date().toISOString()
+    });
+
+    await setDoc(doc(db,"funds",form.fund),
+      { din: bal.din-din, dol: bal.dol-dol }, {merge:true});
+
+    // تسجيل حركة الصندوق
+    await addDoc(collection(db,"fund_txs"), {
+      fundId: form.fund, fundLabel: form.fund,
+      type:"صرف", din, dol,
+      note:"شراء أصل: "+form.name.trim(),
+      date: form.date, createdAt: new Date().toISOString()
+    });
+
+    setForm({name:"",type:"معدات",fund:"عام",valueDin:"",valueDol:"",
+      date:new Date().toISOString().split("T")[0],note:"",currency:"دينار"});
+    setShowAdd(false);
+  };
+
+  const doSell = async () => {
+    if (!sellAsset) return;
+    const pDin = Number(sellForm.priceDin)||0;
+    const pDol = Number(sellForm.priceDol)||0;
+    if (!pDin && !pDol) return;
+    const pw = window.prompt("🔒 أدخل الباسورد:");
+    if (!pw) return;
+    if (pw !== PASS) { alert("❌ باسورد غلط"); return; }
+
+    const profitDin = pDin - (sellAsset.valueDin||0);
+    const profitDol = pDol - (sellAsset.valueDol||0);
+    const bal = funds[sellAsset.fund] || {din:0,dol:0};
+
+    // إضافة لقيمة البيع للصندوق
+    await setDoc(doc(db,"funds",sellAsset.fund),
+      { din: bal.din+pDin, dol: bal.dol+pDol }, {merge:true});
+
+    // تسجيل حركة الصندوق
+    await addDoc(collection(db,"fund_txs"), {
+      fundId: sellAsset.fund, fundLabel: sellAsset.fund,
+      type:"إيداع", din:pDin, dol:pDol,
+      note:"بيع أصل: "+sellAsset.name,
+      date: sellForm.date, createdAt: new Date().toISOString()
+    });
+
+    // تحديث الأصل
+    await updateDoc(doc(db,"assets",sellAsset.id), {
+      status:"sold",
+      sellPriceDin: pDin, sellPriceDol: pDol,
+      profitDin, profitDol,
+      sellDate: sellForm.date,
+      sellNote: sellForm.note.trim()
+    });
+
+    setSellAsset(null);
+    setSellForm({priceDin:"",priceDol:"",date:new Date().toISOString().split("T")[0],note:""});
+  };
+
+  const list = assets.filter(a => a.status===(tab==="active"?"active":"sold"));
+  const totalBuyDin = list.reduce((s,a)=>s+(a.valueDin||0),0);
+  const soldProfitDin = assets.filter(a=>a.status==="sold").reduce((s,a)=>s+(a.profitDin||0),0);
+
+  return (
+    <div style={{ minHeight:"100vh", background:"#F1F5F9",
+      fontFamily:"Tahoma", direction:"rtl" }}>
+      <div style={{ maxWidth:560, margin:"0 auto", padding:"22px 16px" }}>
+
+        <button onClick={onBack} style={{ background:"#fff", border:"1px solid #E2E8F0",
+          borderRadius:10, padding:"8px 16px", fontSize:13, color:"#475569",
+          cursor:"pointer", marginBottom:16, fontFamily:"Tahoma",
+          display:"flex", alignItems:"center", gap:6 }}>← رجوع</button>
+
+        {/* هيدر */}
+        <div style={{ background:"linear-gradient(135deg,#0891B2,#06B6D4)",
+          borderRadius:16, padding:"18px 20px", marginBottom:16 }}>
+          <div style={{ fontSize:18, fontWeight:700, color:"#fff", marginBottom:6 }}>
+            📦 الأصول الثابتة
+          </div>
+          <div style={{ display:"flex", gap:16 }}>
+            <span style={{ fontSize:12, color:"#CFFAFE" }}>
+              ● {assets.filter(a=>a.status==="active").length} نشط
+            </span>
+            <span style={{ fontSize:12, color:"#CFFAFE" }}>
+              ✓ {assets.filter(a=>a.status==="sold").length} مباع
+            </span>
+            {soldProfitDin !== 0 && (
+              <span style={{ fontSize:12, color:"#CFFAFE", fontWeight:700 }}>
+                {soldProfitDin>=0?"📈 ربح":"📉 خسارة"}: {fNum(Math.abs(soldProfitDin))} د.ع
+              </span>
+            )}
+          </div>
+        </div>
+
+        {/* تبويبات */}
+        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, marginBottom:14 }}>
+          {[{v:"active",l:"● النشطة"},{v:"sold",l:"✓ المباعة"}].map(({v,l})=>(
+            <button key={v} onClick={()=>setTab(v)} style={{
+              border:"none", borderRadius:10, padding:"12px", cursor:"pointer",
+              fontFamily:"Tahoma", fontSize:13, fontWeight:700,
+              background:tab===v?"#0891B2":"#fff",
+              color:tab===v?"#fff":"#64748B" }}>{l}</button>
+          ))}
+        </div>
+
+        {/* زر إضافة */}
+        {tab==="active" && (
+          <button onClick={()=>setShowAdd(v=>!v)} style={{
+            width:"100%", border:"none", borderRadius:12, padding:"13px",
+            fontSize:14, fontWeight:700, fontFamily:"Tahoma", marginBottom:14,
+            background:showAdd?"#475569":"#0891B2", color:"#fff", cursor:"pointer" }}>
+            {showAdd?"✕ إلغاء":"+ إضافة أصل جديد"}
+          </button>
+        )}
+
+        {/* فورم الإضافة */}
+        {showAdd && (
+          <div style={{ background:"#fff", borderRadius:14, padding:16,
+            border:"1px solid #E2E8F0", marginBottom:14 }}>
+
+            {/* الاسم */}
+            <div style={{ marginBottom:12 }}>
+              <div style={{ fontSize:12, color:"#64748B", fontWeight:600, marginBottom:5 }}>
+                اسم الأصل *
+              </div>
+              <input placeholder="مثال: مكينة حفر، كرفان، سيارة..." value={form.name}
+                onChange={e=>sf("name")(e.target.value)}
+                style={{ width:"100%", border:"1px solid #CBD5E1", borderRadius:9,
+                  padding:"11px 13px", fontSize:14, outline:"none", fontFamily:"Tahoma",
+                  direction:"rtl", boxSizing:"border-box", background:"#F8FAFC" }}/>
+            </div>
+
+            {/* النوع */}
+            <div style={{ marginBottom:12 }}>
+              <div style={{ fontSize:12, color:"#64748B", fontWeight:600, marginBottom:5 }}>النوع</div>
+              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:6 }}>
+                {ASSET_TYPES.map(t=>(
+                  <button key={t} onClick={()=>sf("type")(t)} style={{
+                    border:"1.5px solid "+(form.type===t?"#0891B2":"#E2E8F0"),
+                    borderRadius:8, padding:"7px 4px", cursor:"pointer",
+                    fontFamily:"Tahoma", fontSize:11, fontWeight:600,
+                    background:form.type===t?"#ECFEFF":"#fff",
+                    color:form.type===t?"#0891B2":"#64748B" }}>{t}</button>
+                ))}
+              </div>
+            </div>
+
+            {/* الصندوق */}
+            <div style={{ marginBottom:12 }}>
+              <div style={{ fontSize:12, color:"#64748B", fontWeight:600, marginBottom:5 }}>
+                الصندوق المصدر *
+              </div>
+              <select value={form.fund} onChange={e=>sf("fund")(e.target.value)}
+                style={{ width:"100%", border:"1px solid #CBD5E1", borderRadius:9,
+                  padding:"10px 12px", fontSize:13, outline:"none", fontFamily:"Tahoma",
+                  direction:"rtl", boxSizing:"border-box", background:"#F8FAFC",
+                  appearance:"none" }}>
+                {ASSET_FUNDS.map(f=>{
+                  const b = funds[f]||{din:0,dol:0};
+                  return <option key={f} value={f}>{f} — {fNum(b.din)} د.ع</option>;
+                })}
+              </select>
+            </div>
+
+            {/* القيمة */}
+            {[{k:"valueDin",l:"قيمة الشراء دينار",c:"#D97706",sym:"د.ع"},
+              {k:"valueDol",l:"قيمة الشراء دولار",c:"#2563EB",sym:"$"}].map(({k,l,c,sym})=>(
+              <div key={k} style={{ marginBottom:10 }}>
+                <div style={{ fontSize:12, color:c, fontWeight:600, marginBottom:5 }}>{l}</div>
+                <input type="text" inputMode="numeric" placeholder="٠" value={form[k]}
+                  onChange={e=>sf(k)(e.target.value.replace(/[^0-9]/g,""))}
+                  style={{ width:"100%", border:"1px solid #CBD5E1", borderRadius:9,
+                    padding:"11px 13px", fontSize:14, outline:"none", fontFamily:"Tahoma",
+                    direction:"rtl", boxSizing:"border-box", background:"#F8FAFC" }}/>
+                {Number(form[k])>0 && (
+                  <div style={{ fontSize:11, color:c, fontWeight:600, marginTop:3 }}>
+                    ✍️ {w2(Number(form[k]))} {k==="valueDin"?"دينار عراقي":"دولار أمريكي"}
+                  </div>
+                )}
+              </div>
+            ))}
+
+            {/* التاريخ والملاحظة */}
+            <div style={{ marginBottom:10 }}>
+              <div style={{ fontSize:12, color:"#64748B", fontWeight:600, marginBottom:5 }}>
+                تاريخ الشراء
+              </div>
+              <input type="date" value={form.date} onChange={e=>sf("date")(e.target.value)}
+                style={{ width:"100%", border:"1px solid #CBD5E1", borderRadius:9,
+                  padding:"11px 13px", fontSize:14, outline:"none", fontFamily:"Tahoma",
+                  boxSizing:"border-box", background:"#F8FAFC" }}/>
+            </div>
+            <div style={{ marginBottom:16 }}>
+              <div style={{ fontSize:12, color:"#64748B", fontWeight:600, marginBottom:5 }}>
+                ملاحظة
+              </div>
+              <input placeholder="وصف إضافي..." value={form.note}
+                onChange={e=>sf("note")(e.target.value)}
+                style={{ width:"100%", border:"1px solid #CBD5E1", borderRadius:9,
+                  padding:"11px 13px", fontSize:14, outline:"none", fontFamily:"Tahoma",
+                  direction:"rtl", boxSizing:"border-box", background:"#F8FAFC" }}/>
+            </div>
+
+            <button onClick={addAsset}
+              disabled={!form.name.trim()||(!Number(form.valueDin)&&!Number(form.valueDol))}
+              style={{ width:"100%", border:"none", borderRadius:10, padding:"13px",
+                fontSize:14, fontWeight:700, fontFamily:"Tahoma", cursor:"pointer",
+                background:form.name.trim()&&(Number(form.valueDin)||Number(form.valueDol))
+                  ?"#0891B2":"#E2E8F0",
+                color:form.name.trim()&&(Number(form.valueDin)||Number(form.valueDol))
+                  ?"#fff":"#94A3B8" }}>
+              ✅ تسجيل الأصل وخصمه من الصندوق
+            </button>
+          </div>
+        )}
+
+        {/* قائمة الأصول */}
+        {list.length===0 ? (
+          <div style={{ background:"#fff", borderRadius:14, padding:30,
+            textAlign:"center", color:"#94A3B8", border:"1px solid #E2E8F0" }}>
+            <div style={{ fontSize:36, marginBottom:8 }}>📦</div>
+            <div>{tab==="active"?"ما في أصول نشطة":"ما في أصول مباعة"}</div>
+          </div>
+        ) : list.map(a=>(
+          <div key={a.id} style={{ background:"#fff", borderRadius:14, padding:16,
+            marginBottom:10, border:"1px solid #E2E8F0",
+            borderRight:"5px solid "+(a.status==="active"?"#0891B2":"#64748B") }}>
+            <div style={{ display:"flex", justifyContent:"space-between", marginBottom:8 }}>
+              <div>
+                <div style={{ fontSize:15, fontWeight:700, color:"#1E293B" }}>{a.name}</div>
+                <div style={{ fontSize:11, color:"#64748B", marginTop:3 }}>
+                  📂 {a.type} · 🏦 {a.fund} · 📅 {a.date}
+                </div>
+                {a.note && <div style={{ fontSize:11, color:"#475569", marginTop:2 }}>{a.note}</div>}
+              </div>
+              {a.status==="active" && (
+                <button onClick={()=>setSellAsset(a)} style={{
+                  background:"#FFF7ED", border:"1px solid #F97316",
+                  borderRadius:8, padding:"6px 12px", cursor:"pointer",
+                  fontSize:11, fontFamily:"Tahoma", fontWeight:700, color:"#F97316",
+                  alignSelf:"flex-start" }}>
+                  💰 بيع
+                </button>
+              )}
+            </div>
+
+            {/* القيمة */}
+            <div style={{ display:"flex", gap:10, flexWrap:"wrap" }}>
+              {(a.valueDin||0)>0 && (
+                <span style={{ background:"#FFFBEB", borderRadius:7, padding:"5px 10px",
+                  fontSize:12, fontWeight:700, color:"#D97706" }}>
+                  شراء: {fNum(a.valueDin)} د.ع
+                </span>
+              )}
+              {(a.valueDol||0)>0 && (
+                <span style={{ background:"#EFF6FF", borderRadius:7, padding:"5px 10px",
+                  fontSize:12, fontWeight:700, color:"#2563EB" }}>
+                  شراء: {fNum(a.valueDol)} $
+                </span>
+              )}
+              {a.status==="sold" && (
+                <>
+                  {(a.sellPriceDin||0)>0 && (
+                    <span style={{ background:"#F0FDF4", borderRadius:7, padding:"5px 10px",
+                      fontSize:12, fontWeight:700, color:"#16A34A" }}>
+                      بيع: {fNum(a.sellPriceDin)} د.ع
+                    </span>
+                  )}
+                  {(a.profitDin||0)!==0 && (
+                    <span style={{ background:(a.profitDin||0)>=0?"#ECFDF5":"#FFF1F2",
+                      borderRadius:7, padding:"5px 10px",
+                      fontSize:12, fontWeight:700,
+                      color:(a.profitDin||0)>=0?"#16A34A":"#DC2626" }}>
+                      {(a.profitDin||0)>=0?"📈 ربح":"📉 خسارة"}: {fNum(Math.abs(a.profitDin||0))} د.ع
+                    </span>
+                  )}
+                  <span style={{ background:"#F1F5F9", borderRadius:7, padding:"5px 10px",
+                    fontSize:11, color:"#64748B" }}>
+                    تاريخ البيع: {a.sellDate}
+                  </span>
+                </>
+              )}
+            </div>
+          </div>
+        ))}
+
+        {/* نافذة البيع */}
+        {sellAsset && (
+          <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.5)",
+            zIndex:999, display:"flex", alignItems:"center", justifyContent:"center", padding:16 }}>
+            <div style={{ background:"#fff", borderRadius:18, width:"100%", maxWidth:420,
+              boxShadow:"0 20px 60px rgba(0,0,0,0.25)" }}>
+              <div style={{ padding:"16px 20px", borderBottom:"1px solid #E2E8F0",
+                display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+                <div style={{ fontSize:15, fontWeight:700, color:"#F97316" }}>
+                  💰 بيع — {sellAsset.name}
+                </div>
+                <button onClick={()=>setSellAsset(null)} style={{ background:"none",
+                  border:"none", fontSize:20, cursor:"pointer", color:"#64748B" }}>✕</button>
+              </div>
+              <div style={{ padding:"18px 20px" }}>
+                {/* القيمة الأصلية */}
+                <div style={{ background:"#FFF7ED", borderRadius:10, padding:12,
+                  marginBottom:16, fontSize:12 }}>
+                  <div style={{ fontWeight:700, color:"#F97316", marginBottom:4 }}>
+                    القيمة الأصلية:
+                  </div>
+                  {(sellAsset.valueDin||0)>0 &&
+                    <div>🇮🇶 {fNum(sellAsset.valueDin)} د.ع</div>}
+                  {(sellAsset.valueDol||0)>0 &&
+                    <div>🇺🇸 {fNum(sellAsset.valueDol)} $</div>}
+                </div>
+
+                {[{k:"priceDin",l:"سعر البيع دينار",c:"#16A34A"},
+                  {k:"priceDol",l:"سعر البيع دولار",c:"#2563EB"}].map(({k,l,c})=>(
+                  <div key={k} style={{ marginBottom:12 }}>
+                    <div style={{ fontSize:12, color:c, fontWeight:600, marginBottom:5 }}>{l}</div>
+                    <input type="text" inputMode="numeric" placeholder="٠" value={sellForm[k]}
+                      onChange={e=>ssf(k)(e.target.value.replace(/[^0-9]/g,""))}
+                      style={{ width:"100%", border:"1px solid #CBD5E1", borderRadius:9,
+                        padding:"11px 13px", fontSize:14, outline:"none", fontFamily:"Tahoma",
+                        direction:"rtl", boxSizing:"border-box", background:"#F8FAFC" }}/>
+                    {Number(sellForm[k])>0 && (
+                      <div style={{ fontSize:11, color:c, fontWeight:600, marginTop:3 }}>
+                        ✍️ {w2(Number(sellForm[k]))} {k==="priceDin"?"دينار":"دولار"}
+                        {k==="priceDin" && sellAsset.valueDin && (
+                          <span style={{ color: Number(sellForm.priceDin)>=sellAsset.valueDin?"#16A34A":"#DC2626",
+                            marginRight:8 }}>
+                            {Number(sellForm.priceDin)>=sellAsset.valueDin?"📈":"📉"}
+                            {Number(sellForm.priceDin)>=sellAsset.valueDin?"ربح":"خسارة"}:
+                            {fNum(Math.abs(Number(sellForm.priceDin)-(sellAsset.valueDin||0)))} د.ع
+                          </span>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                ))}
+
+                <div style={{ marginBottom:12 }}>
+                  <div style={{ fontSize:12, color:"#64748B", fontWeight:600, marginBottom:5 }}>
+                    تاريخ البيع
+                  </div>
+                  <input type="date" value={sellForm.date}
+                    onChange={e=>ssf("date")(e.target.value)}
+                    style={{ width:"100%", border:"1px solid #CBD5E1", borderRadius:9,
+                      padding:"11px 13px", fontSize:14, outline:"none", fontFamily:"Tahoma",
+                      boxSizing:"border-box", background:"#F8FAFC" }}/>
+                </div>
+                <div style={{ marginBottom:16 }}>
+                  <div style={{ fontSize:12, color:"#64748B", fontWeight:600, marginBottom:5 }}>
+                    ملاحظة
+                  </div>
+                  <input placeholder="اسم المشتري أو ملاحظة..." value={sellForm.note}
+                    onChange={e=>ssf("note")(e.target.value)}
+                    style={{ width:"100%", border:"1px solid #CBD5E1", borderRadius:9,
+                      padding:"11px 13px", fontSize:14, outline:"none", fontFamily:"Tahoma",
+                      direction:"rtl", boxSizing:"border-box", background:"#F8FAFC" }}/>
+                </div>
+                <button onClick={doSell}
+                  disabled={!Number(sellForm.priceDin)&&!Number(sellForm.priceDol)}
+                  style={{ width:"100%", border:"none", borderRadius:10, padding:"13px",
+                    fontSize:14, fontWeight:700, fontFamily:"Tahoma", cursor:"pointer",
+                    background:Number(sellForm.priceDin)||Number(sellForm.priceDol)
+                      ?"#F97316":"#E2E8F0",
+                    color:Number(sellForm.priceDin)||Number(sellForm.priceDol)
+                      ?"#fff":"#94A3B8" }}>
+                  ✅ تأكيد البيع وإضافة للصندوق
+                </button>
+              </div>
+            </div>
+          </div>
         )}
 
       </div>
