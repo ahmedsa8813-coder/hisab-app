@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import App2 from "./App2";
 import { initializeApp } from "firebase/app";
 import { getFirestore, collection, addDoc, onSnapshot,
   deleteDoc, doc, updateDoc, setDoc, query, where, getDocs, getDoc } from "firebase/firestore";
@@ -307,6 +308,8 @@ export default function App() {
     return <ProjectDetail proj={selProj} onBack={() => { setPage("projects"); setSelProj(null); }}/>;
 
   // الصفحة المالية الرئيسية — تُعرض عند page==="financial"
+  if (page === "financial2") return <App2 />;
+
   if (page === "financial") return (
     <div style={{ minHeight:"100vh", background:"#F1F5F9",
       fontFamily:"Tahoma", direction:"rtl" }}>
@@ -362,8 +365,38 @@ export default function App() {
             </div>
           );
         })()}
-        {/* زر المشاريع */}
-        <button onClick={() => setPage("projects")} style={{ width:"100%",
+        {/* أزرار التنقل */}
+        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:14 }}>
+          <button onClick={() => setPage("projects")} style={{
+            background:"#fff", border:"1px solid #E2E8F0", borderTop:"4px solid #D97706",
+            borderRadius:16, padding:"14px 16px", cursor:"pointer", textAlign:"right",
+            fontFamily:"Tahoma" }}>
+            <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+              <span style={{ fontSize:22 }}>🏗️</span>
+              <div>
+                <div style={{ fontSize:14, fontWeight:700, color:"#1E293B" }}>المشاريع</div>
+                <div style={{ fontSize:11, color:"#64748B" }}>
+                  {projects.filter(p=>p.status==="active").length} نشط
+                </div>
+              </div>
+            </div>
+          </button>
+          <button onClick={() => setPage("financial2")} style={{
+            background:"#fff", border:"1px solid #E2E8F0", borderTop:"4px solid #059669",
+            borderRadius:16, padding:"14px 16px", cursor:"pointer", textAlign:"right",
+            fontFamily:"Tahoma" }}>
+            <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+              <span style={{ fontSize:22 }}>📊</span>
+              <div>
+                <div style={{ fontSize:14, fontWeight:700, color:"#1E293B" }}>الحسابات</div>
+                <div style={{ fontSize:11, color:"#64748B" }}>الصناديق والموظفين</div>
+              </div>
+            </div>
+          </button>
+        </div>
+
+        {/* زر المشاريع القديم - محذوف */}
+        <button onClick={() => setPage("projects")} style={{ width:"100%", display:"none",
           background:"#fff", border:"1px solid #E2E8F0", borderTop:"4px solid #D97706",
           borderRadius:16, padding:"18px 20px", cursor:"pointer", textAlign:"right",
           fontFamily:"Tahoma", marginBottom:20 }}>
