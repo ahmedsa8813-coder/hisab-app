@@ -258,9 +258,51 @@ export default function App() {
           fontFamily:"Tahoma", display:"flex", alignItems:"center", gap:6 }}>
           ← رجوع للرئيسية
         </button>
-        <div style={{ fontSize:20, fontWeight:700, color:"#1E293B", marginBottom:20 }}>
+        <div style={{ fontSize:20, fontWeight:700, color:"#1E293B", marginBottom:16 }}>
           💰 القسم المالي
         </div>
+
+        {/* إجمالي كل الصناديق */}
+        {(() => {
+          const allFunds = [
+            "رأس_المال","عام","شركاء",
+            ...TYPES.map(t=>t.val)
+          ];
+          const totalDin = allFunds.reduce((s,f)=>(funds[f]?.din||0)+s, 0);
+          const totalDol = allFunds.reduce((s,f)=>(funds[f]?.dol||0)+s, 0);
+          return (
+            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:20 }}>
+              <div style={{ background:"linear-gradient(135deg,#D97706,#F59E0B)",
+                borderRadius:14, padding:"16px", textAlign:"center",
+                boxShadow:"0 4px 20px rgba(217,119,6,0.3)" }}>
+                <div style={{ fontSize:12, color:"#FEF3C7", marginBottom:6 }}>
+                  🇮🇶 جرد إجمالي الدينار
+                </div>
+                <div style={{ fontSize:11, color:"#FEF3C7", marginBottom:4 }}>
+                  كل الصناديق مجتمعة
+                </div>
+                <div style={{ fontSize:20, fontWeight:700, color:"#fff" }}>
+                  {fNum(totalDin)}
+                </div>
+                <div style={{ fontSize:12, color:"#FEF3C7" }}>د.ع</div>
+              </div>
+              <div style={{ background:"linear-gradient(135deg,#1D4ED8,#3B82F6)",
+                borderRadius:14, padding:"16px", textAlign:"center",
+                boxShadow:"0 4px 20px rgba(29,78,216,0.3)" }}>
+                <div style={{ fontSize:12, color:"#DBEAFE", marginBottom:6 }}>
+                  🇺🇸 جرد إجمالي الدولار
+                </div>
+                <div style={{ fontSize:11, color:"#DBEAFE", marginBottom:4 }}>
+                  كل الصناديق مجتمعة
+                </div>
+                <div style={{ fontSize:20, fontWeight:700, color:"#fff" }}>
+                  {fNum(totalDol)}
+                </div>
+                <div style={{ fontSize:12, color:"#DBEAFE" }}>$</div>
+              </div>
+            </div>
+          );
+        })()}
         {/* زر المشاريع */}
         <button onClick={() => setPage("projects")} style={{ width:"100%",
           background:"#fff", border:"1px solid #E2E8F0", borderTop:"4px solid #D97706",
