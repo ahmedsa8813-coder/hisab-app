@@ -616,10 +616,6 @@ function AdminPage({ onBack }) {
 
 function ProjectCard({ p, onOpen, onToggle, onDelete }) {
   const ts = typeStyle(p.type);
-  const hasDin = p.valueDin > 0;
-  const hasDol = p.valueDol > 0;
-  const pctDin = hasDin ? Math.min(100, Math.round((p.received || 0) / p.valueDin * 100)) : 0;
-  const pctDol = hasDol ? Math.min(100, Math.round((p.spent    || 0) / p.valueDol * 100)) : 0;
 
   return (
     <div style={{ background: "#fff", borderRadius: 14, padding: "16px 18px",
@@ -674,45 +670,28 @@ function ProjectCard({ p, onOpen, onToggle, onDelete }) {
         </div>
       </div>
 
-      {/* القيم والأشرطة */}
-      {(hasDin || hasDol) && (
-        <div style={{ borderTop: "1px solid #F1F5F9", paddingTop: 10 }}>
-          {hasDin && (
-            <div style={{ marginBottom: 8 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 3 }}>
-                <span style={{ fontSize: 11, color: "#64748B", fontWeight: 600 }}>
-                  🇮🇶 قيمة الدينار
-                </span>
-                <span style={{ fontSize: 11, fontWeight: 700, color: "#D97706" }}>
-                  {fNum(p.valueDin)} د.ع
-                </span>
-              </div>
-              <div style={{ height: 7, background: "#F1F5F9", borderRadius: 99, overflow: "hidden" }}>
-                <div style={{ height: "100%", width: pctDin + "%",
-                  background: "linear-gradient(90deg,#D97706,#F59E0B)",
-                  borderRadius: 99, transition: "width 0.4s" }}/>
-              </div>
-            </div>
-          )}
-          {hasDol && (
-            <div>
-              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 3 }}>
-                <span style={{ fontSize: 11, color: "#64748B", fontWeight: 600 }}>
-                  🇺🇸 قيمة الدولار
-                </span>
-                <span style={{ fontSize: 11, fontWeight: 700, color: "#2563EB" }}>
-                  {fNum(p.valueDol)} $
-                </span>
-              </div>
-              <div style={{ height: 7, background: "#F1F5F9", borderRadius: 99, overflow: "hidden" }}>
-                <div style={{ height: "100%", width: pctDol + "%",
-                  background: "linear-gradient(90deg,#2563EB,#60A5FA)",
-                  borderRadius: 99, transition: "width 0.4s" }}/>
-              </div>
-            </div>
-          )}
+      {/* الميزان في القائمة */}
+      <div style={{ borderTop: "1px solid #F1F5F9", paddingTop: 10,
+        display: "flex", gap: 8, flexWrap: "wrap" }}>
+        <div style={{ background: (p.balDin||0) >= 0 ? "#FFFBEB" : "#FFF1F2",
+          borderRadius: 9, padding: "7px 12px",
+          border: "1.5px solid " + ((p.balDin||0) >= 0 ? "#D97706" : "#DC2626") }}>
+          <span style={{ fontSize: 10, color: "#64748B" }}>⚖️ ميزان د.ع  </span>
+          <span style={{ fontSize: 13, fontWeight: 700,
+            color: (p.balDin||0) >= 0 ? "#D97706" : "#DC2626" }}>
+            {(p.balDin||0) >= 0 ? "+" : ""}{fNum(p.balDin||0)} د.ع
+          </span>
         </div>
-      )}
+        <div style={{ background: (p.balDol||0) >= 0 ? "#EFF6FF" : "#FFF1F2",
+          borderRadius: 9, padding: "7px 12px",
+          border: "1.5px solid " + ((p.balDol||0) >= 0 ? "#2563EB" : "#DC2626") }}>
+          <span style={{ fontSize: 10, color: "#64748B" }}>⚖️ ميزان $  </span>
+          <span style={{ fontSize: 13, fontWeight: 700,
+            color: (p.balDol||0) >= 0 ? "#2563EB" : "#DC2626" }}>
+            {(p.balDol||0) >= 0 ? "+" : ""}{fNum(p.balDol||0)} $
+          </span>
+        </div>
+      </div>
     </div>
   );
 }
@@ -748,7 +727,28 @@ function ProjectDetail({ proj, onBack }) {
 
   const addTx = () => {
     if (!amt || !form.receiver.trim()) return;
-    const data = {
+    const isDol = form.currency === "دولار";
+    // التحقق من عدم تجاوز قيمة المشروع للمستلمات
+    if (tab === "in") {
+      const projVal = isDol ? (proj.valueDol || 0) : (proj.valueDin || 0);
+      const curTotal = totalIn(form.currency);
+      if (projVal > 0 && curTotal + amt > projVal) {
+        const rem = projVal - curTotal;
+        alert("⚠️ تجاوز قيمة المشروع!\nالمتبقي المسموح: " + fNum(rem) + (isDol ? " $" : " د.ع"));
+        return;
+      }
+    }
+    const isDolCur = form.currency === "دولار";
+    const isIn = tab === "in";
+    // حساب الميزان الجديد
+    const newBalDin = isDolCur
+      ? (proj.balDin || 0)
+      : (proj.balDin || 0) + (isIn ? amt : -amt);
+    const newBalDol = isDolCur
+      ? (proj.balDol || 0) + (isIn ? amt : -amt)
+      : (proj.balDol || 0);
+    // حفظ الحركة
+    addDoc(collection(db, "project_txs"), {
       projectId: proj.id,
       projectName: proj.name,
       type: tab,
@@ -758,8 +758,9 @@ function ProjectDetail({ proj, onBack }) {
       date: form.date,
       note: form.note.trim(),
       createdAt: new Date().toISOString()
-    };
-    addDoc(collection(db, "project_txs"), data);
+    });
+    // تحديث الميزان في المشروع
+    updateDoc(doc(db, "projects", proj.id), { balDin: newBalDin, balDol: newBalDol });
     setForm({ amount: "", currency: form.currency, receiver: "", date: form.date, note: "" });
     setShow(false);
   };
