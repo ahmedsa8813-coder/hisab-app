@@ -771,6 +771,61 @@ function ProjectDetail({ proj, onBack }) {
 
   const ts = typeStyle(proj.type);
 
+  const doPrint = () => {
+    const allTxs = [...inTxs, ...outTxs].sort((a,b) => (a.date||"").localeCompare(b.date||""));
+    let n = 0;
+    const rows = allTxs.map(t => {
+      n++;
+      const isIn = t.type === "in";
+      const isDol = t.currency === "دولار";
+      return `<tr style="background:${n%2===0?"#F8FAFC":"#fff"}">
+        <td>${n}</td>
+        <td>${t.date||""}</td>
+        <td style="color:${isIn?"#16A34A":"#DC2626"};font-weight:700">${isIn?"↓ مستلم":"↑ مصروف"}</td>
+        <td style="color:${isDol?"#2563EB":"#16A34A"}">${isDol?"🇺🇸 دولار":"🇮🇶 دينار"}</td>
+        <td>${t.receiver||""}</td>
+        <td style="text-align:right">${t.note||"—"}</td>
+        <td style="font-weight:700;color:${isIn?"#16A34A":"#DC2626"}">${isIn?"+":"-"}${fNum(t.amount)} ${isDol?"$":"د.ع"}</td>
+      </tr>`;
+    }).join("");
+    const html = `<!DOCTYPE html><html dir="rtl"><head><meta charset="utf-8"/>
+<style>*{font-family:Tahoma}body{margin:22px;direction:rtl}
+.co{font-size:20px;font-weight:700;color:#1E293B}.ca{font-size:11px;color:#64748B}
+hr{border-color:#E2E8F0;margin:10px 0}
+.pt{font-size:17px;font-weight:700;color:#D97706;margin:10px 0 4px}
+.sg{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px}
+.sb{border-radius:9px;padding:12px;text-align:center}
+.sl{font-size:10px;color:#64748B;margin-bottom:4px}.sv{font-size:15px;font-weight:700}
+table{width:100%;border-collapse:collapse}
+thead tr{background:#D97706}th{color:#fff;padding:9px;font-size:11px;text-align:center}
+td{padding:8px;font-size:11px;text-align:center;border-bottom:1px solid #F1F5F9}
+.ft{margin-top:14px;font-size:10px;color:#94A3B8;display:flex;justify-content:space-between}
+</style></head><body>
+<div class="co">شركة باب المشاريع</div><div class="ca">بغداد</div><hr/>
+<div class="pt">📋 كشف حساب — ${proj.name}</div>
+<p style="font-size:11px;color:#64748B">
+  ${proj.type?" النوع: "+proj.type+" ·":""} 
+  ${proj.startDate?" بداية: "+proj.startDate+" ·":""}
+  ${proj.days?" مدة: "+proj.days+" يوم":""}
+</p>
+<div class="sg">
+  <div class="sb" style="background:#F0FDF4"><div class="sl">↓ مستلم دينار</div><div class="sv" style="color:#16A34A">${fNum(totalIn("دينار"))} د.ع</div></div>
+  <div class="sb" style="background:#FFF1F2"><div class="sl">↑ مصروف دينار</div><div class="sv" style="color:#DC2626">${fNum(totalOut("دينار"))} د.ع</div></div>
+  <div class="sb" style="background:#FFFBEB;border:2px solid #D97706"><div class="sl">⚖️ ميزان دينار</div><div class="sv" style="color:#D97706">${fNum(totalIn("دينار")-totalOut("دينار"))} د.ع</div></div>
+  <div class="sb" style="background:#EFF6FF"><div class="sl">↓ مستلم دولار</div><div class="sv" style="color:#2563EB">${fNum(totalIn("دولار"))} $</div></div>
+  <div class="sb" style="background:#FEF2F2"><div class="sl">↑ مصروف دولار</div><div class="sv" style="color:#DC2626">${fNum(totalOut("دولار"))} $</div></div>
+  <div class="sb" style="background:#EFF6FF;border:2px solid #2563EB"><div class="sl">⚖️ ميزان دولار</div><div class="sv" style="color:#2563EB">${fNum(totalIn("دولار")-totalOut("دولار"))} $</div></div>
+</div>
+<table><thead><tr><th>#</th><th>التاريخ</th><th>النوع</th><th>العملة</th><th>المستلم / صُرف على</th><th>الملاحظة</th><th>المبلغ</th></tr></thead>
+<tbody>${rows}</tbody></table>
+<div class="ft"><span>شركة باب المشاريع</span><span>طُبع: ${new Date().toISOString().split("T")[0]}</span></div>
+</body></html>`;
+    const w = window.open("","_blank","width=900,height=700");
+    if(!w){alert("السماح بالنوافذ المنبثقة");return;}
+    w.document.write(html);w.document.close();w.focus();
+    setTimeout(()=>w.print(),700);
+  };
+
   return (
     <div style={{ minHeight: "100vh", background: "#F1F5F9",
       fontFamily: "Tahoma", direction: "rtl" }}>
@@ -815,47 +870,65 @@ function ProjectDetail({ proj, onBack }) {
           </div>
         </div>
 
-        {/* ملخص */}
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 16 }}>
-          {/* مستلم */}
-          <div style={{ background: "#F0FDF4", borderRadius: 12, padding: 14,
-            border: "1px solid #16A34A20" }}>
-            <div style={{ fontSize: 12, fontWeight: 700, color: "#16A34A", marginBottom: 8 }}>
-              ↓ إجمالي المستلم
+        {/* ملخص مالي */}
+        <div style={{ background: "#fff", borderRadius: 14, padding: 16,
+          border: "1px solid #E2E8F0", marginBottom: 14 }}>
+          <div style={{ display: "flex", justifyContent: "space-between",
+            alignItems: "center", marginBottom: 12 }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: "#1E293B" }}>
+              📊 الملخص المالي
             </div>
-            {totalIn("دينار") > 0 && (
-              <div style={{ fontSize: 14, fontWeight: 700, color: "#16A34A" }}>
-                {fNum(totalIn("دينار"))} <span style={{ fontSize: 11 }}>د.ع</span>
-              </div>
-            )}
-            {totalIn("دولار") > 0 && (
-              <div style={{ fontSize: 14, fontWeight: 700, color: "#2563EB" }}>
-                {fNum(totalIn("دولار"))} <span style={{ fontSize: 11 }}>$</span>
-              </div>
-            )}
-            {totalIn("دينار") === 0 && totalIn("دولار") === 0 && (
-              <div style={{ fontSize: 12, color: "#94A3B8" }}>لا يوجد</div>
-            )}
+            <button onClick={doPrint} style={{ background: "#D97706", border: "none",
+              borderRadius: 9, padding: "7px 14px", color: "#fff", cursor: "pointer",
+              fontSize: 12, fontFamily: "Tahoma", fontWeight: 700 }}>
+              🖨️ طباعة الكشف
+            </button>
           </div>
-          {/* مصروف */}
-          <div style={{ background: "#FFF1F2", borderRadius: 12, padding: 14,
-            border: "1px solid #DC262620" }}>
-            <div style={{ fontSize: 12, fontWeight: 700, color: "#DC2626", marginBottom: 8 }}>
-              ↑ إجمالي المصروف
+          {/* الدينار */}
+          <div style={{ marginBottom: 10 }}>
+            <div style={{ fontSize: 11, color: "#64748B", fontWeight: 600, marginBottom: 6 }}>🇮🇶 الدينار العراقي</div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
+              <div style={{ background: "#F0FDF4", borderRadius: 10, padding: "10px", textAlign: "center" }}>
+                <div style={{ fontSize: 10, color: "#64748B", marginBottom: 3 }}>↓ مستلم</div>
+                <div style={{ fontSize: 13, fontWeight: 700, color: "#16A34A" }}>{fNum(totalIn("دينار"))} د.ع</div>
+              </div>
+              <div style={{ background: "#FFF1F2", borderRadius: 10, padding: "10px", textAlign: "center" }}>
+                <div style={{ fontSize: 10, color: "#64748B", marginBottom: 3 }}>↑ مصروف</div>
+                <div style={{ fontSize: 13, fontWeight: 700, color: "#DC2626" }}>{fNum(totalOut("دينار"))} د.ع</div>
+              </div>
+              <div style={{ background: totalIn("دينار")-totalOut("دينار") >= 0 ? "#FFFBEB" : "#FFF1F2",
+                borderRadius: 10, padding: "10px", textAlign: "center",
+                border: "2px solid " + (totalIn("دينار")-totalOut("دينار") >= 0 ? "#D97706" : "#DC2626") }}>
+                <div style={{ fontSize: 10, color: "#64748B", marginBottom: 3 }}>⚖️ الميزان</div>
+                <div style={{ fontSize: 13, fontWeight: 700,
+                  color: totalIn("دينار")-totalOut("دينار") >= 0 ? "#D97706" : "#DC2626" }}>
+                  {totalIn("دينار")-totalOut("دينار") >= 0 ? "+" : ""}{fNum(totalIn("دينار")-totalOut("دينار"))} د.ع
+                </div>
+              </div>
             </div>
-            {totalOut("دينار") > 0 && (
-              <div style={{ fontSize: 14, fontWeight: 700, color: "#DC2626" }}>
-                {fNum(totalOut("دينار"))} <span style={{ fontSize: 11 }}>د.ع</span>
+          </div>
+          {/* الدولار */}
+          <div>
+            <div style={{ fontSize: 11, color: "#64748B", fontWeight: 600, marginBottom: 6 }}>🇺🇸 الدولار الأمريكي</div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
+              <div style={{ background: "#EFF6FF", borderRadius: 10, padding: "10px", textAlign: "center" }}>
+                <div style={{ fontSize: 10, color: "#64748B", marginBottom: 3 }}>↓ مستلم</div>
+                <div style={{ fontSize: 13, fontWeight: 700, color: "#2563EB" }}>{fNum(totalIn("دولار"))} $</div>
               </div>
-            )}
-            {totalOut("دولار") > 0 && (
-              <div style={{ fontSize: 14, fontWeight: 700, color: "#7C3AED" }}>
-                {fNum(totalOut("دولار"))} <span style={{ fontSize: 11 }}>$</span>
+              <div style={{ background: "#FEF2F2", borderRadius: 10, padding: "10px", textAlign: "center" }}>
+                <div style={{ fontSize: 10, color: "#64748B", marginBottom: 3 }}>↑ مصروف</div>
+                <div style={{ fontSize: 13, fontWeight: 700, color: "#DC2626" }}>{fNum(totalOut("دولار"))} $</div>
               </div>
-            )}
-            {totalOut("دينار") === 0 && totalOut("دولار") === 0 && (
-              <div style={{ fontSize: 12, color: "#94A3B8" }}>لا يوجد</div>
-            )}
+              <div style={{ background: totalIn("دولار")-totalOut("دولار") >= 0 ? "#EFF6FF" : "#FFF1F2",
+                borderRadius: 10, padding: "10px", textAlign: "center",
+                border: "2px solid " + (totalIn("دولار")-totalOut("دولار") >= 0 ? "#2563EB" : "#DC2626") }}>
+                <div style={{ fontSize: 10, color: "#64748B", marginBottom: 3 }}>⚖️ الميزان</div>
+                <div style={{ fontSize: 13, fontWeight: 700,
+                  color: totalIn("دولار")-totalOut("دولار") >= 0 ? "#2563EB" : "#DC2626" }}>
+                  {totalIn("دولار")-totalOut("دولار") >= 0 ? "+" : ""}{fNum(totalIn("دولار")-totalOut("دولار"))} $
+                </div>
+              </div>
+            </div>
           </div>
         </div>
 
