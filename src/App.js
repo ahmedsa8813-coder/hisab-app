@@ -669,9 +669,11 @@ function HomePage({ onSelect }) {
 }
 
 function AdminPage({ onBack }) {
-  const [tasks, setTasks] = useState([]);
-  const [text, setText] = useState("");
-  const [filter, setFilter] = useState("all");
+  const [tasks, setTasks]       = useState([]);
+  const [activeProjs, setActiveProjs] = useState([]);
+  const [text, setText]         = useState("");
+  const [selProj, setSelProj]   = useState("");  // ربط بمشروع
+  const [filter, setFilter]     = useState("all");
   const today = new Date().toISOString().split("T")[0];
 
   useEffect(() => {
@@ -682,15 +684,29 @@ function AdminPage({ onBack }) {
     });
   }, []);
 
+  // جلب المشاريع المفتوحة من القسم المالي
+  useEffect(() => {
+    return onSnapshot(collection(db, "projects"), snap => {
+      const list = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+        .filter(p => p.status === "active")
+        .sort((a,b) => (a.name||"").localeCompare(b.name||""));
+      setActiveProjs(list);
+    });
+  }, []);
+
   const addTask = () => {
     if (!text.trim()) return;
+    const proj = activeProjs.find(p => p.id === selProj);
     addDoc(collection(db, "daily_tasks"), {
       text: text.trim(),
       date: today,
       done: false,
+      projectId:   proj?.id   || "",
+      projectName: proj?.name || "",
       createdAt: new Date().toISOString()
     });
     setText("");
+    setSelProj("");
   };
 
   const toggleDone = (id, done) => {
@@ -737,8 +753,32 @@ function AdminPage({ onBack }) {
         {/* إضافة مهمة */}
         <div style={{ background: "#fff", borderRadius: 14, padding: 16,
           border: "1px solid #E2E8F0", marginBottom: 16 }}>
-          <div style={{ fontSize: 14, fontWeight: 700, color: "#1E293B", marginBottom: 10 }}>
+          <div style={{ fontSize: 14, fontWeight: 700, color: "#1E293B", marginBottom: 12 }}>
             ➕ إضافة عمل جديد
+          </div>
+          {/* ربط بمشروع */}
+          <div style={{ marginBottom: 10 }}>
+            <div style={{ fontSize: 12, color: "#64748B", fontWeight: 600, marginBottom: 6 }}>
+              🏗️ ربط بمشروع (اختياري)
+            </div>
+            <select value={selProj} onChange={e => setSelProj(e.target.value)}
+              style={{ width: "100%", border: "1px solid #CBD5E1", borderRadius: 10,
+                padding: "10px 14px", fontSize: 14, outline: "none", fontFamily: "Tahoma",
+                direction: "rtl", background: selProj ? "#EFF6FF" : "#F8FAFC",
+                color: selProj ? "#2563EB" : "#94A3B8",
+                fontWeight: selProj ? 700 : 400, appearance: "none",
+                boxSizing: "border-box" }}>
+              <option value="">— بدون ربط —</option>
+              {activeProjs.map(p => {
+                const ts = typeStyle(p.type);
+                return <option key={p.id} value={p.id}>{ts.icon} {p.name}{p.province?" — "+p.province:""}</option>;
+              })}
+            </select>
+            {activeProjs.length === 0 && (
+              <div style={{ fontSize: 11, color: "#94A3B8", marginTop: 4 }}>
+                ما في مشاريع مفتوحة حالياً
+              </div>
+            )}
           </div>
           <div style={{ display: "flex", gap: 8 }}>
             <input
@@ -814,11 +854,17 @@ function AdminPage({ onBack }) {
                   {t.done ? "✓" : ""}
                 </button>
                 <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 14, color: "#1E293B", fontWeight: 600,
+                  <div style={{ fontSize: 14, fontWeight: 600,
                     textDecoration: t.done ? "line-through" : "none",
                     color: t.done ? "#94A3B8" : "#1E293B" }}>
                     {t.text}
                   </div>
+                  {t.projectName && (
+                    <div style={{ fontSize: 11, color: "#2563EB", marginTop: 3,
+                      fontWeight: 600 }}>
+                      🏗️ {t.projectName}
+                    </div>
+                  )}
                 </div>
                 <button onClick={() => deleteTask(t.id)} style={{
                   background: "none", border: "none", color: "#DC2626",
@@ -852,6 +898,11 @@ function AdminPage({ onBack }) {
                     <div style={{ fontSize: 11, color: "#94A3B8", marginTop: 2 }}>
                       📅 {t.date}
                     </div>
+                    {t.projectName && (
+                      <div style={{ fontSize: 11, color: "#2563EB", fontWeight: 600 }}>
+                        🏗️ {t.projectName}
+                      </div>
+                    )}
                   </div>
                   <button onClick={() => deleteTask(t.id)} style={{
                     background: "none", border: "none", color: "#DC2626",
