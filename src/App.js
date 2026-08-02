@@ -244,49 +244,116 @@ export default function App() {
 
   if (page === "home")    return <HomePage onSelect={setPage} />;
   if (page === "admin")   return <AdminPage onBack={() => setPage("home")} />;
-  if (page === "project" && selProj)
-    return <ProjectDetail proj={selProj} onBack={() => { setPage("financial"); setSelProj(null); }}/>;
+  if (page === "proj" && selProj)
+    return <ProjectDetail proj={selProj} onBack={() => { setPage("projects"); setSelProj(null); }}/>;
+
+  // الصفحة المالية الرئيسية — تُعرض عند page==="financial"
+  if (page === "financial") return (
+    <div style={{ minHeight:"100vh", background:"#F1F5F9",
+      fontFamily:"Tahoma", direction:"rtl" }}>
+      <div style={{ maxWidth:520, margin:"0 auto", padding:"24px 16px" }}>
+        <button onClick={() => setPage("home")} style={{ background:"#fff",
+          border:"1px solid #E2E8F0", borderRadius:10, padding:"8px 16px",
+          fontSize:13, color:"#475569", cursor:"pointer", marginBottom:20,
+          fontFamily:"Tahoma", display:"flex", alignItems:"center", gap:6 }}>
+          ← رجوع للرئيسية
+        </button>
+        <div style={{ fontSize:20, fontWeight:700, color:"#1E293B", marginBottom:20 }}>
+          💰 القسم المالي
+        </div>
+        {/* زر المشاريع */}
+        <button onClick={() => setPage("projects")} style={{ width:"100%",
+          background:"#fff", border:"1px solid #E2E8F0", borderTop:"4px solid #D97706",
+          borderRadius:16, padding:"18px 20px", cursor:"pointer", textAlign:"right",
+          fontFamily:"Tahoma", marginBottom:20 }}>
+          <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:8 }}>
+            <div style={{ width:44, height:44, borderRadius:12, background:"#FFFBEB",
+              display:"flex", alignItems:"center", justifyContent:"center", fontSize:22 }}>🏗️</div>
+            <div>
+              <div style={{ fontSize:16, fontWeight:700, color:"#1E293B" }}>المشاريع</div>
+              <div style={{ fontSize:12, color:"#64748B", marginTop:2 }}>
+                {projects.filter(p=>p.status==="active").length} نشط ·{" "}
+                {projects.filter(p=>p.status==="done").length} منتهي
+              </div>
+            </div>
+          </div>
+        </button>
+        {/* الصناديق الأربعة */}
+        <div style={{ fontSize:14, fontWeight:700, color:"#1E293B", marginBottom:14 }}>
+          💎 الصناديق
+        </div>
+        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12, marginBottom:12 }}>
+          {/* صندوق رأس المال */}
+          {[
+            { fund:"رأس_المال", label:"رأس المال",  icon:"💼", color:"#059669", bg:"#ECFDF5" },
+            { fund:"عام",       label:"الصندوق العام", icon:"🏦", color:"#D97706", bg:"#FFFBEB" },
+            { fund:"شركاء",     label:"أرباح الشركاء", icon:"👥", color:"#9333EA", bg:"#FAF5FF" },
+          ].map(({ fund, label, icon, color, bg }) => {
+            const f = funds[fund] || { din:0, dol:0 };
+            return (
+              <div key={fund} style={{ background:bg, borderRadius:14, padding:"14px 16px",
+                border:"1.5px solid "+color+"40", gridColumn: fund==="شركاء"?"span 2":"span 1" }}>
+                <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:10 }}>
+                  <span style={{ fontSize:20 }}>{icon}</span>
+                  <span style={{ fontSize:13, fontWeight:700, color }}>{label}</span>
+                </div>
+                <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:6 }}>
+                  <div style={{ background:"#fff", borderRadius:8, padding:"8px", textAlign:"center" }}>
+                    <div style={{ fontSize:9, color:"#64748B", marginBottom:2 }}>🇮🇶 دينار</div>
+                    <div style={{ fontSize:14, fontWeight:700, color }}>{fNum(f.din)} د.ع</div>
+                  </div>
+                  <div style={{ background:"#fff", borderRadius:8, padding:"8px", textAlign:"center" }}>
+                    <div style={{ fontSize:9, color:"#64748B", marginBottom:2 }}>🇺🇸 دولار</div>
+                    <div style={{ fontSize:14, fontWeight:700, color:"#2563EB" }}>{fNum(f.dol)} $</div>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+        {/* صناديق الأقسام */}
+        <div style={{ fontSize:13, fontWeight:700, color:"#64748B", marginBottom:10 }}>
+          صناديق الأقسام
+        </div>
+        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
+          {TYPES.map(({ val, icon, color, bg }) => {
+            const f = funds[val] || { din:0, dol:0 };
+            return (
+              <div key={val} style={{ background:bg, borderRadius:14, padding:"14px 16px",
+                border:"1.5px solid "+color+"40" }}>
+                <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:10 }}>
+                  <span style={{ fontSize:18 }}>{icon}</span>
+                  <span style={{ fontSize:13, fontWeight:700, color }}>{val}</span>
+                </div>
+                <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:6 }}>
+                  <div style={{ background:"#fff", borderRadius:8, padding:"8px", textAlign:"center" }}>
+                    <div style={{ fontSize:9, color:"#64748B", marginBottom:2 }}>🇮🇶</div>
+                    <div style={{ fontSize:13, fontWeight:700, color }}>{fNum(f.din)} د.ع</div>
+                  </div>
+                  <div style={{ background:"#fff", borderRadius:8, padding:"8px", textAlign:"center" }}>
+                    <div style={{ fontSize:9, color:"#64748B", marginBottom:2 }}>🇺🇸</div>
+                    <div style={{ fontSize:14, fontWeight:700, color:"#2563EB" }}>{fNum(f.dol)} $</div>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
 
   return (
     <div style={{ minHeight: "100vh", background: "#F1F5F9",
       fontFamily: "Tahoma", direction: "rtl" }}>
       <div style={{ maxWidth: 640, margin: "0 auto", padding: "22px 16px" }}>
         {/* رجوع للرئيسية */}
-        <button onClick={() => setPage("home")} style={{
+        <button onClick={() => setPage("financial")} style={{
           background: "#fff", border: "1px solid #E2E8F0", borderRadius: 10,
           padding: "8px 16px", fontSize: 13, color: "#475569", cursor: "pointer",
           marginBottom: 16, fontFamily: "Tahoma", display: "flex",
           alignItems: "center", gap: 6
-        }}>← رجوع للرئيسية</button>
-
-        {/* صناديق الأنواع */}
-        <div style={{ background: "#fff", borderRadius: 14, padding: 16,
-          border: "1px solid #E2E8F0", marginBottom: 14 }}>
-          <div style={{ fontSize: 13, fontWeight: 700, color: "#1E293B", marginBottom: 12 }}>
-            💎 أرصدة الصناديق (من المشاريع المنتهية)
-          </div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-            {TYPES.map(({ val, icon, color, bg }) => {
-              const f = funds[val] || { din: 0, dol: 0 };
-              return (
-                <div key={val} style={{ background: bg, borderRadius: 10, padding: "10px 12px",
-                  border: "1.5px solid " + color + "30" }}>
-                  <div style={{ fontSize: 12, fontWeight: 700, color, marginBottom: 6 }}>
-                    {icon} {val}
-                  </div>
-                  <div style={{ fontSize: 13, fontWeight: 700, color }}>
-                    {fNum(f.din)} د.ع
-                  </div>
-                  {f.dol > 0 && (
-                    <div style={{ fontSize: 12, fontWeight: 700, color: "#2563EB" }}>
-                      {fNum(f.dol)} $
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        </div>
+        }}>← رجوع للقسم المالي</button>
 
         {/* هيدر */}
         <div style={{ background: "#fff", borderRadius: 14, padding: "16px 20px",
@@ -485,7 +552,7 @@ export default function App() {
             </div>
           </div>
         ) : list.map(p => <ProjectCard key={p.id} p={p}
-            onOpen={() => { setSelProj(p); setPage("project"); }}
+            onOpen={() => { setSelProj(p); setPage("proj"); }}
             onToggle={() => toggleStatus(p.id, p.status)}
             onDelete={() => deleteProject(p.id)}
             onEdit={editProject} />
