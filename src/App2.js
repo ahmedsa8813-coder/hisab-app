@@ -113,206 +113,261 @@ export default function App2({ onBack }) {
   const totalDin    = fundsDin + activeDin;
   const totalDol    = fundsDol + activeDol;
 
+  const NAV_ITEMS = [
+    {id:"fund",    label:"الصناديق",   icon:"💎"},
+    {id:"reports", label:"التقارير",   icon:"📊"},
+    {id:"assets",  label:"الأصول",     icon:"📦"},
+    {id:"employees",label:"الموظفون",  icon:"👷"},
+  ];
+
   return (
     <div style={{ minHeight:"100vh", background:"#F1F5F9",
-      fontFamily:"Tahoma", direction:"rtl" }}>
-      <div style={{ maxWidth:540, margin:"0 auto", padding:"22px 16px" }}>
+      fontFamily:"Tahoma", direction:"rtl", display:"flex" }}>
 
-        {/* رجوع */}
-        <button onClick={onBack} style={{ background:"#fff",
-          border:"1px solid #E2E8F0", borderRadius:10, padding:"8px 16px",
-          fontSize:13, color:"#475569", cursor:"pointer", marginBottom:16,
-          fontFamily:"Tahoma", display:"flex", alignItems:"center", gap:6 }}>
-          ← رجوع للقائمة الرئيسية
-        </button>
-
-        {/* هيدر */}
-        <div style={{ background:"linear-gradient(135deg,#1E293B,#334155)",
-          borderRadius:18, padding:"20px", marginBottom:20 }}>
-          <div style={{ fontSize:20, fontWeight:700, color:"#fff", marginBottom:4 }}>
-            🏢 شركة باب المشاريع
+      {/* ─── سايدبار ─── */}
+      <div style={{ width:230, minHeight:"100vh", background:"#1E293B",
+        display:"flex", flexDirection:"column", flexShrink:0,
+        position:"sticky", top:0, height:"100vh" }}>
+        <div style={{ padding:"24px 20px", borderBottom:"1px solid #334155" }}>
+          <div style={{ fontSize:16, fontWeight:700, color:"#fff" }}>🏢 باب المشاريع</div>
+          <div style={{ fontSize:10, color:"#64748B", marginTop:2 }}>نظام الحسابات الداخلي</div>
+        </div>
+        <div style={{ padding:"16px 20px", borderBottom:"1px solid #334155" }}>
+          <div style={{ fontSize:9, color:"#64748B", marginBottom:8 }}>الجرد الكلي</div>
+          <div style={{ fontSize:18, fontWeight:700, color:"#F59E0B" }}>
+            {fNum(totalDin)} <span style={{fontSize:11,fontWeight:400,color:"#94A3B8"}}>د.ع</span>
           </div>
-          <div style={{ fontSize:12, color:"#94A3B8" }}>نظام الحسابات الداخلي</div>
+          <div style={{ fontSize:18, fontWeight:700, color:"#60A5FA", marginTop:4 }}>
+            {fNum(totalDol)} <span style={{fontSize:11,fontWeight:400,color:"#64748B"}}>$</span>
+          </div>
+          <div style={{ marginTop:10, borderTop:"1px solid #334155", paddingTop:10 }}>
+            <div style={{ display:"flex", justifyContent:"space-between",
+              fontSize:10, color:"#64748B", marginBottom:4 }}>
+              <span>💎 الصناديق</span>
+              <span style={{color:"#94A3B8"}}>{fNum(fundsDin)} د.ع</span>
+            </div>
+            <div style={{ display:"flex", justifyContent:"space-between",
+              fontSize:10, color:"#64748B" }}>
+              <span>🏗️ مشاريع ({projects.filter(p=>p.status==="active").length})</span>
+              <span style={{color:"#94A3B8"}}>{fNum(activeDin)} د.ع</span>
+            </div>
+          </div>
+        </div>
+        <div style={{ padding:"12px", flex:1 }}>
+          {NAV_ITEMS.map(n=>(
+            <button key={n.id}
+              onClick={()=>n.id==="fund"?null:setPage(n.id)}
+              style={{ width:"100%", background:"transparent", border:"none",
+                borderRadius:10, padding:"11px 14px", cursor:"pointer",
+                fontFamily:"Tahoma", textAlign:"right", display:"flex",
+                alignItems:"center", gap:10, marginBottom:4, color:"#CBD5E1",
+                fontSize:13, fontWeight:600 }}
+              onMouseEnter={e=>e.currentTarget.style.background="rgba(255,255,255,0.08)"}
+              onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
+              <span>{n.icon}</span><span>{n.label}</span>
+            </button>
+          ))}
+        </div>
+        <div style={{ padding:"0 12px 20px" }}>
+          <button onClick={onBack} style={{ width:"100%",
+            background:"rgba(255,255,255,0.05)", border:"1px solid #334155",
+            borderRadius:10, padding:"10px 14px", cursor:"pointer",
+            fontFamily:"Tahoma", color:"#94A3B8", fontSize:12,
+            display:"flex", alignItems:"center", gap:8 }}>
+            <span>←</span><span>رجوع للرئيسية</span>
+          </button>
+        </div>
+      </div>
+
+      {/* ─── المحتوى ─── */}
+      <div style={{ flex:1, padding:"28px 32px", overflow:"auto" }}>
+
+        <div style={{ marginBottom:24 }}>
+          <h1 style={{ margin:0, marginBottom:4, fontSize:22,
+            fontWeight:700, color:"#1E293B" }}>لوحة الحسابات</h1>
+          <div style={{ fontSize:12, color:"#64748B" }}>
+            {new Date().toLocaleDateString("ar-IQ",{weekday:"long",year:"numeric",month:"long",day:"numeric"})}
+          </div>
         </div>
 
-        {/* الجرد الإجمالي */}
+        {/* كبطاقات الجرد */}
         <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr",
-          gap:10, marginBottom:12 }}>
-          <div style={{ background:"linear-gradient(135deg,#D97706,#F59E0B)",
-            borderRadius:14, padding:16, textAlign:"center" }}>
-            <div style={{ fontSize:11, color:"#FEF3C7", marginBottom:4 }}>
-              🇮🇶 جرد الدينار الكلي
+          gap:16, marginBottom:28 }}>
+          {[
+            {label:"🇮🇶 إجمالي الدينار", val:fNum(totalDin), unit:"د.ع",
+              sub1:"صناديق: "+fNum(fundsDin), sub2:"مشاريع: "+fNum(activeDin),
+              g:"linear-gradient(135deg,#D97706,#F59E0B)", sh:"rgba(217,119,6,0.25)"},
+            {label:"🇺🇸 إجمالي الدولار", val:fNum(totalDol), unit:"$",
+              sub1:"صناديق: "+fNum(fundsDol), sub2:"مشاريع: "+fNum(activeDol),
+              g:"linear-gradient(135deg,#1D4ED8,#3B82F6)", sh:"rgba(29,78,216,0.25)"},
+          ].map((card,i)=>(
+            <div key={i} style={{ background:card.g, borderRadius:18,
+              padding:"24px 28px", boxShadow:"0 8px 30px "+card.sh }}>
+              <div style={{ fontSize:12, color:"rgba(255,255,255,0.7)", marginBottom:8 }}>
+                {card.label}
+              </div>
+              <div style={{ fontSize:34, fontWeight:700, color:"#fff", marginBottom:2 }}>
+                {card.val}
+              </div>
+              <div style={{ fontSize:13, color:"rgba(255,255,255,0.6)", marginBottom:16 }}>
+                {card.unit}
+              </div>
+              <div style={{ display:"flex", gap:20, fontSize:11,
+                color:"rgba(255,255,255,0.6)", borderTop:"1px solid rgba(255,255,255,0.15)",
+                paddingTop:12 }}>
+                <span>{card.sub1}</span>
+                <span>{card.sub2}</span>
+              </div>
             </div>
-            <div style={{ fontSize:19, fontWeight:700, color:"#fff" }}>
-              {fNum(totalDin)}
-            </div>
-            <div style={{ fontSize:10, color:"#FEF3C7" }}>د.ع</div>
-          </div>
-          <div style={{ background:"linear-gradient(135deg,#1D4ED8,#3B82F6)",
-            borderRadius:14, padding:16, textAlign:"center" }}>
-            <div style={{ fontSize:11, color:"#DBEAFE", marginBottom:4 }}>
-              🇺🇸 جرد الدولار الكلي
-            </div>
-            <div style={{ fontSize:19, fontWeight:700, color:"#fff" }}>
-              {fNum(totalDol)}
-            </div>
-            <div style={{ fontSize:10, color:"#DBEAFE" }}>$</div>
-          </div>
-        </div>
-
-        {/* تفصيل الجرد */}
-        <div style={{ background:"#fff", borderRadius:12, padding:"12px 16px",
-          marginBottom:20, border:"1px solid #E2E8F0" }}>
-          <div style={{ display:"flex", justifyContent:"space-between",
-            fontSize:11, color:"#64748B", marginBottom:6 }}>
-            <span>💎 الصناديق (7)</span>
-            <div>
-              <span style={{ color:"#D97706", fontWeight:700 }}>{fNum(fundsDin)} د.ع</span>
-              <span style={{ color:"#94A3B8" }}> | </span>
-              <span style={{ color:"#2563EB", fontWeight:700 }}>{fNum(fundsDol)} $</span>
-            </div>
-          </div>
-          <div style={{ display:"flex", justifyContent:"space-between",
-            fontSize:11, color:"#64748B" }}>
-            <span>🏗️ مشاريع قيد التنفيذ ({projects.filter(p=>p.status==="active").length})</span>
-            <div>
-              <span style={{ color:"#16A34A", fontWeight:700 }}>{fNum(activeDin)} د.ع</span>
-              <span style={{ color:"#94A3B8" }}> | </span>
-              <span style={{ color:"#2563EB", fontWeight:700 }}>{fNum(activeDol)} $</span>
-            </div>
-          </div>
+          ))}
         </div>
 
         {/* الصناديق الرئيسية */}
-        <div style={{ fontSize:13, fontWeight:700, color:"#1E293B", marginBottom:10 }}>
-          💎 الصناديق الرئيسية
-        </div>
-        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:20 }}>
-          {MAIN_FUNDS.map(f => {
-            const bal = funds[f.id] || { din:0, dol:0 };
-            return (
-              <button key={f.id} onClick={() => { setSelFund(f); setPage("fund"); }}
-                style={{ background:f.bg, border:"1.5px solid "+f.color+"40",
-                  borderRadius:14, padding:"14px", textAlign:"right",
-                  cursor:"pointer", fontFamily:"Tahoma",
-                  gridColumn: f.id==="شركاء"?"span 2":"span 1" }}>
-                <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:10 }}>
-                  <span style={{ fontSize:20 }}>{f.icon}</span>
-                  <span style={{ fontSize:13, fontWeight:700, color:f.color }}>{f.label}</span>
-                  <span style={{ marginRight:"auto", fontSize:10, color:f.color,
-                    background:"#fff", borderRadius:20, padding:"2px 8px" }}>← تفاصيل</span>
-                </div>
-                <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:6 }}>
-                  <div style={{ background:"#fff", borderRadius:8, padding:"8px", textAlign:"center" }}>
-                    <div style={{ fontSize:9, color:"#64748B", marginBottom:2 }}>🇮🇶 دينار</div>
-                    <div style={{ fontSize:13, fontWeight:700, color:f.color }}>{fNum(bal.din)}</div>
+        <div style={{ marginBottom:24 }}>
+          <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:14 }}>
+            <div style={{ width:4, height:20, background:"#059669", borderRadius:99 }}/>
+            <span style={{ fontSize:14, fontWeight:700, color:"#475569" }}>الصناديق الرئيسية</span>
+          </div>
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:14 }}>
+            {MAIN_FUNDS.map(f=>{
+              const bal=funds[f.id]||{din:0,dol:0};
+              return (
+                <button key={f.id} onClick={()=>{setSelFund(f);setPage("fund");}}
+                  style={{ background:"#fff", border:"1px solid #E2E8F0",
+                    borderTop:"3px solid "+f.color, borderRadius:16,
+                    padding:"20px", cursor:"pointer", fontFamily:"Tahoma", textAlign:"right",
+                    gridColumn:f.id==="شركاء"?"span 3":"span 1",
+                    boxShadow:"0 1px 4px rgba(0,0,0,0.04)",
+                    transition:"box-shadow 0.2s" }}
+                  onMouseEnter={e=>e.currentTarget.style.boxShadow="0 6px 24px rgba(0,0,0,0.1)"}
+                  onMouseLeave={e=>e.currentTarget.style.boxShadow="0 1px 4px rgba(0,0,0,0.04)"}>
+                  <div style={{ display:"flex", justifyContent:"space-between",
+                    alignItems:"center", marginBottom:16 }}>
+                    <span style={{ fontSize:11, color:f.color, background:f.bg,
+                      borderRadius:20, padding:"3px 10px", fontWeight:600 }}>تفاصيل ←</span>
+                    <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                      <span style={{ fontSize:15, fontWeight:700, color:"#1E293B" }}>{f.label}</span>
+                      <span style={{ fontSize:24 }}>{f.icon}</span>
+                    </div>
                   </div>
-                  <div style={{ background:"#fff", borderRadius:8, padding:"8px", textAlign:"center" }}>
-                    <div style={{ fontSize:9, color:"#64748B", marginBottom:2 }}>🇺🇸 دولار</div>
-                    <div style={{ fontSize:13, fontWeight:700, color:"#2563EB" }}>{fNum(bal.dol)}</div>
-                  </div>
-                </div>
-              </button>
-            );
-          })}
+                  {f.id==="شركاء" ? (
+                    <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr 1fr 1fr", gap:8 }}>
+                      <div style={{ background:f.bg, borderRadius:10, padding:"12px", textAlign:"center" }}>
+                        <div style={{ fontSize:9, color:"#64748B", marginBottom:3 }}>الإجمالي</div>
+                        <div style={{ fontSize:16, fontWeight:700, color:f.color }}>{fNum(bal.din)}</div>
+                        <div style={{ fontSize:9, color:"#94A3B8" }}>د.ع</div>
+                      </div>
+                      {[{n:"إيهاب",c:"#2563EB"},{n:"أحمد",c:"#D97706"},
+                        {n:"نور",c:"#059669"},{n:"محمد",c:"#7C3AED"}].map(p=>{
+                        const pf=funds["partner_"+p.n]||{din:0};
+                        return (
+                          <div key={p.n} style={{ background:"#F8FAFC", borderRadius:10,
+                            padding:"12px", textAlign:"center" }}>
+                            <div style={{ fontSize:9, color:p.c, fontWeight:700, marginBottom:3 }}>
+                              م.{p.n}
+                            </div>
+                            <div style={{ fontSize:15, fontWeight:700, color:p.c }}>
+                              {fNum(pf.din)}
+                            </div>
+                            <div style={{ fontSize:9, color:"#94A3B8" }}>د.ع</div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
+                      <div style={{ background:f.bg, borderRadius:10, padding:"14px", textAlign:"center" }}>
+                        <div style={{ fontSize:9, color:"#64748B", marginBottom:4 }}>🇮🇶 دينار</div>
+                        <div style={{ fontSize:18, fontWeight:700, color:f.color }}>{fNum(bal.din)}</div>
+                        <div style={{ fontSize:10, color:"#94A3B8" }}>د.ع</div>
+                      </div>
+                      <div style={{ background:"#EFF6FF", borderRadius:10, padding:"14px", textAlign:"center" }}>
+                        <div style={{ fontSize:9, color:"#64748B", marginBottom:4 }}>🇺🇸 دولار</div>
+                        <div style={{ fontSize:18, fontWeight:700, color:"#2563EB" }}>{fNum(bal.dol)}</div>
+                        <div style={{ fontSize:10, color:"#94A3B8" }}>$</div>
+                      </div>
+                    </div>
+                  )}
+                </button>
+              );
+            })}
+          </div>
         </div>
 
         {/* صناديق الأقسام */}
-        <div style={{ fontSize:13, fontWeight:700, color:"#1E293B", marginBottom:10 }}>
-          🏗️ صناديق الأقسام
+        <div style={{ marginBottom:24 }}>
+          <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:14 }}>
+            <div style={{ width:4, height:20, background:"#D97706", borderRadius:99 }}/>
+            <span style={{ fontSize:14, fontWeight:700, color:"#475569" }}>صناديق الأقسام</span>
+          </div>
+          <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:14 }}>
+            {DEPT_FUNDS.map(f=>{
+              const bal=funds[f.id]||{din:0,dol:0};
+              return (
+                <button key={f.id} onClick={()=>{setSelFund(f);setPage("fund");}}
+                  style={{ background:"#fff", border:"1px solid #E2E8F0",
+                    borderTop:"3px solid "+f.color, borderRadius:16,
+                    padding:"18px", cursor:"pointer", fontFamily:"Tahoma", textAlign:"right",
+                    boxShadow:"0 1px 4px rgba(0,0,0,0.04)", transition:"box-shadow 0.2s" }}
+                  onMouseEnter={e=>e.currentTarget.style.boxShadow="0 6px 24px rgba(0,0,0,0.1)"}
+                  onMouseLeave={e=>e.currentTarget.style.boxShadow="0 1px 4px rgba(0,0,0,0.04)"}>
+                  <div style={{ display:"flex", justifyContent:"space-between",
+                    alignItems:"center", marginBottom:14 }}>
+                    <span style={{ fontSize:22 }}>{f.icon}</span>
+                    <span style={{ fontSize:14, fontWeight:700, color:"#1E293B" }}>{f.label}</span>
+                  </div>
+                  <div style={{ background:f.bg, borderRadius:10, padding:"10px",
+                    textAlign:"center", marginBottom:8 }}>
+                    <div style={{ fontSize:9, color:"#64748B", marginBottom:2 }}>🇮🇶 دينار</div>
+                    <div style={{ fontSize:16, fontWeight:700, color:f.color }}>{fNum(bal.din)}</div>
+                    <div style={{ fontSize:9, color:"#94A3B8" }}>د.ع</div>
+                  </div>
+                  <div style={{ background:"#EFF6FF", borderRadius:10, padding:"10px", textAlign:"center" }}>
+                    <div style={{ fontSize:9, color:"#64748B", marginBottom:2 }}>🇺🇸 دولار</div>
+                    <div style={{ fontSize:16, fontWeight:700, color:"#2563EB" }}>{fNum(bal.dol)}</div>
+                    <div style={{ fontSize:9, color:"#94A3B8" }}>$</div>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
         </div>
-        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:20 }}>
-          {DEPT_FUNDS.map(f => {
-            const bal = funds[f.id] || { din:0, dol:0 };
-            return (
-              <button key={f.id} onClick={() => { setSelFund(f); setPage("fund"); }}
-                style={{ background:f.bg, border:"1.5px solid "+f.color+"40",
-                  borderRadius:14, padding:"14px", textAlign:"right",
-                  cursor:"pointer", fontFamily:"Tahoma" }}>
-                <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:10 }}>
-                  <span style={{ fontSize:18 }}>{f.icon}</span>
-                  <span style={{ fontSize:13, fontWeight:700, color:f.color }}>{f.label}</span>
+
+        {/* روابط سريعة */}
+        <div>
+          <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:14 }}>
+            <div style={{ width:4, height:20, background:"#7C3AED", borderRadius:99 }}/>
+            <span style={{ fontSize:14, fontWeight:700, color:"#475569" }}>أقسام أخرى</span>
+          </div>
+          <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:14 }}>
+            {[
+              {pg:"reports", icon:"📊", label:"التقارير",
+                desc:"تقارير مالية شاملة", color:"#7C3AED"},
+              {pg:"assets",  icon:"📦", label:"الأصول الثابتة",
+                desc:assets.filter(a=>(a.qtyRemaining||0)>0).length+" صنف نشط", color:"#0891B2"},
+              {pg:"employees",icon:"👷", label:"الموظفون",
+                desc:employees.length+" موظف مسجل", color:"#0284C7"},
+            ].map(n=>(
+              <button key={n.pg} onClick={()=>setPage(n.pg)}
+                style={{ background:"#fff", border:"1px solid #E2E8F0",
+                  borderTop:"3px solid "+n.color, borderRadius:16,
+                  padding:"20px", cursor:"pointer", fontFamily:"Tahoma", textAlign:"right",
+                  boxShadow:"0 1px 4px rgba(0,0,0,0.04)", transition:"box-shadow 0.2s" }}
+                onMouseEnter={e=>e.currentTarget.style.boxShadow="0 6px 24px rgba(0,0,0,0.1)"}
+                onMouseLeave={e=>e.currentTarget.style.boxShadow="0 1px 4px rgba(0,0,0,0.04)"}>
+                <div style={{ display:"flex", justifyContent:"space-between",
+                  alignItems:"flex-start", marginBottom:10 }}>
+                  <span style={{ fontSize:11, color:n.color, fontWeight:600 }}>فتح ←</span>
+                  <span style={{ fontSize:28 }}>{n.icon}</span>
                 </div>
-                <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:6 }}>
-                  <div style={{ background:"#fff", borderRadius:8, padding:"8px", textAlign:"center" }}>
-                    <div style={{ fontSize:9, color:"#64748B", marginBottom:2 }}>🇮🇶</div>
-                    <div style={{ fontSize:13, fontWeight:700, color:f.color }}>{fNum(bal.din)} د.ع</div>
-                  </div>
-                  <div style={{ background:"#fff", borderRadius:8, padding:"8px", textAlign:"center" }}>
-                    <div style={{ fontSize:9, color:"#64748B", marginBottom:2 }}>🇺🇸</div>
-                    <div style={{ fontSize:13, fontWeight:700, color:"#2563EB" }}>{fNum(bal.dol)} $</div>
-                  </div>
+                <div style={{ fontSize:15, fontWeight:700, color:"#1E293B", marginBottom:4 }}>
+                  {n.label}
                 </div>
+                <div style={{ fontSize:11, color:"#94A3B8" }}>{n.desc}</div>
               </button>
-            );
-          })}
+            ))}
+          </div>
         </div>
-
-        {/* التقارير */}
-        <button onClick={() => setPage("reports")} style={{
-          width:"100%", background:"#fff", border:"1px solid #E2E8F0",
-          borderTop:"4px solid #7C3AED", borderRadius:14, padding:"16px 20px",
-          cursor:"pointer", textAlign:"right", fontFamily:"Tahoma", marginBottom:14 }}>
-          <div style={{ display:"flex", alignItems:"center", gap:12 }}>
-            <div style={{ width:44, height:44, borderRadius:12, background:"#F5F3FF",
-              display:"flex", alignItems:"center", justifyContent:"center", fontSize:22 }}>
-              📊
-            </div>
-            <div>
-              <div style={{ fontSize:15, fontWeight:700, color:"#1E293B" }}>التقارير</div>
-              <div style={{ fontSize:12, color:"#64748B", marginTop:2 }}>
-                تقارير مالية شاملة بفلاتر متعددة
-              </div>
-            </div>
-            <span style={{ marginRight:"auto", fontSize:12, color:"#7C3AED", fontWeight:600 }}>
-              ← فتح
-            </span>
-          </div>
-        </button>
-
-        {/* الأصول */}
-        <button onClick={() => setPage("assets")} style={{
-          width:"100%", background:"#fff", border:"1px solid #E2E8F0",
-          borderTop:"4px solid #0891B2", borderRadius:14, padding:"16px 20px",
-          cursor:"pointer", textAlign:"right", fontFamily:"Tahoma", marginBottom:14 }}>
-          <div style={{ display:"flex", alignItems:"center", gap:12 }}>
-            <div style={{ width:44, height:44, borderRadius:12, background:"#ECFEFF",
-              display:"flex", alignItems:"center", justifyContent:"center", fontSize:22 }}>
-              📦
-            </div>
-            <div>
-              <div style={{ fontSize:15, fontWeight:700, color:"#1E293B" }}>الأصول الثابتة</div>
-              <div style={{ fontSize:12, color:"#64748B", marginTop:2 }}>
-                معدات، مركبات، عقارات وغيرها
-              </div>
-            </div>
-            <span style={{ marginRight:"auto", fontSize:12, color:"#0891B2", fontWeight:600 }}>
-              ← إدارة
-            </span>
-          </div>
-        </button>
-
-        {/* الموظفين */}
-        <button onClick={() => setPage("employees")} style={{
-          width:"100%", background:"#fff", border:"1px solid #E2E8F0",
-          borderTop:"4px solid #0284C7", borderRadius:14, padding:"16px 20px",
-          cursor:"pointer", textAlign:"right", fontFamily:"Tahoma" }}>
-          <div style={{ display:"flex", alignItems:"center", gap:12 }}>
-            <div style={{ width:44, height:44, borderRadius:12, background:"#F0F9FF",
-              display:"flex", alignItems:"center", justifyContent:"center", fontSize:22 }}>
-              👷
-            </div>
-            <div>
-              <div style={{ fontSize:15, fontWeight:700, color:"#1E293B" }}>الموظفون</div>
-              <div style={{ fontSize:12, color:"#64748B", marginTop:2 }}>
-                {employees.length} موظف مسجل
-              </div>
-            </div>
-            <span style={{ marginRight:"auto", fontSize:12, color:"#0284C7", fontWeight:600 }}>
-              ← إدارة
-            </span>
-          </div>
-        </button>
 
       </div>
     </div>
