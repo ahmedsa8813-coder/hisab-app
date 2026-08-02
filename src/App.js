@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { initializeApp } from "firebase/app";
 import { getFirestore, collection, addDoc, onSnapshot,
-  deleteDoc, doc, updateDoc, orderBy, query, where } from "firebase/firestore";
+  deleteDoc, doc, updateDoc, orderBy, query, where, getDocs } from "firebase/firestore";
 
 const app = initializeApp({
   apiKey: "AIzaSyCN0XF9YDxLZIOMoVeZYMpXLl0rrS1HGrs",
@@ -100,6 +100,17 @@ export default function App() {
   const deleteProject = async id => {
     if (!window.confirm("حذف المشروع؟")) return;
     await deleteDoc(doc(db, "projects", id));
+    // حذف حركاته أيضاً
+    const s = await getDocs(query(collection(db, "project_txs"), where("projectId","==",id)));
+    for (const d of s.docs) await deleteDoc(doc(db, "project_txs", d.id));
+  };
+
+  const resetAllProjects = async () => {
+    if (!window.confirm("حذف كل المشاريع وكل بياناتها؟")) return;
+    const ps = await getDocs(collection(db, "projects"));
+    for (const d of ps.docs) await deleteDoc(doc(db, "projects", d.id));
+    const ts = await getDocs(collection(db, "project_txs"));
+    for (const d of ts.docs) await deleteDoc(doc(db, "project_txs", d.id));
   };
 
   const toggleStatus = async (id, current) => {
@@ -152,17 +163,28 @@ export default function App() {
           ))}
         </div>
 
-        {/* زر إضافة */}
-        {tab === "active" && (
-          <button onClick={() => { setShowForm(v => !v); setForm(emptyForm); }} style={{
+        {/* أزرار */}
+        <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
+          {tab === "active" && (
+            <button onClick={() => { setShowForm(v => !v); setForm(emptyForm); }} style={{
+              flex: 1,
             width: "100%", background: showForm ? "#475569" : "#D97706",
             border: "none", borderRadius: 12, padding: "13px",
-            color: "#fff", fontSize: 15, fontWeight: 700,
-            cursor: "pointer", fontFamily: "Tahoma", marginBottom: 14
+              color: "#fff", fontSize: 15, fontWeight: 700,
+              cursor: "pointer", fontFamily: "Tahoma"
+            }}>
+              {showForm ? "✕ إلغاء" : "+ إضافة مشروع جديد"}
+            </button>
+          )}
+          <button onClick={resetAllProjects} style={{
+            background: "#FFF1F2", border: "1px solid #FEE2E2",
+            borderRadius: 12, padding: "13px 16px", cursor: "pointer",
+            color: "#DC2626", fontFamily: "Tahoma", fontSize: 13, fontWeight: 700,
+            whiteSpace: "nowrap"
           }}>
-            {showForm ? "✕ إلغاء" : "+ إضافة مشروع جديد"}
+            🗑️ تصفير
           </button>
-        )}
+        </div>
 
         {/* فورم */}
         {showForm && tab === "active" && (
@@ -608,9 +630,12 @@ function ProjectCard({ p, onOpen, onToggle, onDelete }) {
           }}>
             {p.status === "active" ? "✓ إنهاء" : "↩ تفعيل"}
           </button>
-          <button onClick={onDelete} style={{ background: "none", border: "none",
+          <button onClick={e => { e.stopPropagation(); onDelete(); }} style={{
+            background: "#FFF1F2", border: "1px solid #FEE2E2",
+            borderRadius: 7, padding: "5px 10px",
             color: "#DC2626", cursor: "pointer", fontSize: 11,
-            fontFamily: "Tahoma", fontWeight: 600 }}>
+            fontFamily: "Tahoma", fontWeight: 700
+          }}>
             🗑️ حذف
           </button>
         </div>
