@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { initializeApp } from "firebase/app";
 import { getFirestore, collection, addDoc, onSnapshot,
-  deleteDoc, doc, updateDoc, orderBy, query } from "firebase/firestore";
+  deleteDoc, doc, updateDoc, orderBy, query, where } from "firebase/firestore";
 
 const app = initializeApp({
   apiKey: "AIzaSyCN0XF9YDxLZIOMoVeZYMpXLl0rrS1HGrs",
@@ -59,7 +59,8 @@ const emptyForm = {
 };
 
 export default function App() {
-  const [page, setPage] = useState("home");
+  const [page, setPage]       = useState("home");
+  const [selProj, setSelProj] = useState(null);
   const [projects, setProjects] = useState([]);
   const [tab, setTab]     = useState("active");
   const [form, setForm]   = useState(emptyForm);
@@ -111,8 +112,10 @@ export default function App() {
   const done   = projects.filter(p => p.status === "done");
   const list   = tab === "active" ? active : done;
 
-  if (page === "home") return <HomePage onSelect={setPage} />;
-  if (page === "admin") return <AdminPage onBack={() => setPage("home")} />;
+  if (page === "home")    return <HomePage onSelect={setPage} />;
+  if (page === "admin")   return <AdminPage onBack={() => setPage("home")} />;
+  if (page === "project" && selProj)
+    return <ProjectDetail proj={selProj} onBack={() => { setPage("financial"); setSelProj(null); }}/>;
 
   return (
     <div style={{ minHeight: "100vh", background: "#F1F5F9",
@@ -286,6 +289,7 @@ export default function App() {
             </div>
           </div>
         ) : list.map(p => <ProjectCard key={p.id} p={p}
+            onOpen={() => { setSelProj(p); setPage("project"); }}
             onToggle={() => toggleStatus(p.id, p.status)}
             onDelete={() => deleteProject(p.id)} />
         )}
@@ -555,7 +559,7 @@ function AdminPage({ onBack }) {
   );
 }
 
-function ProjectCard({ p, onToggle, onDelete }) {
+function ProjectCard({ p, onOpen, onToggle, onDelete }) {
   const ts = typeStyle(p.type);
   const hasDin = p.valueDin > 0;
   const hasDol = p.valueDol > 0;
@@ -585,7 +589,10 @@ function ProjectCard({ p, onToggle, onDelete }) {
               {p.status === "active" ? "● قيد العمل" : "✓ منتهي"}
             </span>
           </div>
-          <div style={{ fontSize: 16, fontWeight: 700, color: "#1E293B" }}>{p.name}</div>
+          <div onClick={onOpen} style={{ fontSize: 16, fontWeight: 700,
+            color: "#1E293B", cursor: "pointer", textDecoration: "underline dotted" }}>
+            {p.name}
+          </div>
           <div style={{ display: "flex", gap: 14, marginTop: 5, flexWrap: "wrap" }}>
             {p.startDate && <span style={{ fontSize: 12, color: "#64748B" }}>📅 {p.startDate}</span>}
             {p.days > 0  && <span style={{ fontSize: 12, color: "#64748B" }}>⏱️ {p.days} يوم</span>}
@@ -648,6 +655,328 @@ function ProjectCard({ p, onToggle, onDelete }) {
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+// ─── صفحة تفاصيل المشروع ───────────────────────────────
+function ProjectDetail({ proj, onBack }) {
+  const [txs, setTxs]     = useState([]);
+  const [tab, setTab]     = useState("in");  // in = مستلم، out = مصروف
+  const [show, setShow]   = useState(false);
+  const [form, setForm]   = useState({
+    amount: "", currency: "دينار", receiver: "", date: new Date().toISOString().split("T")[0], note: ""
+  });
+  const sf = k => v => setForm(f => ({ ...f, [k]: v }));
+  const amt = Number(form.amount) || 0;
+
+  // جلب الحركات
+  useEffect(() => {
+    const q = query(
+      collection(db, "project_txs"),
+      where("projectId", "==", proj.id),
+      orderBy("createdAt", "desc")
+    );
+    return onSnapshot(q, snap =>
+      setTxs(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
+  }, [proj.id]);
+
+  const inTxs  = txs.filter(t => t.type === "in");
+  const outTxs = txs.filter(t => t.type === "out");
+
+  const totalIn  = (cur) => inTxs.filter(t=>t.currency===cur).reduce((s,t)=>s+t.amount,0);
+  const totalOut = (cur) => outTxs.filter(t=>t.currency===cur).reduce((s,t)=>s+t.amount,0);
+
+  const addTx = () => {
+    if (!amt || !form.receiver.trim()) return;
+    const data = {
+      projectId: proj.id,
+      projectName: proj.name,
+      type: tab,
+      amount: amt,
+      currency: form.currency,
+      receiver: form.receiver.trim(),
+      date: form.date,
+      note: form.note.trim(),
+      createdAt: new Date().toISOString()
+    };
+    addDoc(collection(db, "project_txs"), data);
+    setForm({ amount: "", currency: form.currency, receiver: "", date: form.date, note: "" });
+    setShow(false);
+  };
+
+  const deleteTx = async id => {
+    if (!window.confirm("حذف؟")) return;
+    await deleteDoc(doc(db, "project_txs", id));
+  };
+
+  const ts = typeStyle(proj.type);
+
+  return (
+    <div style={{ minHeight: "100vh", background: "#F1F5F9",
+      fontFamily: "Tahoma", direction: "rtl" }}>
+      <div style={{ maxWidth: 680, margin: "0 auto", padding: "20px 16px" }}>
+
+        {/* رجوع */}
+        <button onClick={onBack} style={{ background: "#fff", border: "1px solid #E2E8F0",
+          borderRadius: 10, padding: "8px 16px", fontSize: 13, color: "#475569",
+          cursor: "pointer", marginBottom: 16, fontFamily: "Tahoma",
+          display: "flex", alignItems: "center", gap: 6 }}>
+          ← رجوع للمشاريع
+        </button>
+
+        {/* بطاقة المشروع */}
+        <div style={{ background: "#fff", borderRadius: 14, padding: "16px 18px",
+          marginBottom: 16, border: "1px solid #E2E8F0",
+          borderTop: "4px solid " + (ts.color || "#D97706") }}>
+          <div style={{ display: "flex", gap: 8, marginBottom: 8, flexWrap: "wrap" }}>
+            {proj.type && (
+              <span style={{ fontSize: 11, fontWeight: 600, padding: "3px 10px",
+                borderRadius: 20, background: ts.bg, color: ts.color }}>
+                {ts.icon} {proj.type}
+              </span>
+            )}
+            <span style={{ fontSize: 11, fontWeight: 600, padding: "3px 10px",
+              borderRadius: 20,
+              background: proj.status === "active" ? "#DCFCE7" : "#F1F5F9",
+              color: proj.status === "active" ? "#16A34A" : "#64748B" }}>
+              {proj.status === "active" ? "● قيد العمل" : "✓ منتهي"}
+            </span>
+          </div>
+          <div style={{ fontSize: 18, fontWeight: 700, color: "#1E293B", marginBottom: 6 }}>
+            {proj.name}
+          </div>
+          <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
+            {proj.startDate && <span style={{ fontSize: 12, color: "#64748B" }}>📅 {proj.startDate}</span>}
+            {proj.days > 0  && <span style={{ fontSize: 12, color: "#64748B" }}>⏱️ {proj.days} يوم</span>}
+            {proj.valueDin > 0 && <span style={{ fontSize: 12, color: "#D97706", fontWeight: 600 }}>
+              🇮🇶 {fNum(proj.valueDin)} د.ع</span>}
+            {proj.valueDol > 0 && <span style={{ fontSize: 12, color: "#2563EB", fontWeight: 600 }}>
+              🇺🇸 {fNum(proj.valueDol)} $</span>}
+          </div>
+        </div>
+
+        {/* ملخص */}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 16 }}>
+          {/* مستلم */}
+          <div style={{ background: "#F0FDF4", borderRadius: 12, padding: 14,
+            border: "1px solid #16A34A20" }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: "#16A34A", marginBottom: 8 }}>
+              ↓ إجمالي المستلم
+            </div>
+            {totalIn("دينار") > 0 && (
+              <div style={{ fontSize: 14, fontWeight: 700, color: "#16A34A" }}>
+                {fNum(totalIn("دينار"))} <span style={{ fontSize: 11 }}>د.ع</span>
+              </div>
+            )}
+            {totalIn("دولار") > 0 && (
+              <div style={{ fontSize: 14, fontWeight: 700, color: "#2563EB" }}>
+                {fNum(totalIn("دولار"))} <span style={{ fontSize: 11 }}>$</span>
+              </div>
+            )}
+            {totalIn("دينار") === 0 && totalIn("دولار") === 0 && (
+              <div style={{ fontSize: 12, color: "#94A3B8" }}>لا يوجد</div>
+            )}
+          </div>
+          {/* مصروف */}
+          <div style={{ background: "#FFF1F2", borderRadius: 12, padding: 14,
+            border: "1px solid #DC262620" }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: "#DC2626", marginBottom: 8 }}>
+              ↑ إجمالي المصروف
+            </div>
+            {totalOut("دينار") > 0 && (
+              <div style={{ fontSize: 14, fontWeight: 700, color: "#DC2626" }}>
+                {fNum(totalOut("دينار"))} <span style={{ fontSize: 11 }}>د.ع</span>
+              </div>
+            )}
+            {totalOut("دولار") > 0 && (
+              <div style={{ fontSize: 14, fontWeight: 700, color: "#7C3AED" }}>
+                {fNum(totalOut("دولار"))} <span style={{ fontSize: 11 }}>$</span>
+              </div>
+            )}
+            {totalOut("دينار") === 0 && totalOut("دولار") === 0 && (
+              <div style={{ fontSize: 12, color: "#94A3B8" }}>لا يوجد</div>
+            )}
+          </div>
+        </div>
+
+        {/* تبويبات */}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 14 }}>
+          <button onClick={() => { setTab("in"); setShow(false); }} style={{
+            border: tab === "in" ? "none" : "1px solid #E2E8F0",
+            borderRadius: 10, padding: "12px", cursor: "pointer",
+            fontFamily: "Tahoma", fontSize: 14, fontWeight: 700,
+            background: tab === "in" ? "#16A34A" : "#fff",
+            color: tab === "in" ? "#fff" : "#64748B"
+          }}>↓ المبالغ المستلمة ({inTxs.length})</button>
+          <button onClick={() => { setTab("out"); setShow(false); }} style={{
+            border: tab === "out" ? "none" : "1px solid #E2E8F0",
+            borderRadius: 10, padding: "12px", cursor: "pointer",
+            fontFamily: "Tahoma", fontSize: 14, fontWeight: 700,
+            background: tab === "out" ? "#DC2626" : "#fff",
+            color: tab === "out" ? "#fff" : "#64748B"
+          }}>↑ المبالغ المصروفة ({outTxs.length})</button>
+        </div>
+
+        {/* زر إضافة */}
+        <button onClick={() => setShow(v => !v)} style={{
+          width: "100%", border: "none", borderRadius: 12, padding: "13px",
+          fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "Tahoma",
+          marginBottom: 14,
+          background: show ? "#475569" : tab === "in" ? "#16A34A" : "#DC2626",
+          color: "#fff"
+        }}>
+          {show ? "✕ إلغاء" : tab === "in" ? "+ إضافة مبلغ مستلم" : "+ إضافة مبلغ مصروف"}
+        </button>
+
+        {/* فورم الإضافة */}
+        {show && (
+          <div style={{ background: "#fff", borderRadius: 14, padding: 18,
+            border: "1px solid #E2E8F0", marginBottom: 16 }}>
+
+            {/* العملة */}
+            <div style={{ fontSize: 13, color: "#64748B", fontWeight: 600, marginBottom: 8 }}>
+              العملة
+            </div>
+            <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
+              {["دينار","دولار"].map(cur => (
+                <button key={cur} onClick={() => sf("currency")(cur)} style={{
+                  flex: 1, padding: "10px", borderRadius: 10, cursor: "pointer",
+                  fontFamily: "Tahoma", fontSize: 13, fontWeight: 700,
+                  border: "2px solid " + (form.currency === cur ? (cur === "دينار" ? "#16A34A" : "#2563EB") : "#E2E8F0"),
+                  background: form.currency === cur ? (cur === "دينار" ? "#F0FDF4" : "#EFF6FF") : "#fff",
+                  color: form.currency === cur ? (cur === "دينار" ? "#16A34A" : "#2563EB") : "#94A3B8"
+                }}>
+                  {cur === "دينار" ? "🇮🇶 دينار" : "🇺🇸 دولار"}
+                </button>
+              ))}
+            </div>
+
+            {/* المبلغ */}
+            <div style={{ fontSize: 13, color: "#64748B", fontWeight: 600, marginBottom: 6 }}>
+              المبلغ *
+            </div>
+            <input placeholder="٠" value={form.amount} inputMode="numeric"
+              onChange={e => sf("amount")(e.target.value.replace(/[^0-9]/g, ""))}
+              style={{ width: "100%", border: "1px solid #CBD5E1", borderRadius: 10,
+                padding: "12px 14px", fontSize: 15, outline: "none", fontFamily: "Tahoma",
+                direction: "rtl", marginBottom: 4, boxSizing: "border-box",
+                background: "#F8FAFC", color: "#1E293B",
+                MozAppearance: "textfield", WebkitAppearance: "none" }}/>
+            {amt > 0 && (
+              <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 12,
+                color: form.currency === "دينار" ? "#16A34A" : "#2563EB" }}>
+                ✍️ {w2(amt)} {form.currency === "دينار" ? "دينار عراقي" : "دولار أمريكي"}
+                {" — "}{fNum(amt)} {form.currency === "دينار" ? "د.ع" : "$"}
+              </div>
+            )}
+            {!amt && <div style={{ marginBottom: 12 }}/>}
+
+            {/* المستلم */}
+            <div style={{ fontSize: 13, color: "#64748B", fontWeight: 600, marginBottom: 6 }}>
+              {tab === "in" ? "المستلم *" : "صُرف على *"}
+            </div>
+            <input placeholder={tab === "in" ? "اسم المستلم..." : "وجهة الصرف..."}
+              value={form.receiver}
+              onChange={e => sf("receiver")(e.target.value)}
+              style={{ width: "100%", border: "1px solid #CBD5E1", borderRadius: 10,
+                padding: "12px 14px", fontSize: 15, outline: "none", fontFamily: "Tahoma",
+                direction: "rtl", marginBottom: 14, boxSizing: "border-box",
+                background: "#F8FAFC", color: "#1E293B" }}/>
+
+            {/* التاريخ */}
+            <div style={{ fontSize: 13, color: "#64748B", fontWeight: 600, marginBottom: 6 }}>
+              التاريخ *
+            </div>
+            <input type="date" value={form.date}
+              onChange={e => sf("date")(e.target.value)}
+              style={{ width: "100%", border: "1px solid #CBD5E1", borderRadius: 10,
+                padding: "12px 14px", fontSize: 15, outline: "none", fontFamily: "Tahoma",
+                direction: "rtl", marginBottom: 14, boxSizing: "border-box",
+                background: "#F8FAFC", color: "#1E293B" }}/>
+
+            {/* الملاحظات */}
+            <div style={{ fontSize: 13, color: "#64748B", fontWeight: 600, marginBottom: 6 }}>
+              ملاحظات
+            </div>
+            <textarea placeholder="أي تفاصيل إضافية..."
+              value={form.note}
+              onChange={e => sf("note")(e.target.value)}
+              rows={3}
+              style={{ width: "100%", border: "1px solid #CBD5E1", borderRadius: 10,
+                padding: "12px 14px", fontSize: 14, outline: "none", fontFamily: "Tahoma",
+                direction: "rtl", marginBottom: 16, boxSizing: "border-box",
+                background: "#F8FAFC", color: "#1E293B", resize: "none" }}/>
+
+            <button onClick={addTx} disabled={!amt || !form.receiver.trim()} style={{
+              width: "100%", border: "none", borderRadius: 10, padding: "13px",
+              fontSize: 14, fontWeight: 700, fontFamily: "Tahoma",
+              cursor: amt && form.receiver.trim() ? "pointer" : "not-allowed",
+              background: amt && form.receiver.trim()
+                ? (tab === "in" ? "#16A34A" : "#DC2626") : "#E2E8F0",
+              color: amt && form.receiver.trim() ? "#fff" : "#94A3B8"
+            }}>
+              {tab === "in" ? "✅ تسجيل المبلغ المستلم" : "✅ تسجيل المبلغ المصروف"}
+            </button>
+          </div>
+        )}
+
+        {/* قائمة الحركات */}
+        {(tab === "in" ? inTxs : outTxs).length === 0 ? (
+          <div style={{ textAlign: "center", padding: 32, color: "#94A3B8",
+            background: "#fff", borderRadius: 12, border: "1px solid #E2E8F0" }}>
+            {tab === "in" ? "ما في مبالغ مستلمة بعد" : "ما في مبالغ مصروفة بعد"}
+          </div>
+        ) : (
+          (tab === "in" ? inTxs : outTxs).map(t => (
+            <div key={t.id} style={{ background: "#fff", borderRadius: 12, padding: "14px 16px",
+              marginBottom: 10, border: "1px solid #E2E8F0",
+              borderRight: "5px solid " + (tab === "in" ? "#16A34A" : "#DC2626") }}>
+              <div style={{ display: "flex", justifyContent: "space-between",
+                alignItems: "flex-start" }}>
+                <div style={{ flex: 1 }}>
+                  {/* المبلغ + العملة */}
+                  <div style={{ fontSize: 18, fontWeight: 700, marginBottom: 4,
+                    color: tab === "in" ? "#16A34A" : "#DC2626" }}>
+                    {tab === "in" ? "↓ " : "↑ "}
+                    {fNum(t.amount)} {t.currency === "دينار" ? "د.ع" : "$"}
+                  </div>
+                  {/* كتابة */}
+                  <div style={{ fontSize: 11, color: "#64748B", marginBottom: 6 }}>
+                    ✍️ {w2(t.amount)} {t.currency === "دينار" ? "دينار" : "دولار"}
+                  </div>
+                  {/* العملة badge */}
+                  <span style={{ fontSize: 10, fontWeight: 600, padding: "2px 8px",
+                    borderRadius: 20, marginBottom: 6, display: "inline-block",
+                    background: t.currency === "دينار" ? "#F0FDF4" : "#EFF6FF",
+                    color: t.currency === "دينار" ? "#16A34A" : "#2563EB" }}>
+                    {t.currency === "دينار" ? "🇮🇶 دينار" : "🇺🇸 دولار"}
+                  </span>
+                  <div style={{ marginTop: 6 }}>
+                    <div style={{ fontSize: 12, color: "#1E293B", fontWeight: 600 }}>
+                      👤 {t.receiver}
+                    </div>
+                    <div style={{ fontSize: 11, color: "#64748B", marginTop: 3 }}>
+                      📅 {t.date}
+                    </div>
+                    {t.note && (
+                      <div style={{ fontSize: 11, color: "#475569", marginTop: 4,
+                        background: "#F8FAFC", borderRadius: 7, padding: "5px 8px" }}>
+                        📝 {t.note}
+                      </div>
+                    )}
+                  </div>
+                </div>
+                <button onClick={() => deleteTx(t.id)} style={{
+                  background: "none", border: "none", color: "#DC2626",
+                  cursor: "pointer", fontSize: 13, fontFamily: "Tahoma",
+                  fontWeight: 600, marginRight: 8
+                }}>🗑️</button>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
     </div>
   );
 }
