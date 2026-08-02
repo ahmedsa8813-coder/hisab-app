@@ -1,12 +1,15 @@
 import React, { useState, useEffect } from "react";
 import { initializeApp } from "firebase/app";
 import { getFirestore, collection, addDoc, onSnapshot,
-  deleteDoc, doc, updateDoc, orderBy, query, where, getDocs } from "firebase/firestore";
+  deleteDoc, doc, updateDoc, query, where, getDocs, getDoc } from "firebase/firestore";
 
 const app = initializeApp({
-  apiKey: "AIzaSyCN0XF9YDxLZIOMoVeZYMpXLl0rrS1HGrs",
-  authDomain: "bab-fb825.firebaseapp.com",
-  projectId: "bab-fb825"
+  apiKey: "AIzaSyCBGovCJ_Bx64dOjC0UWzJsBPgXEuJaizI",
+  authDomain: "bab-projects-b7d04.firebaseapp.com",
+  projectId: "bab-projects-b7d04",
+  storageBucket: "bab-projects-b7d04.firebasestorage.app",
+  messagingSenderId: "982434748534",
+  appId: "1:982434748534:web:ca0e52ef0115ecfc346757"
 });
 const db = getFirestore(app);
 
@@ -68,33 +71,51 @@ export default function App() {
   const sf = k => v => setForm(f => ({ ...f, [k]: v }));
 
   useEffect(() => {
-    const q = query(collection(db, "projects"), orderBy("createdAt", "desc"));
-    return onSnapshot(q, snap =>
-      setProjects(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
+    return onSnapshot(collection(db, "projects"),
+      snap => {
+        const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        list.sort((a,b) => b.createdAt?.localeCompare(a.createdAt || "") || 0);
+        setProjects(list);
+      },
+      err => alert("خطأ في قاعدة البيانات: " + err.message)
+    );
   }, []);
 
   const valid = form.type && form.name.trim() && form.days
              && (Number(form.valueDin) > 0 || Number(form.valueDol) > 0)
              && form.startDate;
 
-  const addProject = () => {
-    if (!valid) return;
-    // أغلق الفورم فوراً
-    setForm(emptyForm);
-    setShowForm(false);
-    // Firebase في الخلفية
-    addDoc(collection(db, "projects"), {
-      type:      form.type,
-      name:      form.name.trim(),
-      days:      Number(form.days),
-      valueDin:  Number(form.valueDin) || 0,
-      valueDol:  Number(form.valueDol) || 0,
-      startDate: form.startDate,
-      received:  0,
-      spent:     0,
-      status:    "active",
-      createdAt: new Date().toISOString()
-    });
+  const [saving, setSaving] = useState(false);
+
+  const addProject = async () => {
+    if (!valid || saving) return;
+    setSaving(true);
+    try {
+      const data = {
+        type:      form.type,
+        name:      form.name.trim(),
+        days:      Number(form.days),
+        valueDin:  Number(form.valueDin) || 0,
+        valueDol:  Number(form.valueDol) || 0,
+        startDate: form.startDate,
+        received:  0,
+        spent:     0,
+        status:    "active",
+        createdAt: new Date().toISOString()
+      };
+      const ref = await addDoc(collection(db, "projects"), data);
+      // تحقق فعلي إن البيانات وصلت Firebase
+      const saved = await getDoc(ref);
+      if (saved.exists()) {
+        setForm(emptyForm);
+        setShowForm(false);
+      } else {
+        alert("⚠️ لم يتم الحفظ في Firebase، تحقق من الاتصال");
+      }
+    } catch(e) {
+      alert("خطأ في الحفظ: " + e.code + " — " + e.message);
+    }
+    setSaving(false);
   };
 
   const deleteProject = async id => {
@@ -123,6 +144,15 @@ export default function App() {
   const done   = projects.filter(p => p.status === "done");
   const list   = tab === "active" ? active : done;
 
+  const testFirebase = async () => {
+    try {
+      const ref = await addDoc(collection(db, "test_ping"), { t: Date.now() });
+      const snap = await getDoc(ref);
+      if (snap.exists()) alert("Firebase OK - ID: " + ref.id);
+      else alert("فشل - البيانات ما وصلت للسيرفر");
+    } catch(e) { alert("خطأ: " + e.code + " - " + e.message); }
+  };
+
   if (page === "home")    return <HomePage onSelect={setPage} />;
   if (page === "admin")   return <AdminPage onBack={() => setPage("home")} />;
   if (page === "project" && selProj)
@@ -144,9 +174,10 @@ export default function App() {
         <div style={{ background: "#fff", borderRadius: 14, padding: "16px 20px",
           marginBottom: 16, border: "1px solid #E2E8F0", borderTop: "4px solid #D97706" }}>
           <div style={{ fontSize: 20, fontWeight: 700, color: "#1E293B" }}>🏗️ صندوق المشاريع</div>
-          <div style={{ display: "flex", gap: 16, marginTop: 6 }}>
+          <div style={{ display: "flex", gap: 16, marginTop: 6, alignItems: "center" }}>
             <span style={{ fontSize: 13, color: "#16A34A", fontWeight: 600 }}>● {active.length} قيد العمل</span>
             <span style={{ fontSize: 13, color: "#64748B", fontWeight: 600 }}>✓ {done.length} منتهية</span>
+            <button onClick={testFirebase} style={{ fontSize: 11, background: "#F0FDF4", border: "1px solid #16A34A", borderRadius: 7, padding: "4px 10px", cursor: "pointer", color: "#16A34A", fontFamily: "Tahoma", fontWeight: 700 }}>🔌 اختبار</button>
           </div>
         </div>
 
@@ -292,11 +323,11 @@ export default function App() {
             <button onClick={addProject} disabled={!valid} style={{
               width: "100%", border: "none", borderRadius: 10, padding: "13px",
               fontSize: 15, fontWeight: 700, fontFamily: "Tahoma",
-              cursor: valid ? "pointer" : "not-allowed",
-              background: valid ? "#D97706" : "#E2E8F0",
-              color: valid ? "#fff" : "#94A3B8"
+              cursor: valid && !saving ? "pointer" : "not-allowed",
+              background: valid && !saving ? "#D97706" : "#E2E8F0",
+              color: valid && !saving ? "#fff" : "#94A3B8"
             }}>
-              ✅ حفظ المشروع
+              {saving ? "⏳ جاري الحفظ..." : "✅ حفظ المشروع"}
             </button>
           </div>
         )}
@@ -391,9 +422,11 @@ function AdminPage({ onBack }) {
   const today = new Date().toISOString().split("T")[0];
 
   useEffect(() => {
-    const q = query(collection(db, "daily_tasks"), orderBy("createdAt", "desc"));
-    return onSnapshot(q, snap =>
-      setTasks(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
+    return onSnapshot(collection(db, "daily_tasks"), snap => {
+      const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      list.sort((a,b) => (b.createdAt||"").localeCompare(a.createdAt||""));
+      setTasks(list);
+    });
   }, []);
 
   const addTask = () => {
@@ -697,13 +730,14 @@ function ProjectDetail({ proj, onBack }) {
 
   // جلب الحركات
   useEffect(() => {
-    const q = query(
-      collection(db, "project_txs"),
-      where("projectId", "==", proj.id),
-      orderBy("createdAt", "desc")
+    return onSnapshot(
+      query(collection(db, "project_txs"), where("projectId","==",proj.id)),
+      snap => {
+        const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        list.sort((a,b) => b.createdAt?.localeCompare(a.createdAt || "") || 0);
+        setTxs(list);
+      }
     );
-    return onSnapshot(q, snap =>
-      setTxs(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
   }, [proj.id]);
 
   const inTxs  = txs.filter(t => t.type === "in");
