@@ -50,10 +50,13 @@ export default function App() {
   const valid = form.type && form.name.trim() && form.client.trim()
              && form.province.trim() && Number(form.value) > 0;
 
-  const addProject = async () => {
-    if (!valid || saving) return;
-    setSaving(true);
-    await addDoc(collection(db, "projects"), {
+  const addProject = () => {
+    if (!valid) return;
+    // أغلق الفورم فوراً
+    setForm(emptyForm);
+    setShowForm(false);
+    // Firebase في الخلفية
+    addDoc(collection(db, "projects"), {
       type:     form.type,
       name:     form.name.trim(),
       client:   form.client.trim(),
@@ -66,9 +69,6 @@ export default function App() {
       status:   "active",
       createdAt: new Date().toISOString()
     });
-    setForm(emptyForm);
-    setShowForm(false);
-    setSaving(false);
   };
 
   const deleteProject = async id => {
@@ -199,14 +199,14 @@ export default function App() {
               </div>
             ))}
 
-            <button onClick={addProject} disabled={!valid || saving} style={{
+            <button onClick={addProject} disabled={!valid} style={{
               width: "100%", border: "none", borderRadius: 10, padding: "13px",
               fontSize: 15, fontWeight: 700, fontFamily: "Tahoma",
-              cursor: valid && !saving ? "pointer" : "not-allowed",
+              cursor: valid ? "pointer" : "not-allowed",
               background: valid ? "#D97706" : "#E2E8F0",
               color: valid ? "#fff" : "#94A3B8"
             }}>
-              {saving ? "جاري الحفظ..." : "✅ حفظ المشروع"}
+              "✅ حفظ المشروع"
             </button>
           </div>
         )}
