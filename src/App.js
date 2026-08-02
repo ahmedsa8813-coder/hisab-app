@@ -2093,27 +2093,35 @@ ${note ? `<div class="row"><span class="lbl">ملاحظة</span><span class="val
   };
 
   const printStatement = () => {
+    // كل الحركات (إيداع + سحب) مفلترة بالتاريخ
     const filtered = txs.filter(t => {
-      if (t.type !== "سحب") return false;
       if (fromDate && t.date < fromDate) return false;
       if (toDate && t.date > toDate) return false;
       return true;
-    }).sort((a,b)=>(a.date||"").localeCompare(b.date||""));
+    }).sort((a,b) => (a.date||"").localeCompare(b.date||"")||(a.createdAt||"").localeCompare(b.createdAt||""));
 
-    if (filtered.length === 0) { alert("ما في سحوبات في هذه الفترة"); return; }
+    if (filtered.length === 0) { alert("ما في حركات في هذه الفترة"); return; }
 
-    let totalDin = 0, totalDol = 0;
-    let n = 0;
+    let balDin = 0, balDol = 0, n = 0;
+    let totDepDin=0, totDepDol=0, totWitDin=0, totWitDol=0;
+
     const rows = filtered.map(t => {
       n++;
-      totalDin += t.din || 0;
-      totalDol += t.dol || 0;
-      return `<tr style="background:${n%2===0?"#F8FAFC":"#fff"}">
+      const isIn = t.type === "إيداع";
+      const din = t.din || 0;
+      const dol = t.dol || 0;
+      if (isIn) { balDin += din; balDol += dol; totDepDin += din; totDepDol += dol; }
+      else       { balDin -= din; balDol -= dol; totWitDin += din; totWitDol += dol; }
+      const bg = n%2===0?"#F8FAFC":"#fff";
+      return `<tr style="background:${bg}">
         <td>${n}</td>
         <td>${t.date||""}</td>
-        <td style="text-align:right">${t.note||"—"}</td>
-        ${(t.din||0)>0?`<td style="color:#DC2626;font-weight:700;text-align:center">${fNum(t.din)} د.ع</td>`:"<td>—</td>"}
-        ${(t.dol||0)>0?`<td style="color:#DC2626;font-weight:700;text-align:center">${fNum(t.dol)} $</td>`:"<td>—</td>"}
+        <td style="text-align:right;padding:7px 10px">${t.note||"—"}</td>
+        <td style="color:#16A34A;font-weight:700">${isIn&&din>0?"+"+fNum(din)+" د.ع":""}</td>
+        <td style="color:#DC2626;font-weight:700">${!isIn&&din>0?"-"+fNum(din)+" د.ع":""}</td>
+        <td style="color:#16A34A;font-weight:700">${isIn&&dol>0?"+"+fNum(dol)+" $":""}</td>
+        <td style="color:#DC2626;font-weight:700">${!isIn&&dol>0?"-"+fNum(dol)+" $":""}</td>
+        <td style="font-weight:700;color:${balDin>=0?"#D97706":"#DC2626"}">${fNum(balDin)} د.ع</td>
       </tr>`;
     }).join("");
 
@@ -2122,53 +2130,60 @@ ${note ? `<div class="row"><span class="lbl">ملاحظة</span><span class="val
 
     const html = `<!DOCTYPE html><html dir="rtl"><head><meta charset="utf-8"/>
 <style>
-*{font-family:Tahoma}body{margin:24px;direction:rtl}
+*{font-family:Tahoma,Arial}body{margin:20px;direction:rtl}
 .hdr{border-bottom:3px solid ${partner.color};padding-bottom:12px;margin-bottom:14px;text-align:center}
-.co{font-size:20px;font-weight:700;color:#1E293B}.ca{font-size:11px;color:#64748B}
+.co{font-size:20px;font-weight:700}.ca{font-size:11px;color:#64748B}
 .title{font-size:16px;font-weight:700;color:${partner.color};margin:12px 0 4px}
 .info{font-size:11px;color:#64748B;margin-bottom:14px}
-.summary{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px}
-.sb{border-radius:9px;padding:12px;text-align:center}
-.sl{font-size:10px;color:#64748B;margin-bottom:4px}.sv{font-size:15px;font-weight:700}
+.sg{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:16px}
+.sb{border-radius:9px;padding:10px;text-align:center}
+.sl{font-size:9px;color:#64748B;margin-bottom:3px}.sv{font-size:13px;font-weight:700}
 table{width:100%;border-collapse:collapse}
-thead tr{background:${partner.color}}
-th{color:#fff;padding:9px 8px;font-size:11px}
-td{padding:8px;font-size:11px;text-align:center;border-bottom:1px solid #F1F5F9}
-.ft{margin-top:14px;font-size:10px;color:#94A3B8;display:flex;justify-content:space-between;border-top:1px solid #E2E8F0;padding-top:8px}
+thead tr{background:${partner.color}}th{color:#fff;padding:8px 6px;font-size:10px}
+td{padding:7px 6px;font-size:10px;text-align:center;border-bottom:1px solid #F1F5F9}
+.tot td{background:#F1F5F9;font-weight:700;border-top:2px solid ${partner.color}}
+.ft{margin-top:14px;font-size:10px;color:#94A3B8;display:flex;justify-content:space-between;border-top:1px dashed #E2E8F0;padding-top:8px}
 </style></head><body>
 <div class="hdr">
   <div class="co">شركة باب المشاريع</div>
   <div class="ca">بغداد — العرصات</div>
 </div>
-<div class="title">كشف سحوبات — ${partner.name}</div>
-<div class="info">
-  الحصة: ${partner.pct}% &nbsp;·&nbsp; الفترة: ${period} &nbsp;·&nbsp; عدد العمليات: ${filtered.length}
-</div>
-<div class="summary">
+<div class="title">📋 كشف الحساب الشامل — ${partner.name}</div>
+<div class="info">الحصة: ${partner.pct}% &nbsp;·&nbsp; الفترة: ${period} &nbsp;·&nbsp; ${filtered.length} حركة</div>
+<div class="sg">
+  <div class="sb" style="background:#F0FDF4;border:1px solid #16A34A20">
+    <div class="sl">↓ إجمالي الإيداعات دينار</div>
+    <div class="sv" style="color:#16A34A">+${fNum(totDepDin)} د.ع</div>
+  </div>
   <div class="sb" style="background:#FFF1F2;border:1px solid #DC262620">
-    <div class="sl">إجمالي السحوبات دينار</div>
-    <div class="sv" style="color:#DC2626">${fNum(totalDin)} د.ع</div>
+    <div class="sl">↑ إجمالي السحوبات دينار</div>
+    <div class="sv" style="color:#DC2626">-${fNum(totWitDin)} د.ع</div>
   </div>
-  <div class="sb" style="background:#FEF2F2;border:1px solid #DC262620">
-    <div class="sl">إجمالي السحوبات دولار</div>
-    <div class="sv" style="color:#DC2626">${fNum(totalDol)} $</div>
+  <div class="sb" style="background:#EFF6FF;border:1px solid #2563EB20">
+    <div class="sl">↓ إجمالي الإيداعات دولار</div>
+    <div class="sv" style="color:#2563EB">+${fNum(totDepDol)} $</div>
   </div>
-  <div class="sb" style="background:${partner.bg};border:1px solid ${partner.color}40">
-    <div class="sl">الرصيد الحالي</div>
+  <div class="sb" style="background:${partner.bg};border:2px solid ${partner.color}">
+    <div class="sl">⚖️ الرصيد الحالي</div>
     <div class="sv" style="color:${partner.color}">${fNum(pf.din)} د.ع</div>
-    ${pf.dol>0?`<div style="font-size:12px;font-weight:700;color:#2563EB">${fNum(pf.dol)} $</div>`:""}
+    ${pf.dol>0?`<div style="font-size:11px;font-weight:700;color:#2563EB">${fNum(pf.dol)} $</div>`:""}
   </div>
 </div>
 <table>
   <thead><tr>
-    <th>#</th><th>التاريخ</th><th>البيان / الملاحظة</th><th>الدينار</th><th>الدولار</th>
+    <th>#</th><th>التاريخ</th><th style="text-align:right">البيان</th>
+    <th>إيداع دينار</th><th>سحب دينار</th>
+    <th>إيداع دولار</th><th>سحب دولار</th>
+    <th>الميزان</th>
   </tr></thead>
   <tbody>${rows}</tbody>
-  <tr style="background:#F1F5F9;font-weight:700">
-    <td colspan="2">الإجمالي</td>
-    <td></td>
-    <td style="color:#DC2626">${fNum(totalDin)} د.ع</td>
-    <td style="color:#DC2626">${fNum(totalDol)} $</td>
+  <tr class="tot">
+    <td colspan="2">الإجمالي</td><td></td>
+    <td style="color:#16A34A">+${fNum(totDepDin)} د.ع</td>
+    <td style="color:#DC2626">-${fNum(totWitDin)} د.ع</td>
+    <td style="color:#16A34A">+${fNum(totDepDol)} $</td>
+    <td style="color:#DC2626">-${fNum(totWitDol)} $</td>
+    <td style="color:${partner.color}">${fNum(pf.din)} د.ع</td>
   </tr>
 </table>
 <div class="ft">
@@ -2177,7 +2192,7 @@ td{padding:8px;font-size:11px;text-align:center;border-bottom:1px solid #F1F5F9}
 </div>
 </body></html>`;
 
-    const w = window.open("","_blank","width=900,height=700");
+    const w = window.open("","_blank","width=1000,height=750");
     if(!w){alert("السماح بالنوافذ المنبثقة");return;}
     w.document.write(html);w.document.close();w.focus();
     setTimeout(()=>w.print(),700);
@@ -2314,7 +2329,7 @@ td{padding:8px;font-size:11px;text-align:center;border-bottom:1px solid #F1F5F9}
           <div style={{ display:"flex", justifyContent:"space-between",
             alignItems:"center", marginBottom: showStatement?14:0 }}>
             <div style={{ fontSize:14, fontWeight:700, color:"#1E293B" }}>
-              🖨️ كشف حساب السحوبات
+              🖨️ كشف الحساب الشامل
             </div>
             <button onClick={()=>setShowStatement(v=>!v)} style={{
               background:showStatement?"#475569":partner.color, border:"none",
@@ -2356,16 +2371,16 @@ td{padding:8px;font-size:11px;text-align:center;border-bottom:1px solid #F1F5F9}
               <div style={{ fontSize:12, color:"#64748B", marginBottom:12 }}>
                 سيتم طباعة{" "}
                 <strong style={{ color:"#1E293B" }}>
-                  {txs.filter(t=>t.type==="سحب"&&(!fromDate||t.date>=fromDate)&&(!toDate||t.date<=toDate)).length}
+                  {txs.filter(t=>(!fromDate||t.date>=fromDate)&&(!toDate||t.date<=toDate)).length}
                 </strong>
-                {" "}سحبة
-                {fromDate||toDate?" في الفترة المحددة":" (كل السحوبات)"}
+                {" "}حركة
+                {fromDate||toDate?" في الفترة المحددة":" (كل الحركات)"}
               </div>
               <button onClick={printStatement} style={{
                 width:"100%", border:"none", borderRadius:10, padding:"12px",
                 fontSize:14, fontWeight:700, fontFamily:"Tahoma",
                 background:partner.color, color:"#fff", cursor:"pointer" }}>
-                🖨️ طباعة كشف السحوبات
+                🖨️ طباعة كشف الحساب الشامل
               </button>
             </div>
           )}
