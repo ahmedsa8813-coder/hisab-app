@@ -45,6 +45,8 @@ const fNum = n => {
   return r;
 };
 
+const PASS = "1234";
+
 const PROVINCES = [
   "بغداد","البصرة","نينوى","أربيل","السليمانية","دهوك","كركوك",
   "الأنبار","صلاح الدين","ديالى","واسط","ميسان","ذي قار",
@@ -127,15 +129,27 @@ export default function App() {
   };
 
   const deleteProject = async id => {
-    if (!window.confirm("حذف المشروع؟")) return;
+    const pw = window.prompt("🔒 حذف المشروع\nأدخل الباسورد:");
+    if (pw === null) return;
+    if (pw !== PASS) { alert("❌ باسورد غلط"); return; }
     await deleteDoc(doc(db, "projects", id));
-    // حذف حركاته أيضاً
     const s = await getDocs(query(collection(db, "project_txs"), where("projectId","==",id)));
     for (const d of s.docs) await deleteDoc(doc(db, "project_txs", d.id));
   };
 
+  const editProject = async (id, data) => {
+    const pw = window.prompt("🔒 تعديل المشروع\nأدخل الباسورد:");
+    if (pw === null) return false;
+    if (pw !== PASS) { alert("❌ باسورد غلط"); return false; }
+    await updateDoc(doc(db, "projects", id), data);
+    return true;
+  };
+
   const resetAllProjects = async () => {
-    if (!window.confirm("حذف كل المشاريع وكل بياناتها؟")) return;
+    const pw = window.prompt("🔒 تصفير كل المشاريع\nأدخل الباسورد:");
+    if (pw === null) return;
+    if (pw !== PASS) { alert("❌ باسورد غلط"); return; }
+    if (!window.confirm("تأكيد: حذف كل المشاريع وبياناتها؟")) return;
     const ps = await getDocs(collection(db, "projects"));
     for (const d of ps.docs) await deleteDoc(doc(db, "projects", d.id));
     const ts = await getDocs(collection(db, "project_txs"));
@@ -384,7 +398,8 @@ export default function App() {
         ) : list.map(p => <ProjectCard key={p.id} p={p}
             onOpen={() => { setSelProj(p); setPage("project"); }}
             onToggle={() => toggleStatus(p.id, p.status)}
-            onDelete={() => deleteProject(p.id)} />
+            onDelete={() => deleteProject(p.id)}
+            onEdit={editProject} />
         )}
       </div>
     </div>
@@ -654,8 +669,15 @@ function AdminPage({ onBack }) {
   );
 }
 
-function ProjectCard({ p, onOpen, onToggle, onDelete }) {
+function ProjectCard({ p, onOpen, onToggle, onDelete, onEdit }) {
   const ts = typeStyle(p.type);
+  const [showEdit, setShowEdit] = React.useState(false);
+  const [ef, setEf] = React.useState({
+    name: p.name||"", province: p.province||"", city: p.city||"",
+    days: String(p.days||""), valueDin: String(p.valueDin||""), valueDol: String(p.valueDol||""),
+    startDate: p.startDate||""
+  });
+  const se = k => v => setEf(x=>({...x,[k]:v}));
 
   return (
     <div style={{ background: "#fff", borderRadius: 14, padding: "16px 18px",
@@ -700,6 +722,14 @@ function ProjectCard({ p, onOpen, onToggle, onDelete }) {
           }}>
             {p.status === "active" ? "✓ إنهاء" : "↩ تفعيل"}
           </button>
+          <button onClick={e => { e.stopPropagation(); onEdit && setShowEdit(true); }} style={{
+            background: "#EFF6FF", border: "1px solid #BFDBFE",
+            borderRadius: 7, padding: "5px 10px",
+            color: "#2563EB", cursor: "pointer", fontSize: 11,
+            fontFamily: "Tahoma", fontWeight: 700, marginBottom: 4
+          }}>
+            ✏️ تعديل
+          </button>
           <button onClick={e => { e.stopPropagation(); onDelete(); }} style={{
             background: "#FFF1F2", border: "1px solid #FEE2E2",
             borderRadius: 7, padding: "5px 10px",
@@ -710,6 +740,88 @@ function ProjectCard({ p, onOpen, onToggle, onDelete }) {
           </button>
         </div>
       </div>
+
+      {/* نافذة التعديل */}
+      {showEdit && (
+        <div onClick={e=>e.stopPropagation()} style={{ position:"fixed",inset:0,
+          background:"rgba(0,0,0,0.5)",zIndex:999,display:"flex",
+          alignItems:"center",justifyContent:"center",padding:16 }}>
+          <div style={{ background:"#fff",borderRadius:18,width:"100%",maxWidth:420,
+            maxHeight:"90vh",overflow:"auto",boxShadow:"0 20px 60px rgba(0,0,0,0.25)" }}>
+            <div style={{ padding:"16px 20px",borderBottom:"1px solid #E2E8F0",
+              display:"flex",justifyContent:"space-between",alignItems:"center" }}>
+              <div style={{ fontSize:15,fontWeight:700,color:"#2563EB" }}>✏️ تعديل المشروع</div>
+              <button onClick={()=>setShowEdit(false)} style={{ background:"none",border:"none",
+                fontSize:20,cursor:"pointer",color:"#64748B" }}>✕</button>
+            </div>
+            <div style={{ padding:"18px 20px" }}>
+              {/* نوع المشروع */}
+              <div style={{ fontSize:12,color:"#64748B",fontWeight:600,marginBottom:8 }}>نوع المشروع</div>
+              <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:6,marginBottom:14 }}>
+                {TYPES.map(({val,icon,color,bg})=>(
+                  <button key={val} onClick={()=>se("type")(val)} style={{
+                    border:"2px solid "+(ef.type===val?color:"#E2E8F0"),
+                    borderRadius:10,padding:"10px 8px",cursor:"pointer",
+                    fontFamily:"Tahoma",fontSize:13,fontWeight:700,
+                    display:"flex",alignItems:"center",justifyContent:"center",gap:8,
+                    background:ef.type===val?bg:"#fff",color:ef.type===val?color:"#94A3B8"
+                  }}><span style={{fontSize:18}}>{icon}</span>{val}</button>
+                ))}
+              </div>
+              {[
+                {l:"اسم المشروع",k:"name",ph:"..."},
+                {l:"تاريخ البداية",k:"startDate",ph:"",t:"date"},
+                {l:"المدة بالأيام",k:"days",ph:"90",t:"number"},
+                {l:"قيمة الدينار",k:"valueDin",ph:"٠",t:"number"},
+                {l:"قيمة الدولار",k:"valueDol",ph:"٠",t:"number"},
+              ].map(({l,k,ph,t})=>(
+                <div key={k} style={{marginBottom:12}}>
+                  <div style={{fontSize:12,color:"#64748B",fontWeight:600,marginBottom:5}}>{l}</div>
+                  <input type={t||"text"} placeholder={ph} value={ef[k]||""}
+                    onChange={e=>se(k)(e.target.value)}
+                    style={{width:"100%",border:"1px solid #CBD5E1",borderRadius:9,
+                      padding:"10px 13px",fontSize:14,outline:"none",fontFamily:"Tahoma",
+                      direction:"rtl",boxSizing:"border-box",background:"#F8FAFC"}}/>
+                </div>
+              ))}
+              <div style={{marginBottom:12}}>
+                <div style={{fontSize:12,color:"#64748B",fontWeight:600,marginBottom:5}}>المحافظة</div>
+                <select value={ef.province||""} onChange={e=>se("province")(e.target.value)}
+                  style={{width:"100%",border:"1px solid #CBD5E1",borderRadius:9,
+                    padding:"10px 13px",fontSize:14,outline:"none",fontFamily:"Tahoma",
+                    direction:"rtl",boxSizing:"border-box",background:"#F8FAFC",appearance:"none"}}>
+                  <option value="">اختر...</option>
+                  {PROVINCES.map(pr=><option key={pr} value={pr}>{pr}</option>)}
+                </select>
+              </div>
+              <div style={{marginBottom:16}}>
+                <div style={{fontSize:12,color:"#64748B",fontWeight:600,marginBottom:5}}>المدينة</div>
+                <input placeholder="..." value={ef.city||""} onChange={e=>se("city")(e.target.value)}
+                  style={{width:"100%",border:"1px solid #CBD5E1",borderRadius:9,
+                    padding:"10px 13px",fontSize:14,outline:"none",fontFamily:"Tahoma",
+                    direction:"rtl",boxSizing:"border-box",background:"#F8FAFC"}}/>
+              </div>
+              <button onClick={async()=>{
+                const ok = await onEdit(p.id,{
+                  name:ef.name.trim()||p.name,
+                  type:ef.type||p.type,
+                  province:ef.province||p.province||"",
+                  city:ef.city?.trim()||"",
+                  days:Number(ef.days)||p.days||0,
+                  valueDin:Number(ef.valueDin)||0,
+                  valueDol:Number(ef.valueDol)||0,
+                  startDate:ef.startDate||p.startDate||""
+                });
+                if(ok)setShowEdit(false);
+              }} style={{width:"100%",border:"none",borderRadius:10,padding:"13px",
+                fontSize:14,fontWeight:700,fontFamily:"Tahoma",
+                background:"#2563EB",color:"#fff",cursor:"pointer"}}>
+                ✅ حفظ التعديلات
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* الميزان في القائمة */}
       <div style={{ borderTop: "1px solid #F1F5F9", paddingTop: 10,
