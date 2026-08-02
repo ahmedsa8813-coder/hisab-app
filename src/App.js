@@ -34,6 +34,7 @@ const emptyForm = {
 };
 
 export default function App() {
+  const [page, setPage] = useState("home");
   const [projects, setProjects] = useState([]);
   const [tab, setTab]     = useState("active");
   const [form, setForm]   = useState(emptyForm);
@@ -86,10 +87,19 @@ export default function App() {
   const done   = projects.filter(p => p.status === "done");
   const list   = tab === "active" ? active : done;
 
+  if (page === "home") return <HomePage onSelect={setPage} />;
+
   return (
     <div style={{ minHeight: "100vh", background: "#F1F5F9",
       fontFamily: "Tahoma", direction: "rtl" }}>
       <div style={{ maxWidth: 640, margin: "0 auto", padding: "22px 16px" }}>
+        {/* رجوع للرئيسية */}
+        <button onClick={() => setPage("home")} style={{
+          background: "#fff", border: "1px solid #E2E8F0", borderRadius: 10,
+          padding: "8px 16px", fontSize: 13, color: "#475569", cursor: "pointer",
+          marginBottom: 16, fontFamily: "Tahoma", display: "flex",
+          alignItems: "center", gap: 6
+        }}>← رجوع للرئيسية</button>
 
         {/* هيدر */}
         <div style={{ background: "#fff", borderRadius: 14, padding: "16px 20px",
@@ -224,6 +234,70 @@ export default function App() {
             onToggle={() => toggleStatus(p.id, p.status)}
             onDelete={() => deleteProject(p.id)} />
         )}
+      </div>
+    </div>
+  );
+}
+
+function HomePage({ onSelect }) {
+  return (
+    <div style={{ minHeight: "100vh", background: "#1E293B",
+      fontFamily: "Tahoma", direction: "rtl",
+      display: "flex", flexDirection: "column",
+      alignItems: "center", justifyContent: "center", padding: 20 }}>
+
+      {/* الشعار */}
+      <div style={{ textAlign: "center", marginBottom: 40 }}>
+        <div style={{ fontSize: 48, marginBottom: 12 }}>🏗️</div>
+        <div style={{ fontSize: 24, fontWeight: 700, color: "#fff" }}>
+          شركة باب المشاريع
+        </div>
+        <div style={{ fontSize: 13, color: "#94A3B8", marginTop: 6 }}>
+          اختر القسم للمتابعة
+        </div>
+      </div>
+
+      {/* القسمان */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr",
+        gap: 16, width: "100%", maxWidth: 500 }}>
+
+        {/* القسم المالي */}
+        <button onClick={() => onSelect("financial")} style={{
+          background: "linear-gradient(135deg, #D97706, #F59E0B)",
+          border: "none", borderRadius: 20, padding: "32px 16px",
+          cursor: "pointer", textAlign: "center", fontFamily: "Tahoma",
+          boxShadow: "0 8px 32px rgba(217,119,6,0.4)",
+          transition: "transform 0.15s"
+        }}
+          onMouseEnter={e => e.currentTarget.style.transform = "scale(1.03)"}
+          onMouseLeave={e => e.currentTarget.style.transform = "scale(1)"}>
+          <div style={{ fontSize: 40, marginBottom: 10 }}>💰</div>
+          <div style={{ fontSize: 18, fontWeight: 700, color: "#fff", marginBottom: 6 }}>
+            القسم المالي
+          </div>
+          <div style={{ fontSize: 12, color: "#FEF3C7" }}>
+            المشاريع · الصرف · الإيرادات
+          </div>
+        </button>
+
+        {/* القسم الإداري */}
+        <button onClick={() => onSelect("admin")} style={{
+          background: "linear-gradient(135deg, #1D4ED8, #3B82F6)",
+          border: "none", borderRadius: 20, padding: "32px 16px",
+          cursor: "pointer", textAlign: "center", fontFamily: "Tahoma",
+          boxShadow: "0 8px 32px rgba(29,78,216,0.4)",
+          transition: "transform 0.15s"
+        }}
+          onMouseEnter={e => e.currentTarget.style.transform = "scale(1.03)"}
+          onMouseLeave={e => e.currentTarget.style.transform = "scale(1)"}>
+          <div style={{ fontSize: 40, marginBottom: 10 }}>📋</div>
+          <div style={{ fontSize: 18, fontWeight: 700, color: "#fff", marginBottom: 6 }}>
+            القسم الإداري
+          </div>
+          <div style={{ fontSize: 12, color: "#DBEAFE" }}>
+            إدارة العمل · الموظفون · المهام
+          </div>
+        </button>
       </div>
     </div>
   );
