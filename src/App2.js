@@ -98,6 +98,10 @@ export default function App2({ onBack }) {
     return <EmployeesPage employees={employees}
       onBack={() => setPage("home")}/>;
 
+  if (page === "reports")
+    return <ReportsPage funds={funds} projects={projects}
+      onBack={() => setPage("home")}/>;
+
   // الصفحة الرئيسية
   const fundsDin    = ALL_FUNDS.reduce((s,f) => s + (funds[f.id]?.din||0), 0);
   const fundsDol    = ALL_FUNDS.reduce((s,f) => s + (funds[f.id]?.dol||0), 0);
@@ -240,6 +244,28 @@ export default function App2({ onBack }) {
             );
           })}
         </div>
+
+        {/* التقارير */}
+        <button onClick={() => setPage("reports")} style={{
+          width:"100%", background:"#fff", border:"1px solid #E2E8F0",
+          borderTop:"4px solid #7C3AED", borderRadius:14, padding:"16px 20px",
+          cursor:"pointer", textAlign:"right", fontFamily:"Tahoma", marginBottom:14 }}>
+          <div style={{ display:"flex", alignItems:"center", gap:12 }}>
+            <div style={{ width:44, height:44, borderRadius:12, background:"#F5F3FF",
+              display:"flex", alignItems:"center", justifyContent:"center", fontSize:22 }}>
+              📊
+            </div>
+            <div>
+              <div style={{ fontSize:15, fontWeight:700, color:"#1E293B" }}>التقارير</div>
+              <div style={{ fontSize:12, color:"#64748B", marginTop:2 }}>
+                تقارير مالية شاملة بفلاتر متعددة
+              </div>
+            </div>
+            <span style={{ marginRight:"auto", fontSize:12, color:"#7C3AED", fontWeight:600 }}>
+              ← فتح
+            </span>
+          </div>
+        </button>
 
         {/* الموظفين */}
         <button onClick={() => setPage("employees")} style={{
@@ -456,6 +482,12 @@ td{padding:7px 6px;font-size:10px;text-align:center;border-bottom:1px solid #F1F
                   style={{ width:"100%", border:"1px solid #CBD5E1", borderRadius:9,
                     padding:"11px 13px", fontSize:14, outline:"none", fontFamily:"Tahoma",
                     direction:"rtl", boxSizing:"border-box", background:"#F8FAFC" }}/>
+                {Number(form[k])>0 && (
+                  <div style={{ fontSize:12, color:c, fontWeight:600, marginTop:4 }}>
+                    ✍️ {w2(Number(form[k]))} {k==="din"?"دينار عراقي":"دولار أمريكي"}
+                    {" — "}{fNum(Number(form[k]))} {k==="din"?"د.ع":"$"}
+                  </div>
+                )}
               </div>
             ))}
             <div style={{ marginBottom:10 }}>

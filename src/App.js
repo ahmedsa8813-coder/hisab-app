@@ -1201,6 +1201,11 @@ function ProjectCard({ p, onOpen, onToggle, onDelete, onEdit }) {
                     style={{width:"100%",border:"1px solid #CBD5E1",borderRadius:9,
                       padding:"10px 13px",fontSize:14,outline:"none",fontFamily:"Tahoma",
                       direction:"rtl",boxSizing:"border-box",background:"#F8FAFC"}}/>
+                  {(k==="valueDin"||k==="valueDol") && Number(ef[k])>0 && (
+                    <div style={{fontSize:11,color:"#059669",fontWeight:600,marginTop:3}}>
+                      ✍️ {w2(Number(ef[k]))} {k==="valueDin"?"دينار عراقي":"دولار أمريكي"}
+                    </div>
+                  )}
                 </div>
               ))}
               <div style={{marginBottom:12}}>
@@ -1990,16 +1995,22 @@ function ClosingModal({ proj, funds, onConfirm, onCancel }) {
                   </div>
                 </div>
                 {pct > 0 && (
-                  <div style={{ display:"flex", gap:12, fontSize:12 }}>
+                  <div style={{ fontSize:12 }}>
                     {balDin > 0 && (
-                      <span style={{ fontWeight:700, color }}>
+                      <div style={{ fontWeight:700, color, marginBottom:2 }}>
                         {fNum(shareDin)} د.ع
-                      </span>
+                        <span style={{ fontWeight:400, color:"#64748B", marginRight:6 }}>
+                          ✍️ {w2(shareDin)} دينار
+                        </span>
+                      </div>
                     )}
                     {balDol > 0 && (
-                      <span style={{ fontWeight:700, color:"#2563EB" }}>
+                      <div style={{ fontWeight:700, color:"#2563EB" }}>
                         {fNum(shareDol)} $
-                      </span>
+                        <span style={{ fontWeight:400, color:"#64748B", marginRight:6 }}>
+                          ✍️ {w2(shareDol)} دولار
+                        </span>
+                      </div>
                     )}
                   </div>
                 )}
