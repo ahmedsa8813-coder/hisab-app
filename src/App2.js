@@ -100,7 +100,7 @@ export default function App2({ onBack }) {
   }, []);
 
   if (page === "fund" && selFund)
-    return <FundPage fund={selFund} funds={funds}
+    return <FundPage fund={selFund} funds={funds} projects={projects}
       onBack={() => { setPage("home"); setSelFund(null); }}/>;
 
   if (page === "employees")
@@ -409,7 +409,7 @@ export default function App2({ onBack }) {
 }
 
 // ─── صفحة تفاصيل الصندوق ─────────────────────────────
-function FundPage({ fund, funds, onBack }) {
+function FundPage({ fund, funds, projects=[], onBack }) {
   const bal = funds[fund.id] || { din:0, dol:0 };
   const [txs, setTxs] = useState([]);
   const [showAdd, setShowAdd] = useState(false);
@@ -417,6 +417,77 @@ function FundPage({ fund, funds, onBack }) {
     date: new Date().toISOString().split("T")[0] });
   const sf = k => v => setForm(f => ({...f, [k]:v}));
   const [showStmt,  setShowStmt]  = useState(false);
+
+  // نظام الإقراض للمشاريع — فقط للأفرع الأربعة
+  const isBranch = ["إشراف","ديكور","مقاولات","واجهات"].includes(fund.id);
+  const [showProjLoan,  setShowProjLoan]  = useState(false);
+  const [projLoanForm,  setProjLoanForm]  = useState({
+    projectId:"", din:"", dol:"",
+    date: new Date().toISOString().split("T")[0], note:""
+  });
+  const plf = k => v => setProjLoanForm(f=>({...f,[k]:v}));
+  const activeProjects = projects.filter(p=>p.status==="active");
+
+  const giveProjLoanFromFund = async () => {
+    if (!projLoanForm.projectId) { alert("اختر مشروعاً أولاً"); return; }
+    const din = Number(projLoanForm.din)||0;
+    const dol = Number(projLoanForm.dol)||0;
+    if (!din && !dol) return;
+    if (din > bal.din) { alert("⛔ رصيد الدينار في صندوق "+fund.label+" غير كافٍ — المتاح: "+fNum(bal.din)+" د.ع"); return; }
+    if (dol > bal.dol) { alert("⛔ رصيد الدولار غير كافٍ — المتاح: "+fNum(bal.dol)+" $"); return; }
+    const pw = window.prompt("🔒 أدخل الباسورد:");
+    if (!pw) return;
+    if (pw !== PASS) { alert("❌ باسورد غلط"); return; }
+
+    const proj = activeProjects.find(p=>p.id===projLoanForm.projectId);
+    if (!proj) return;
+
+    // خصم من الصندوق
+    await setDoc(doc(db,"funds",fund.id),
+      { din:bal.din-din, dol:bal.dol-dol }, {merge:true});
+
+    // حركة الصندوق
+    await addDoc(collection(db,"fund_txs"),{
+      fundId:fund.id, fundLabel:fund.label, type:"صرف",
+      din, dol, note:"سلفة تشغيلية → "+proj.name,
+      date:projLoanForm.date, createdAt:new Date().toISOString()
+    });
+
+    // تسجيل في المشروع كاستلام
+    const curRecDin = din > 0 ? (proj.recDin||0)+din : (proj.recDin||0);
+    const curSpdDin = proj.spdDin||0;
+    await addDoc(collection(db,"project_txs"),{
+      projectId:proj.id, projectName:proj.name,
+      type:"in", amount:din||dol,
+      currency:din>0?"دينار":"دولار",
+      receiver:"سلفة تشغيلية",
+      date:projLoanForm.date,
+      note:"سلفة من صندوق "+fund.label+(projLoanForm.note?" — "+projLoanForm.note:""),
+      isLoan:true, loanFund:fund.id,
+      createdAt:new Date().toISOString()
+    });
+
+    // تحديث ميزان المشروع
+    if (din > 0) {
+      await updateDoc(doc(db,"projects",proj.id),{
+        recDin:curRecDin, balDin:curRecDin-curSpdDin
+      });
+    }
+
+    // تسجيل كدَيْن على المشروع لصالح هذا الصندوق
+    await addDoc(collection(db,"project_loans"),{
+      projectId:proj.id, projectName:proj.name,
+      fund:fund.id, fundLabel:fund.label,
+      din, dol, note:projLoanForm.note,
+      date:projLoanForm.date, status:"open",
+      createdAt:new Date().toISOString()
+    });
+
+    setProjLoanForm({projectId:"",din:"",dol:"",
+      date:new Date().toISOString().split("T")[0],note:""});
+    setShowProjLoan(false);
+    alert("✅ تم إقراض مشروع "+proj.name+" من صندوق "+fund.label);
+  };
   const [fromDate,  setFromDate]  = useState("");
   const [toDate,    setToDate]    = useState("");
   const [showLoan,  setShowLoan]  = useState(false);
@@ -1030,4 +1101,3 @@ td{padding:7px 6px;font-size:10px;text-align:center;border-bottom:1px solid #F1F
     </div>
   );
 }
-
