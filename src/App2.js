@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { EmployeesPage, ReportsPage } from "./App3";
-import { AssetsPage, OpeningBalancesPage, SettingsPage } from "./App4";
+import { AssetsPage, OpeningBalancesPage, SettingsPage, ExpensesPage } from "./App4";
 import { initializeApp, getApps } from "firebase/app";
 import { getFirestore, collection, addDoc, onSnapshot,
   deleteDoc, doc, updateDoc, setDoc, query, where, getDocs } from "firebase/firestore";

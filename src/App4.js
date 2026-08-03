@@ -813,7 +813,7 @@ export function OpeningBalancesPage({ funds, onBack }) {
 
 // ─── صفحة المصاريف الثابتة ───────────────────────────
 
-function ExpensesPage({ funds, onBack }) {
+export function ExpensesPage({ funds, onBack }) {
   const [expenses,  setExpenses]  = useState([]);
   const [payments,  setPayments]  = useState([]);
   const [showAdd,   setShowAdd]   = useState(false);
