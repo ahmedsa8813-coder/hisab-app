@@ -1286,6 +1286,120 @@ function ProjectDetail({ proj, onBack }) {
   const sf = k => v => setForm(f => ({ ...f, [k]: v }));
   const amt = Number(form.amount) || 0;
 
+  const [showLoan,  setShowLoan]  = useState(false);
+  const [projLoans, setProjLoans] = useState([]);
+  const [loanForm,  setLoanForm]  = useState({
+    fund:"إشراف", din:"", dol:"",
+    date: new Date().toISOString().split("T")[0], note:""
+  });
+  const lf = k => v => setLoanForm(f=>({...f,[k]:v}));
+  const [funds, setFunds] = useState({});
+
+  useEffect(()=>{
+    return onSnapshot(collection(db,"funds"), snap=>{
+      const f={};snap.docs.forEach(d=>{f[d.id]={din:d.data().din||0,dol:d.data().dol||0};});setFunds(f);
+    });
+  },[]);
+
+  useEffect(()=>{
+    return onSnapshot(
+      query(collection(db,"project_loans"),where("projectId","==",proj.id),where("status","==","open")),
+      snap=>setProjLoans(snap.docs.map(d=>({id:d.id,...d.data()})))
+    );
+  },[proj.id]);
+
+  const giveProjLoan = async () => {
+    const din=Number(loanForm.din)||0, dol=Number(loanForm.dol)||0;
+    if(!din&&!dol) return;
+    const bal=funds[loanForm.fund]||{din:0,dol:0};
+    if(din>bal.din){alert("⛔ رصيد صندوق "+loanForm.fund+" غير كافٍ — المتاح: "+fNum(bal.din)+" د.ع");return;}
+    if(dol>bal.dol){alert("⛔ رصيد الدولار في صندوق "+loanForm.fund+" غير كافٍ");return;}
+    const pw=window.prompt("🔒 أدخل الباسورد:");
+    if(!pw)return; if(pw!==PASS){alert("❌ باسورد غلط");return;}
+
+    // خصم من الصندوق
+    await setDoc(doc(db,"funds",loanForm.fund),{din:bal.din-din,dol:bal.dol-dol},{merge:true});
+
+    // تسجيل كحركة إيداع في المشروع
+    await addDoc(collection(db,"project_txs"),{
+      projectId:proj.id, projectName:proj.name,
+      type:"in", amount:din||dol,
+      currency:din>0?"دينار":"دولار",
+      receiver:"سلفة تشغيلية",
+      date:loanForm.date,
+      note:"سلفة من صندوق "+loanForm.fund+(loanForm.note?" — "+loanForm.note:""),
+      isLoan:true,
+      createdAt:new Date().toISOString()
+    });
+
+    // حركة الصندوق
+    await addDoc(collection(db,"fund_txs"),{
+      fundId:loanForm.fund,fundLabel:loanForm.fund,type:"صرف",
+      din,dol,note:"سلفة تشغيلية → "+proj.name,
+      date:loanForm.date,createdAt:new Date().toISOString()
+    });
+
+    // تسجيل الدَّيْن
+    await addDoc(collection(db,"project_loans"),{
+      projectId:proj.id,projectName:proj.name,
+      fund:loanForm.fund,din,dol,
+      note:loanForm.note,date:loanForm.date,
+      status:"open",createdAt:new Date().toISOString()
+    });
+
+    // تحديث ميزان المشروع
+    const curRecDin=inTxs.filter(t=>t.currency!=="دولار").reduce((s,t)=>s+t.amount,0);
+    const curSpdDin=outTxs.filter(t=>t.currency!=="دولار").reduce((s,t)=>s+t.amount,0);
+    if(din>0){
+      await updateDoc(doc(db,"projects",proj.id),{
+        recDin:curRecDin+din, balDin:(curRecDin+din)-curSpdDin
+      });
+    }
+
+    setLoanForm({fund:"إشراف",din:"",dol:"",date:new Date().toISOString().split("T")[0],note:""});
+    setShowLoan(false);
+    alert("✅ تم صرف السلفة التشغيلية");
+  };
+
+  const repayProjLoan = async (loan) => {
+    const pw=window.prompt("🔒 تأكيد سداد السلفة — باسورد:");
+    if(!pw)return; if(pw!==PASS){alert("❌ باسورد غلط");return;}
+    // التحقق من ميزان المشروع
+    const projBal = (proj.balDin||0);
+    if((loan.din||0)>projBal){
+      alert("⛔ ميزان المشروع غير كافٍ للسداد — المتاح: "+fNum(projBal)+" د.ع | المطلوب: "+fNum(loan.din)+" د.ع");
+      return;
+    }
+    const fundBal=funds[loan.fund]||{din:0,dol:0};
+    const today=new Date().toISOString().split("T")[0];
+
+    // إعادة المبلغ للصندوق
+    await setDoc(doc(db,"funds",loan.fund),{din:fundBal.din+(loan.din||0),dol:fundBal.dol+(loan.dol||0)},{merge:true});
+
+    // تسجيل الصرف من المشروع
+    await addDoc(collection(db,"project_txs"),{
+      projectId:proj.id,projectName:proj.name,
+      type:"out",amount:loan.din||loan.dol,
+      currency:(loan.din||0)>0?"دينار":"دولار",
+      receiver:"صندوق "+loan.fund,
+      date:today,note:"سداد سلفة تشغيلية",
+      isLoanRepay:true,
+      createdAt:new Date().toISOString()
+    });
+
+    // حركة الصندوق
+    await addDoc(collection(db,"fund_txs"),{
+      fundId:loan.fund,fundLabel:loan.fund,type:"إيداع",
+      din:loan.din||0,dol:loan.dol||0,
+      note:"سداد سلفة ← "+proj.name,
+      date:today,createdAt:new Date().toISOString()
+    });
+
+    // إغلاق الدَّيْن
+    await updateDoc(doc(db,"project_loans",loan.id),{status:"paid",paidDate:today});
+    alert("✅ تم سداد السلفة — صندوق "+loan.fund+" استرجع مبلغه");
+  };
+
   // جلب الحركات
   useEffect(() => {
     return onSnapshot(
@@ -1685,6 +1799,97 @@ ${(f!=="in"&&totalIn("دولار")+totalOut("دولار")>0)||f==="all"?
         }}>
           {show ? "✕ إلغاء" : tab === "in" ? "+ إضافة مبلغ مستلم" : "+ إضافة مبلغ مصروف"}
         </button>
+
+        {/* فورم السلفة التشغيلية */}
+        {showLoan && (
+          <div style={{ background:"#FFF7ED", borderRadius:14, padding:18,
+            border:"2px solid #F97316", marginBottom:14 }}>
+            <div style={{ fontSize:14, fontWeight:700, color:"#F97316", marginBottom:14 }}>
+              💸 سلفة تشغيلية للمشروع
+            </div>
+
+            {/* اختيار الصندوق */}
+            <div style={{ marginBottom:12 }}>
+              <div style={{ fontSize:12, color:"#64748B", fontWeight:600, marginBottom:6 }}>
+                الصندوق المُقرض
+              </div>
+              <div style={{ display:"grid", gridTemplateColumns:"repeat(5,1fr)", gap:6 }}>
+                {["إشراف","ديكور","مقاولات","واجهات","عام"].map(f=>{
+                  const bal=funds[f]||{din:0,dol:0};
+                  return (
+                    <button key={f} onClick={()=>lf("fund")(f)} style={{
+                      border:"1.5px solid "+(loanForm.fund===f?"#F97316":"#E2E8F0"),
+                      borderRadius:9,padding:"8px 4px",cursor:"pointer",
+                      fontFamily:"Tahoma",background:loanForm.fund===f?"#FFF7ED":"#fff",
+                      textAlign:"center"}}>
+                      <div style={{ fontSize:11, fontWeight:700,
+                        color:loanForm.fund===f?"#F97316":"#64748B" }}>{f}</div>
+                      <div style={{ fontSize:9, color:"#94A3B8", marginTop:1 }}>
+                        {fNum(bal.din)} د.ع
+                        {bal.dol>0&&" | "+fNum(bal.dol)+" $"}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* المبالغ */}
+            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:12 }}>
+              {[{k:"din",l:"مبلغ الدينار",c:"#D97706"},{k:"dol",l:"مبلغ الدولار",c:"#2563EB"}].map(({k,l,cl})=>{
+                const bal=funds[loanForm.fund]||{din:0,dol:0};
+                const v=Number(loanForm[k])||0;
+                const ok=v===0||bal[k]>=v;
+                return (
+                  <div key={k}>
+                    <div style={{ fontSize:12, color:k==="din"?"#D97706":"#2563EB",
+                      fontWeight:600, marginBottom:5 }}>{l}</div>
+                    <input type="text" inputMode="numeric" placeholder="٠" value={loanForm[k]}
+                      onChange={e=>lf(k)(e.target.value.replace(/[^0-9]/g,""))}
+                      style={{ width:"100%", border:"1.5px solid "+(v>0&&!ok?"#DC2626":"#CBD5E1"),
+                        borderRadius:9, padding:"10px 13px", fontSize:14, outline:"none",
+                        fontFamily:"Tahoma", direction:"rtl",
+                        boxSizing:"border-box", background:"#fff" }}/>
+                    {v>0&&(
+                      <div style={{ fontSize:11, marginTop:3, fontWeight:600,
+                        color:ok?k==="din"?"#D97706":"#2563EB":"#DC2626" }}>
+                        {ok?"✍️ "+w2(v)+" "+(k==="din"?"دينار":"دولار")+"  متبقي: "+fNum(bal[k]-v)+(k==="din"?" د.ع":" $")
+                          :"⛔ يتجاوز الرصيد — المتاح: "+fNum(bal[k])+(k==="din"?" د.ع":" $")}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:14 }}>
+              <div>
+                <div style={{ fontSize:12, color:"#64748B", fontWeight:600, marginBottom:5 }}>التاريخ</div>
+                <input type="date" value={loanForm.date} onChange={e=>lf("date")(e.target.value)}
+                  style={{ width:"100%", border:"1px solid #CBD5E1", borderRadius:9,
+                    padding:"10px", fontSize:13, outline:"none", fontFamily:"Tahoma",
+                    boxSizing:"border-box", background:"#fff" }}/>
+              </div>
+              <div>
+                <div style={{ fontSize:12, color:"#64748B", fontWeight:600, marginBottom:5 }}>السبب</div>
+                <input placeholder="عمال، مواد، معدات..." value={loanForm.note}
+                  onChange={e=>lf("note")(e.target.value)}
+                  style={{ width:"100%", border:"1px solid #CBD5E1", borderRadius:9,
+                    padding:"10px", fontSize:13, outline:"none", fontFamily:"Tahoma",
+                    direction:"rtl", boxSizing:"border-box", background:"#fff" }}/>
+              </div>
+            </div>
+
+            <button onClick={giveProjLoan}
+              disabled={!Number(loanForm.din)&&!Number(loanForm.dol)}
+              style={{ width:"100%", border:"none", borderRadius:10, padding:"13px",
+                fontSize:14, fontWeight:700, fontFamily:"Tahoma", cursor:"pointer",
+                background:Number(loanForm.din)||Number(loanForm.dol)?"#F97316":"#E2E8F0",
+                color:Number(loanForm.din)||Number(loanForm.dol)?"#fff":"#94A3B8" }}>
+              ✅ صرف السلفة وتسجيلها في المشروع
+            </button>
+          </div>
+        )}
 
         {/* فورم الإضافة */}
         {show && (
