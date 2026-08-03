@@ -1512,3 +1512,411 @@ ${HDR}
   );
 }
 
+
+// ─── التقارير المالية (ميزانية + أرباح وخسائر) ──────────
+export function FinancialReportsPage({ funds, projects, onBack }) {
+  const [tab, setTab]     = useState("balance"); // balance | pnl
+  const [period, setPeriod] = useState({
+    from: new Date().getFullYear()+"-01-01",
+    to:   new Date().toISOString().split("T")[0]
+  });
+
+  const [salaries,  setSalaries]  = useState([]);
+  const [expenses,  setExpenses]  = useState([]);
+  const [expPays,   setExpPays]   = useState([]);
+  const [assets,    setAssets]    = useState([]);
+  const [assetSales,setAssetSales]= useState([]);
+  const [debts,     setDebts]     = useState([]);
+  const [loans,     setLoans]     = useState([]);
+  const [advances,  setAdvances]  = useState([]);
+  const [projTxs,   setProjTxs]  = useState([]);
+
+  useEffect(()=>{
+    const u1=onSnapshot(collection(db,"salaries"),   s=>setSalaries(s.docs.map(d=>({id:d.id,...d.data()}))));
+    const u2=onSnapshot(collection(db,"expenses"),   s=>setExpenses(s.docs.map(d=>({id:d.id,...d.data()}))));
+    const u3=onSnapshot(collection(db,"expense_payments"), s=>setExpPays(s.docs.map(d=>({id:d.id,...d.data()}))));
+    const u4=onSnapshot(collection(db,"assets"),     s=>setAssets(s.docs.map(d=>({id:d.id,...d.data()}))));
+    const u5=onSnapshot(collection(db,"asset_sales"),s=>setAssetSales(s.docs.map(d=>({id:d.id,...d.data()}))));
+    const u6=onSnapshot(collection(db,"debts"),      s=>setDebts(s.docs.map(d=>({id:d.id,...d.data()}))));
+    const u7=onSnapshot(collection(db,"internal_loans"), s=>setLoans(s.docs.map(d=>({id:d.id,...d.data()}))));
+    const u8=onSnapshot(collection(db,"advances"),   s=>setAdvances(s.docs.map(d=>({id:d.id,...d.data()}))));
+    const u9=onSnapshot(collection(db,"project_txs"),s=>setProjTxs(s.docs.map(d=>({id:d.id,...d.data()}))));
+    return()=>{u1();u2();u3();u4();u5();u6();u7();u8();u9();};
+  },[]);
+
+  // ── الميزانية العمومية ─────────────────────────────────
+  // الأصول
+  const fundsDin     = ["رأس_المال","عام","شركاء","إشراف","ديكور","مقاولات","واجهات"]
+    .reduce((s,f)=>s+(funds[f]?.din||0),0);
+  const fundsDol     = ["رأس_المال","عام","شركاء","إشراف","ديكور","مقاولات","واجهات"]
+    .reduce((s,f)=>s+(funds[f]?.dol||0),0);
+  const activeProjDin= projects.filter(p=>p.status==="active").reduce((s,p)=>s+(p.balDin||0),0);
+  const activeProjDol= projects.filter(p=>p.status==="active").reduce((s,p)=>s+(p.balDol||0),0);
+  const fixedAssetsDin= assets.filter(a=>(a.qtyRemaining||0)>0)
+    .reduce((s,a)=>s+(a.unitPriceDin||0)*(a.qtyRemaining||0),0);
+  const fixedAssetsDol= assets.filter(a=>(a.qtyRemaining||0)>0)
+    .reduce((s,a)=>s+(a.unitPriceDol||0)*(a.qtyRemaining||0),0);
+  const receivableDin = debts.filter(d=>d.type==="receivable"&&d.status==="open")
+    .reduce((s,d)=>s+(d.din||0),0);
+  const receivableDol = debts.filter(d=>d.type==="receivable"&&d.status==="open")
+    .reduce((s,d)=>s+(d.dol||0),0);
+  const totalAssetsDin = fundsDin + activeProjDin + fixedAssetsDin + receivableDin;
+  const totalAssetsDol = fundsDol + activeProjDol + fixedAssetsDol + receivableDol;
+
+  // الخصوم
+  const payableDin   = debts.filter(d=>d.type==="payable"&&d.status==="open")
+    .reduce((s,d)=>s+(d.din||0),0);
+  const payableDol   = debts.filter(d=>d.type==="payable"&&d.status==="open")
+    .reduce((s,d)=>s+(d.dol||0),0);
+  const openLoansDin = loans.filter(l=>l.status==="open").reduce((s,l)=>s+(l.din||0),0);
+  const openLoansDol = loans.filter(l=>l.status==="open").reduce((s,l)=>s+(l.dol||0),0);
+  const pendingAdvDin= advances.filter(a=>a.status==="pending").reduce((s,a)=>s+(a.din||0),0);
+  const totalLiabDin = payableDin + openLoansDin + pendingAdvDin;
+  const totalLiabDol = payableDol + openLoansDol;
+
+  // حقوق الملكية
+  const partnersDin = ["partner_إيهاب","partner_أحمد","partner_نور","partner_محمد"]
+    .reduce((s,f)=>s+(funds[f]?.din||0),0);
+  const equityDin   = totalAssetsDin - totalLiabDin;
+  const equityDol   = totalAssetsDol - totalLiabDol;
+
+  // ── الأرباح والخسائر ──────────────────────────────────
+  const inPeriod = d => (!period.from||(d.date||d.month||d.createdAt||"").slice(0,10)>=period.from)
+    && (!period.to||(d.date||d.month||d.createdAt||"").slice(0,10)<=period.to);
+
+  // الإيرادات
+  const projRevDin  = projTxs.filter(t=>t.type==="استلام"&&inPeriod(t)).reduce((s,t)=>s+(t.din||0),0);
+  const projRevDol  = projTxs.filter(t=>t.type==="استلام"&&inPeriod(t)).reduce((s,t)=>s+(t.dol||0),0);
+  const assetRevDin = assetSales.filter(inPeriod).reduce((s,a)=>s+(a.sellPriceDin||0),0);
+  const assetRevDol = assetSales.filter(inPeriod).reduce((s,a)=>s+(a.sellPriceDol||0),0);
+  const totalRevDin = projRevDin + assetRevDin;
+  const totalRevDol = projRevDol + assetRevDol;
+
+  // المصاريف
+  const salExpDin   = salaries.filter(inPeriod).reduce((s,t)=>s+(t.netDin||0),0);
+  const salExpDol   = salaries.filter(inPeriod).reduce((s,t)=>s+(t.netDol||0),0);
+  const fixExpDin   = expPays.filter(inPeriod).reduce((s,t)=>s+(t.din||0),0);
+  const fixExpDol   = expPays.filter(inPeriod).reduce((s,t)=>s+(t.dol||0),0);
+  const assetCostDin= assets.filter(inPeriod).reduce((s,a)=>s+(a.totalDin||0),0);
+  const assetCostDol= assets.filter(inPeriod).reduce((s,a)=>s+(a.totalDol||0),0);
+  const advExpDin   = advances.filter(inPeriod).reduce((s,a)=>s+(a.din||0),0);
+  const totalExpDin = salExpDin + fixExpDin + assetCostDin + advExpDin;
+  const totalExpDol = salExpDol + fixExpDol + assetCostDol;
+
+  const netDin = totalRevDin - totalExpDin;
+  const netDol = totalRevDol - totalExpDol;
+
+  // ── طباعة الميزانية ───────────────────────────────────
+  const printBalance = () => {
+    const today = new Date().toISOString().split("T")[0];
+    const row=(label,din,dol,bold=false,color="#1E293B")=>`
+      <tr style="background:#fff">
+        <td style="text-align:right;padding:8px 12px;font-size:12px;${bold?"font-weight:700":""}color:${color}">${label}</td>
+        <td style="text-align:center;padding:8px;font-size:12px;${bold?"font-weight:700":""}color:${din>0?"#D97706":"#DC2626"}">${din!==0?fNum(Math.abs(din))+" د.ع":""}</td>
+        <td style="text-align:center;padding:8px;font-size:12px;${bold?"font-weight:700":""}color:#2563EB">${dol!==0?fNum(Math.abs(dol))+" $":""}</td>
+      </tr>`;
+    const section=(title,color)=>`
+      <tr style="background:${color}"><td colspan="3" style="padding:8px 12px;font-size:13px;font-weight:700;color:#fff">${title}</td></tr>`;
+
+    const html=`<!DOCTYPE html><html dir="rtl"><head><meta charset="utf-8"/>
+<style>*{font-family:Tahoma}body{margin:22px;direction:rtl}
+.hdr{text-align:center;border-bottom:3px solid #0F172A;padding-bottom:12px;margin-bottom:14px}
+.co{font-size:20px;font-weight:700}.ca{font-size:11px;color:#64748B}
+table{width:100%;border-collapse:collapse;margin-bottom:18px}
+th{background:#0F172A;color:#fff;padding:10px;font-size:12px}
+.net{background:#F0FDF4;font-weight:700;font-size:14px}
+.ft{margin-top:12px;font-size:10px;color:#94A3B8;display:flex;justify-content:space-between}
+</style></head><body>
+<div class="hdr"><div class="co">شركة باب المشاريع</div>
+<div class="ca">الميزانية العمومية — بتاريخ: ${today}</div></div>
+<table>
+<thead><tr><th style="text-align:right">البند</th><th>دينار</th><th>دولار</th></tr></thead>
+<tbody>
+${section("📦 الأصول","#0F172A")}
+${row("النقد في الصناديق السبعة",fundsDin,fundsDol)}
+${row("ميزان المشاريع النشطة ("+projects.filter(p=>p.status==="active").length+")",activeProjDin,activeProjDol)}
+${row("الأصول الثابتة (القيمة الدفترية)",fixedAssetsDin,fixedAssetsDol)}
+${row("الذمم المدينة (الشركة طالبة)",receivableDin,receivableDol)}
+${row("إجمالي الأصول",totalAssetsDin,totalAssetsDol,true,"#059669")}
+${section("📤 الخصوم","#DC2626")}
+${row("الذمم الدائنة (الشركة مطلوبة)",payableDin,payableDol)}
+${row("القروض الداخلية على الصناديق",openLoansDin,openLoansDol)}
+${row("السلف المستحقة على الموظفين",pendingAdvDin,0)}
+${row("إجمالي الخصوم",totalLiabDin,totalLiabDol,true,"#DC2626")}
+${section("💼 حقوق الملكية","#7C3AED")}
+${row("أرصدة الشركاء الأربعة",partnersDin,0)}
+${row("صافي حقوق الملكية",equityDin,equityDol,true,"#7C3AED")}
+</tbody>
+<tfoot><tr class="net">
+<td style="padding:12px;text-align:right">✅ إجمالي الخصوم + حقوق الملكية</td>
+<td style="text-align:center">${fNum(totalLiabDin+equityDin)} د.ع</td>
+<td style="text-align:center">${fNum(totalLiabDol+equityDol)} $</td>
+</tr></tfoot>
+</table>
+<div class="ft"><span>شركة باب المشاريع</span><span>طُبع: ${today}</span></div>
+</body></html>`;
+    const w=window.open("","_blank","width=900,height=700");
+    if(!w){alert("السماح بالنوافذ المنبثقة");return;}
+    w.document.write(html);w.document.close();w.focus();setTimeout(()=>w.print(),700);
+  };
+
+  // ── طباعة الأرباح والخسائر ───────────────────────────
+  const printPnL = () => {
+    const today = new Date().toISOString().split("T")[0];
+    const row=(label,din,dol,bold=false,color="#1E293B")=>`
+      <tr><td style="text-align:right;padding:8px 12px;font-size:12px;${bold?"font-weight:700;":""}color:${color}">${label}</td>
+      <td style="text-align:center;font-size:12px;${bold?"font-weight:700;":""}color:${din>=0?"#16A34A":"#DC2626"}">${din!==0?(din<0?"-":"")+fNum(Math.abs(din))+" د.ع":""}</td>
+      <td style="text-align:center;font-size:12px;${bold?"font-weight:700;":""}color:#2563EB">${dol!==0?(dol<0?"-":"")+fNum(Math.abs(dol))+" $":""}</td></tr>`;
+    const section=(t,c)=>`<tr style="background:${c}"><td colspan="3" style="padding:8px 12px;font-size:13px;font-weight:700;color:#fff">${t}</td></tr>`;
+
+    const html=`<!DOCTYPE html><html dir="rtl"><head><meta charset="utf-8"/>
+<style>*{font-family:Tahoma}body{margin:22px;direction:rtl}
+.hdr{text-align:center;border-bottom:3px solid #0F172A;padding-bottom:12px;margin-bottom:14px}
+.co{font-size:20px;font-weight:700}.ca{font-size:11px;color:#64748B}
+table{width:100%;border-collapse:collapse;margin-bottom:14px}
+th{background:#0F172A;color:#fff;padding:10px;font-size:12px}
+tr:nth-child(even){background:#F8FAFC}
+.net{font-weight:700;font-size:14px;background:${netDin>=0?"#F0FDF4":"#FFF1F2"}}
+.ft{margin-top:12px;font-size:10px;color:#94A3B8;display:flex;justify-content:space-between}
+</style></head><body>
+<div class="hdr"><div class="co">شركة باب المشاريع</div>
+<div class="ca">تقرير الأرباح والخسائر — ${period.from} إلى ${period.to}</div></div>
+<table>
+<thead><tr><th style="text-align:right">البند</th><th>دينار</th><th>دولار</th></tr></thead>
+<tbody>
+${section("📈 الإيرادات","#16A34A")}
+${row("إيرادات المشاريع (مستلمات)",projRevDin,projRevDol)}
+${row("إيرادات بيع الأصول",assetRevDin,assetRevDol)}
+${row("إجمالي الإيرادات",totalRevDin,totalRevDol,true,"#16A34A")}
+${section("📉 المصاريف","#DC2626")}
+${row("رواتب الموظفين",salExpDin,salExpDol)}
+${row("المصاريف الثابتة (إيجارات وغيرها)",fixExpDin,fixExpDol)}
+${row("شراء الأصول الثابتة",assetCostDin,assetCostDol)}
+${row("سلف الموظفين",advExpDin,0)}
+${row("إجمالي المصاريف",totalExpDin,totalExpDol,true,"#DC2626")}
+</tbody>
+<tfoot><tr class="net">
+<td style="padding:12px;text-align:right">${netDin>=0?"✅ صافي الربح":"❌ صافي الخسارة"}</td>
+<td style="text-align:center;color:${netDin>=0?"#16A34A":"#DC2626"}">${fNum(Math.abs(netDin))} د.ع</td>
+<td style="text-align:center;color:${netDol>=0?"#16A34A":"#DC2626"}">${fNum(Math.abs(netDol))} $</td>
+</tr></tfoot>
+</table>
+<div class="ft"><span>شركة باب المشاريع</span><span>طُبع: ${today}</span></div>
+</body></html>`;
+    const w=window.open("","_blank","width=900,height=700");
+    if(!w){alert("السماح بالنوافذ المنبثقة");return;}
+    w.document.write(html);w.document.close();w.focus();setTimeout(()=>w.print(),700);
+  };
+
+  const Card=({label,din,dol,color,bg,icon})=>(
+    <div style={{background:bg,borderRadius:12,padding:"12px 14px",
+      border:"1px solid "+color+"30"}}>
+      <div style={{fontSize:10,color:"#64748B",marginBottom:4}}>{icon} {label}</div>
+      {din!==0&&<div style={{fontSize:16,fontWeight:700,color}}>{fNum(Math.abs(din))} <span style={{fontSize:10}}>د.ع</span></div>}
+      {dol!==0&&<div style={{fontSize:13,fontWeight:700,color:"#2563EB"}}>{fNum(Math.abs(dol))} <span style={{fontSize:10}}>$</span></div>}
+    </div>
+  );
+
+  return (
+    <div style={{minHeight:"100vh",background:"#F1F5F9",fontFamily:"Tahoma",direction:"rtl"}}>
+      <div style={{maxWidth:800,margin:"0 auto",padding:"22px 16px"}}>
+
+        <button onClick={onBack} style={{background:"#fff",border:"1px solid #E2E8F0",
+          borderRadius:10,padding:"8px 16px",fontSize:13,color:"#475569",cursor:"pointer",
+          marginBottom:16,fontFamily:"Tahoma",display:"flex",alignItems:"center",gap:6}}>← رجوع</button>
+
+        {/* هيدر */}
+        <div style={{background:"linear-gradient(135deg,#0F172A,#1E293B)",
+          borderRadius:16,padding:"20px 24px",marginBottom:16}}>
+          <div style={{fontSize:18,fontWeight:700,color:"#fff",marginBottom:4}}>
+            📈 التقارير المالية
+          </div>
+          <div style={{fontSize:12,color:"#94A3B8"}}>
+            ميزانية عمومية · أرباح وخسائر
+          </div>
+        </div>
+
+        {/* تبويبات */}
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:16}}>
+          <button onClick={()=>setTab("balance")} style={{
+            border:"none",borderRadius:10,padding:"12px",cursor:"pointer",
+            fontFamily:"Tahoma",fontSize:13,fontWeight:700,
+            background:tab==="balance"?"#0F172A":"#fff",
+            color:tab==="balance"?"#fff":"#64748B"}}>
+            📊 الميزانية العمومية
+          </button>
+          <button onClick={()=>setTab("pnl")} style={{
+            border:"none",borderRadius:10,padding:"12px",cursor:"pointer",
+            fontFamily:"Tahoma",fontSize:13,fontWeight:700,
+            background:tab==="pnl"?"#0F172A":"#fff",
+            color:tab==="pnl"?"#fff":"#64748B"}}>
+            📉 الأرباح والخسائر
+          </button>
+        </div>
+
+        {/* ─── الميزانية العمومية ─── */}
+        {tab==="balance" && (
+          <>
+            {/* الأصول */}
+            <div style={{background:"#fff",borderRadius:14,padding:18,
+              border:"1px solid #E2E8F0",marginBottom:12}}>
+              <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:14}}>
+                <div style={{width:4,height:20,background:"#059669",borderRadius:99}}/>
+                <span style={{fontSize:14,fontWeight:700,color:"#059669"}}>📦 الأصول</span>
+                <span style={{marginRight:"auto",fontSize:13,fontWeight:700,color:"#059669"}}>
+                  {fNum(totalAssetsDin)} د.ع {totalAssetsDol>0&&"| "+fNum(totalAssetsDol)+" $"}
+                </span>
+              </div>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+                <Card label="النقد في الصناديق" din={fundsDin} dol={fundsDol} color="#D97706" bg="#FFFBEB" icon="💰"/>
+                <Card label={"مشاريع نشطة ("+projects.filter(p=>p.status==="active").length+")"} din={activeProjDin} dol={activeProjDol} color="#0284C7" bg="#F0F9FF" icon="🏗️"/>
+                <Card label={"الأصول الثابتة ("+assets.filter(a=>(a.qtyRemaining||0)>0).length+" صنف)"} din={fixedAssetsDin} dol={fixedAssetsDol} color="#0891B2" bg="#ECFEFF" icon="📦"/>
+                <Card label={"ذمم مدينة ("+debts.filter(d=>d.type==="receivable"&&d.status==="open").length+")"} din={receivableDin} dol={receivableDol} color="#16A34A" bg="#F0FDF4" icon="📥"/>
+              </div>
+            </div>
+
+            {/* الخصوم */}
+            <div style={{background:"#fff",borderRadius:14,padding:18,
+              border:"1px solid #E2E8F0",marginBottom:12}}>
+              <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:14}}>
+                <div style={{width:4,height:20,background:"#DC2626",borderRadius:99}}/>
+                <span style={{fontSize:14,fontWeight:700,color:"#DC2626"}}>📤 الخصوم</span>
+                <span style={{marginRight:"auto",fontSize:13,fontWeight:700,color:"#DC2626"}}>
+                  {fNum(totalLiabDin)} د.ع {totalLiabDol>0&&"| "+fNum(totalLiabDol)+" $"}
+                </span>
+              </div>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
+                <Card label={"ذمم دائنة ("+debts.filter(d=>d.type==="payable"&&d.status==="open").length+")"} din={payableDin} dol={payableDol} color="#DC2626" bg="#FFF1F2" icon="📤"/>
+                <Card label={"قروض داخلية ("+loans.filter(l=>l.status==="open").length+")"} din={openLoansDin} dol={openLoansDol} color="#F97316" bg="#FFF7ED" icon="🔄"/>
+                <Card label={"سلف موظفين ("+advances.filter(a=>a.status==="pending").length+")"} din={pendingAdvDin} dol={0} color="#7C3AED" bg="#F5F3FF" icon="👷"/>
+              </div>
+            </div>
+
+            {/* حقوق الملكية */}
+            <div style={{background:"#fff",borderRadius:14,padding:18,
+              border:"1px solid #E2E8F0",marginBottom:16}}>
+              <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:14}}>
+                <div style={{width:4,height:20,background:"#7C3AED",borderRadius:99}}/>
+                <span style={{fontSize:14,fontWeight:700,color:"#7C3AED"}}>💼 حقوق الملكية</span>
+              </div>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:12}}>
+                <Card label="أرصدة الشركاء الأربعة" din={partnersDin} dol={0} color="#9333EA" bg="#FAF5FF" icon="👥"/>
+                <div style={{background:equityDin>=0?"#F0FDF4":"#FFF1F2",borderRadius:12,
+                  padding:"12px 14px",border:"2px solid "+(equityDin>=0?"#16A34A":"#DC2626")}}>
+                  <div style={{fontSize:10,color:"#64748B",marginBottom:4}}>
+                    ⚖️ صافي حقوق الملكية
+                  </div>
+                  <div style={{fontSize:18,fontWeight:700,color:equityDin>=0?"#16A34A":"#DC2626"}}>
+                    {fNum(Math.abs(equityDin))} <span style={{fontSize:11}}>د.ع</span>
+                  </div>
+                  {equityDol!==0&&<div style={{fontSize:14,fontWeight:700,color:"#2563EB"}}>
+                    {fNum(Math.abs(equityDol))} <span style={{fontSize:11}}>$</span>
+                  </div>}
+                </div>
+              </div>
+              {/* المعادلة */}
+              <div style={{background:"#F8FAFC",borderRadius:10,padding:"12px 16px",
+                fontSize:12,color:"#64748B",textAlign:"center"}}>
+                الأصول ({fNum(totalAssetsDin)} د.ع) = الخصوم ({fNum(totalLiabDin)} د.ع) + حقوق الملكية ({fNum(equityDin)} د.ع)
+              </div>
+            </div>
+
+            <button onClick={printBalance} style={{width:"100%",border:"none",
+              borderRadius:12,padding:"14px",fontSize:14,fontWeight:700,
+              fontFamily:"Tahoma",background:"#0F172A",color:"#fff",cursor:"pointer"}}>
+              🖨️ طباعة الميزانية العمومية
+            </button>
+          </>
+        )}
+
+        {/* ─── الأرباح والخسائر ─── */}
+        {tab==="pnl" && (
+          <>
+            {/* فلتر الفترة */}
+            <div style={{background:"#fff",borderRadius:12,padding:14,
+              border:"1px solid #E2E8F0",marginBottom:14}}>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+                <div>
+                  <div style={{fontSize:11,color:"#64748B",fontWeight:600,marginBottom:5}}>من تاريخ</div>
+                  <input type="date" value={period.from}
+                    onChange={e=>setPeriod(p=>({...p,from:e.target.value}))}
+                    style={{width:"100%",border:"1px solid #CBD5E1",borderRadius:9,
+                      padding:"9px 12px",fontSize:13,outline:"none",fontFamily:"Tahoma",
+                      boxSizing:"border-box",background:"#F8FAFC"}}/>
+                </div>
+                <div>
+                  <div style={{fontSize:11,color:"#64748B",fontWeight:600,marginBottom:5}}>إلى تاريخ</div>
+                  <input type="date" value={period.to}
+                    onChange={e=>setPeriod(p=>({...p,to:e.target.value}))}
+                    style={{width:"100%",border:"1px solid #CBD5E1",borderRadius:9,
+                      padding:"9px 12px",fontSize:13,outline:"none",fontFamily:"Tahoma",
+                      boxSizing:"border-box",background:"#F8FAFC"}}/>
+                </div>
+              </div>
+            </div>
+
+            {/* الإيرادات */}
+            <div style={{background:"#fff",borderRadius:14,padding:18,
+              border:"1px solid #E2E8F0",marginBottom:12}}>
+              <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:14}}>
+                <div style={{width:4,height:20,background:"#16A34A",borderRadius:99}}/>
+                <span style={{fontSize:14,fontWeight:700,color:"#16A34A"}}>📈 الإيرادات</span>
+                <span style={{marginRight:"auto",fontSize:13,fontWeight:700,color:"#16A34A"}}>
+                  {fNum(totalRevDin)} د.ع {totalRevDol>0&&"| "+fNum(totalRevDol)+" $"}
+                </span>
+              </div>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+                <Card label="إيرادات المشاريع" din={projRevDin} dol={projRevDol} color="#16A34A" bg="#F0FDF4" icon="🏗️"/>
+                <Card label="إيرادات بيع الأصول" din={assetRevDin} dol={assetRevDol} color="#0891B2" bg="#ECFEFF" icon="📦"/>
+              </div>
+            </div>
+
+            {/* المصاريف */}
+            <div style={{background:"#fff",borderRadius:14,padding:18,
+              border:"1px solid #E2E8F0",marginBottom:12}}>
+              <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:14}}>
+                <div style={{width:4,height:20,background:"#DC2626",borderRadius:99}}/>
+                <span style={{fontSize:14,fontWeight:700,color:"#DC2626"}}>📉 المصاريف</span>
+                <span style={{marginRight:"auto",fontSize:13,fontWeight:700,color:"#DC2626"}}>
+                  {fNum(totalExpDin)} د.ع {totalExpDol>0&&"| "+fNum(totalExpDol)+" $"}
+                </span>
+              </div>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+                <Card label="رواتب الموظفين" din={salExpDin} dol={salExpDol} color="#DC2626" bg="#FFF1F2" icon="👷"/>
+                <Card label="مصاريف ثابتة (إيجارات)" din={fixExpDin} dol={fixExpDol} color="#F97316" bg="#FFF7ED" icon="🏠"/>
+                <Card label="شراء أصول ثابتة" din={assetCostDin} dol={assetCostDol} color="#7C3AED" bg="#F5F3FF" icon="📦"/>
+                <Card label="سلف موظفين" din={advExpDin} dol={0} color="#0891B2" bg="#F0F9FF" icon="💸"/>
+              </div>
+            </div>
+
+            {/* صافي الربح */}
+            <div style={{background:netDin>=0?"#F0FDF4":"#FFF1F2",borderRadius:14,
+              padding:"18px 20px",border:"3px solid "+(netDin>=0?"#16A34A":"#DC2626"),
+              marginBottom:16,textAlign:"center"}}>
+              <div style={{fontSize:14,color:"#64748B",marginBottom:8}}>
+                {netDin>=0?"✅ صافي الربح للفترة":"❌ صافي الخسارة للفترة"}
+              </div>
+              <div style={{fontSize:32,fontWeight:700,
+                color:netDin>=0?"#16A34A":"#DC2626",marginBottom:4}}>
+                {fNum(Math.abs(netDin))} <span style={{fontSize:16}}>د.ع</span>
+              </div>
+              {netDol!==0&&<div style={{fontSize:22,fontWeight:700,color:"#2563EB"}}>
+                {fNum(Math.abs(netDol))} <span style={{fontSize:14}}>$</span>
+              </div>}
+              <div style={{fontSize:12,color:"#64748B",marginTop:8}}>
+                الإيرادات {fNum(totalRevDin)} − المصاريف {fNum(totalExpDin)} = {netDin>=0?"ربح":"خسارة"} {fNum(Math.abs(netDin))} د.ع
+              </div>
+            </div>
+
+            <button onClick={printPnL} style={{width:"100%",border:"none",
+              borderRadius:12,padding:"14px",fontSize:14,fontWeight:700,
+              fontFamily:"Tahoma",background:"#0F172A",color:"#fff",cursor:"pointer"}}>
+              🖨️ طباعة تقرير الأرباح والخسائر
+            </button>
+          </>
+        )}
+
+      </div>
+    </div>
+  );
+}

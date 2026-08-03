@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { EmployeesPage, ReportsPage } from "./App3";
+import { EmployeesPage, ReportsPage, FinancialReportsPage } from "./App3";
 import { AssetsPage, OpeningBalancesPage, SettingsPage, ExpensesPage, DebtsPage } from "./App4";
 import { initializeApp, getApps } from "firebase/app";
 import { getFirestore, collection, addDoc, onSnapshot,
@@ -125,6 +125,10 @@ export default function App2({ onBack }) {
 
   if (page === "debts")
     return <DebtsPage funds={funds} onBack={() => setPage("home")}/>;
+
+  if (page === "financial_reports")
+    return <FinancialReportsPage funds={funds} projects={projects}
+      onBack={() => setPage("home")}/>;
 
   // الصفحة الرئيسية
   const fundsDin    = ALL_FUNDS.reduce((s,f) => s + (funds[f.id]?.din||0), 0);
@@ -375,6 +379,8 @@ export default function App2({ onBack }) {
                 desc:"رصيد بداية الصناديق", color:"#475569"},
               {pg:"debts",     icon:"💳", label:"الذمم المالية",
                 desc:"طالبة ومطلوبة", color:"#7C2D12"},
+              {pg:"financial_reports", icon:"📈", label:"التقارير المالية",
+                desc:"ميزانية + أرباح وخسائر", color:"#0F172A"},
             ].map(n=>(
               <button key={n.pg} onClick={()=>setPage(n.pg)}
                 style={{ background:"#fff", border:"1px solid #E2E8F0",
