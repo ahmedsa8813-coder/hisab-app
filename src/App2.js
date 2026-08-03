@@ -752,18 +752,114 @@ td{padding:7px 6px;font-size:10px;text-align:center;border-bottom:1px solid #F1F
         </div>
 
         {/* أزرار */}
-        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:14 }}>
+        <div style={{ display:"grid",
+          gridTemplateColumns:isBranch?"1fr 1fr 1fr":"1fr 1fr",
+          gap:10, marginBottom:14 }}>
           <button onClick={()=>setShowAdd(v=>!v)} style={{ border:"none", borderRadius:12,
-            padding:"12px", fontSize:14, fontWeight:700, fontFamily:"Tahoma",
+            padding:"12px", fontSize:13, fontWeight:700, fontFamily:"Tahoma",
             background:showAdd?"#475569":fund.color, color:"#fff", cursor:"pointer" }}>
             {showAdd?"✕ إلغاء":"+ إضافة حركة"}
           </button>
+          {isBranch && (
+            <button onClick={()=>{setShowProjLoan(v=>!v);setShowAdd(false);}} style={{
+              border:"2px solid #F97316", borderRadius:12, padding:"12px",
+              fontSize:13, fontWeight:700, fontFamily:"Tahoma",
+              background:showProjLoan?"#F97316":"#FFF7ED",
+              color:showProjLoan?"#fff":"#F97316", cursor:"pointer" }}>
+              {showProjLoan?"✕ إلغاء":"💸 إقراض مشروع"}
+            </button>
+          )}
           <button onClick={()=>setShowStmt(v=>!v)} style={{ border:"1px solid "+fund.color,
-            borderRadius:12, padding:"12px", fontSize:14, fontWeight:700,
+            borderRadius:12, padding:"12px", fontSize:13, fontWeight:700,
             fontFamily:"Tahoma", background:"#fff", color:fund.color, cursor:"pointer" }}>
             🖨️ كشف الحساب
           </button>
         </div>
+
+        {/* فورم إقراض المشروع */}
+        {showProjLoan && isBranch && (
+          <div style={{ background:"#FFF7ED", borderRadius:14, padding:18,
+            border:"2px solid #F97316", marginBottom:14 }}>
+            <div style={{ fontSize:14, fontWeight:700, color:"#F97316", marginBottom:4 }}>
+              💸 إقراض مشروع من صندوق {fund.label}
+            </div>
+            <div style={{ fontSize:11, color:"#94A3B8", marginBottom:14 }}>
+              🔒 الإقراض من هذا الصندوق فقط — لا يمكن من صندوق آخر
+            </div>
+            <div style={{ marginBottom:12 }}>
+              <div style={{ fontSize:12, color:"#64748B", fontWeight:600, marginBottom:5 }}>المشروع المستفيد *</div>
+              {activeProjects.length===0 ? (
+                <div style={{ fontSize:12, color:"#94A3B8", padding:10,
+                  background:"#F8FAFC", borderRadius:9 }}>ما في مشاريع نشطة</div>
+              ) : (
+                <select value={projLoanForm.projectId}
+                  onChange={e=>plf("projectId")(e.target.value)}
+                  style={{ width:"100%", border:"1px solid #CBD5E1", borderRadius:9,
+                    padding:"10px 13px", fontSize:13, outline:"none", fontFamily:"Tahoma",
+                    direction:"rtl", boxSizing:"border-box", background:"#fff", appearance:"none" }}>
+                  <option value="">— اختر مشروعاً —</option>
+                  {activeProjects.map(p=>(
+                    <option key={p.id} value={p.id}>
+                      {p.name} · {p.type} · ميزان: {fNum(p.balDin||0)} د.ع
+                    </option>
+                  ))}
+                </select>
+              )}
+            </div>
+            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:12 }}>
+              {[{k:"din",l:"مبلغ الدينار",c:"#D97706",av:bal.din},
+                {k:"dol",l:"مبلغ الدولار",c:"#2563EB",av:bal.dol}].map(({k,l,c,av})=>{
+                const v=Number(projLoanForm[k])||0;
+                const ok=v===0||av>=v;
+                return (
+                  <div key={k}>
+                    <div style={{ fontSize:12, color:c, fontWeight:600, marginBottom:5 }}>{l}</div>
+                    <input type="text" inputMode="numeric" placeholder="٠"
+                      value={projLoanForm[k]}
+                      onChange={e=>plf(k)(e.target.value.replace(/[^0-9]/g,""))}
+                      style={{ width:"100%", border:"1.5px solid "+(v>0&&!ok?"#DC2626":"#CBD5E1"),
+                        borderRadius:9, padding:"10px 13px", fontSize:14, outline:"none",
+                        fontFamily:"Tahoma", direction:"rtl", boxSizing:"border-box", background:"#fff" }}/>
+                    {v>0&&(
+                      <div style={{ fontSize:11, marginTop:3, fontWeight:600, color:ok?c:"#DC2626" }}>
+                        {ok?"✍️ "+w2(v)+" "+(k==="din"?"دينار":"دولار")+" — متبقي: "+fNum(av-v)+(k==="din"?" د.ع":" $")
+                          :"⛔ يتجاوز الرصيد — المتاح: "+fNum(av)+(k==="din"?" د.ع":" $")}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:14 }}>
+              <div>
+                <div style={{ fontSize:12, color:"#64748B", fontWeight:600, marginBottom:5 }}>التاريخ</div>
+                <input type="date" value={projLoanForm.date}
+                  onChange={e=>plf("date")(e.target.value)}
+                  style={{ width:"100%", border:"1px solid #CBD5E1", borderRadius:9,
+                    padding:"10px", fontSize:13, outline:"none", fontFamily:"Tahoma",
+                    boxSizing:"border-box", background:"#fff" }}/>
+              </div>
+              <div>
+                <div style={{ fontSize:12, color:"#64748B", fontWeight:600, marginBottom:5 }}>السبب</div>
+                <input placeholder="عمال، مواد، معدات..." value={projLoanForm.note}
+                  onChange={e=>plf("note")(e.target.value)}
+                  style={{ width:"100%", border:"1px solid #CBD5E1", borderRadius:9,
+                    padding:"10px", fontSize:13, outline:"none", fontFamily:"Tahoma",
+                    direction:"rtl", boxSizing:"border-box", background:"#fff" }}/>
+              </div>
+            </div>
+            <button onClick={giveProjLoanFromFund}
+              disabled={!projLoanForm.projectId||(!Number(projLoanForm.din)&&!Number(projLoanForm.dol))}
+              style={{ width:"100%", border:"none", borderRadius:10, padding:"13px",
+                fontSize:14, fontWeight:700, fontFamily:"Tahoma", cursor:"pointer",
+                background:projLoanForm.projectId&&(Number(projLoanForm.din)||Number(projLoanForm.dol))
+                  ?"#F97316":"#E2E8F0",
+                color:projLoanForm.projectId&&(Number(projLoanForm.din)||Number(projLoanForm.dol))
+                  ?"#fff":"#94A3B8" }}>
+              ✅ إقراض المشروع من صندوق {fund.label}
+            </button>
+          </div>
+        )}
 
         {/* فورم الإضافة */}
         {showAdd && (
@@ -1101,4 +1197,3 @@ td{padding:7px 6px;font-size:10px;text-align:center;border-bottom:1px solid #F1F
     </div>
   );
 }
-
