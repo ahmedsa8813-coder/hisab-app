@@ -363,10 +363,10 @@ export default function App2({ onBack }) {
                 desc:"تقارير مالية شاملة", color:"#7C3AED"},
               {pg:"assets",    icon:"📦", label:"الأصول الثابتة",
                 desc:assets.filter(a=>(a.qtyRemaining||0)>0).length+" صنف نشط", color:"#0891B2"},
-              {pg:"employees", icon:"👷", label:"الموظفون",
-                desc:employees.length+" موظف مسجل", color:"#0284C7"},
               {pg:"expenses",  icon:"🏠", label:"المصاريف الثابتة",
                 desc:"إيجارات واشتراكات", color:"#DC2626"},
+              {pg:"employees", icon:"👷", label:"الموظفون",
+                desc:employees.length+" موظف مسجل", color:"#0284C7"},
               {pg:"opening",   icon:"🏁", label:"الأرصدة الافتتاحية",
                 desc:"رصيد بداية الصناديق", color:"#475569"},
             ].map(n=>(
@@ -1563,33 +1563,41 @@ function ExpensesPage({ funds, onBack }) {
   };
 
   const printReceipt = (exp, din, dol, date, note) => {
+    const today = new Date().toISOString().split("T")[0];
     const html=`<!DOCTYPE html><html dir="rtl"><head><meta charset="utf-8"/>
 <style>*{font-family:Tahoma}body{margin:30px;direction:rtl;max-width:420px}
 .hdr{text-align:center;border-bottom:3px solid #DC2626;padding-bottom:12px;margin-bottom:14px}
 .co{font-size:18px;font-weight:700}.ca{font-size:11px;color:#64748B}
 .title{font-size:15px;font-weight:700;color:#DC2626;margin:12px 0 10px}
-.amount{font-size:28px;font-weight:700;color:#DC2626;text-align:center;margin:14px 0}
+.box{background:#FFF1F2;border-radius:12px;padding:14px;margin:14px 0;text-align:center}
+.amt{font-size:26px;font-weight:700;color:#DC2626}
+.sub{font-size:12px;color:#64748B;margin-top:4px}
 .row{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #F1F5F9}
-.lbl{font-size:12px;color:#64748B}.val{font-size:12px;font-weight:700}
+.lbl{font-size:12px;color:#64748B}.val{font-size:12px;font-weight:700;color:#1E293B}
 .footer{text-align:center;font-size:10px;color:#94A3B8;margin-top:16px;
   border-top:1px dashed #E2E8F0;padding-top:10px}
 </style></head><body>
-<div class="hdr"><div class="co">شركة باب المشاريع</div><div class="ca">بغداد</div></div>
+<div class="hdr"><div class="co">شركة باب المشاريع</div><div class="ca">بغداد — العرصات</div></div>
 <div class="title">🏠 إيصال دفع — ${exp.type}</div>
-<div class="amount">${din>0?fNum(din)+" د.ع":""}${din>0&&dol>0?" | ":""} ${dol>0?fNum(dol)+" $":""}</div>
-${din>0?`<div style="text-align:center;font-size:12px;color:#64748B;margin-bottom:10px">✍️ ${w2(din)} دينار عراقي</div>`:""}
+<div class="box">
+  ${din>0?`<div class="amt">${fNum(din)} د.ع</div><div class="sub">✍️ ${w2(din)} دينار عراقي</div>`:""}
+  ${din>0&&dol>0?`<hr style="border:none;border-top:1px solid #FECACA;margin:10px 0"/>`:``}
+  ${dol>0?`<div class="amt" style="color:#2563EB">${fNum(dol)} $</div><div class="sub">✍️ ${w2(dol)} دولار أمريكي</div>`:""}
+</div>
 <div class="row"><span class="lbl">البند</span><span class="val">${exp.name}</span></div>
-<div class="row"><span class="lbl">الجهة</span><span class="val">${exp.party||"—"}</span></div>
+<div class="row"><span class="lbl">النوع</span><span class="val">${exp.type}</span></div>
+<div class="row"><span class="lbl">الجهة / المالك</span><span class="val">${exp.party||"—"}</span></div>
 <div class="row"><span class="lbl">الصندوق</span><span class="val">${exp.fund}</span></div>
 <div class="row"><span class="lbl">الدورة</span><span class="val">${exp.cycle}</span></div>
 <div class="row"><span class="lbl">التاريخ</span><span class="val">${date}</span></div>
 ${note?`<div class="row"><span class="lbl">ملاحظة</span><span class="val">${note}</span></div>`:""}
 <div class="footer">
-  توقيع المستلم: _______________&nbsp;&nbsp;&nbsp;توقيع المسؤول: _______________<br/>
-  شركة باب المشاريع — طُبع: ${new Date().toISOString().split("T")[0]}
+  توقيع المستلم: _______________<br/>
+  توقيع المسؤول: _______________<br/><br/>
+  شركة باب المشاريع — طُبع: ${today}
 </div>
 </body></html>`;
-    const w=window.open("","_blank","width=500,height=650");
+    const w=window.open("","_blank","width=500,height=680");
     if(!w){alert("السماح بالنوافذ المنبثقة");return;}
     w.document.write(html);w.document.close();w.focus();setTimeout(()=>w.print(),600);
   };
@@ -1763,7 +1771,9 @@ ${note?`<div class="row"><span class="lbl">ملاحظة</span><span class="val">
           const expPays = payments.filter(p=>p.expenseId===exp.id);
           const totalPaid = expPays.reduce((s,p)=>s+(p.din||0),0);
           const bal = funds[exp.fund]||{din:0,dol:0};
-          const canPay = bal.din>=(exp.amtDin||0);
+          const needDin = exp.amtDin||0;
+          const needDol = exp.amtDol||0;
+          const canPay = (needDin===0||bal.din>=needDin) && (needDol===0||bal.dol>=needDol);
           return (
             <div key={exp.id} style={{background:"#fff",borderRadius:14,
               padding:"16px 18px",marginBottom:10,border:"1px solid #E2E8F0",
@@ -1826,7 +1836,7 @@ ${note?`<div class="row"><span class="lbl">ملاحظة</span><span class="val">
                       fontSize:12,fontFamily:"Tahoma",fontWeight:700,
                       color:canPay?"#DC2626":"#CBD5E1",
                       opacity:canPay?1:0.6}}>
-                    {canPay?"💸 دفع":"⛔ رصيد غير كافٍ"}
+                    {canPay ? "💸 دفع" : (funds[exp.fund]?.din||0)<(exp.amtDin||0) ? "⛔ دينار غير كافٍ" : "⛔ دولار غير كافٍ"}
                   </button>
                 </div>
               </div>
@@ -2193,7 +2203,14 @@ function SettingsPage({ funds, onBack }) {
     for (const d of txSnap.docs) await deleteDoc(doc(db,"fund_txs",d.id));
     const ptSnap = await getDocs(collection(db,"partner_txs"));
     for (const d of ptSnap.docs) await deleteDoc(doc(db,"partner_txs",d.id));
-    alert("✅ تمت تصفية جميع الصناديق");
+    // تصفير المشاريع النشطة
+    const projSnap = await getDocs(collection(db,"projects"));
+    for (const d of projSnap.docs) {
+      await updateDoc(doc(db,"projects",d.id), { balDin:0, balDol:0, recDin:0, recDol:0, spdDin:0, spdDol:0 });
+    }
+    const ptxSnap = await getDocs(collection(db,"project_txs"));
+    for (const d of ptxSnap.docs) await deleteDoc(doc(db,"project_txs",d.id));
+    alert("✅ تمت تصفية جميع الصناديق والمشاريع");
   };
 
   const clearAll = async () => {
