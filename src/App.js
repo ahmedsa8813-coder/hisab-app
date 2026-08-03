@@ -218,8 +218,47 @@ export default function App() {
   };
 
   const confirmClose = async (proj, distPcts) => {
-    const balDin = proj.balDin || 0;
-    const balDol = proj.balDol || 0;
+    const today = new Date().toISOString().split("T")[0];
+
+    // ── خطوة ١: سداد السلف التشغيلية أولاً ──────────────
+    const loansSnap = await getDocs(
+      query(collection(db,"project_loans"),
+        where("projectId","==",proj.id),where("status","==","open"))
+    );
+    const openLoans = loansSnap.docs.map(d=>({id:d.id,...d.data()}));
+
+    let usedDin = 0, usedDol = 0;
+    for (const loan of openLoans) {
+      const lDin = loan.din||0, lDol = loan.dol||0;
+      const fundBal = funds[loan.fund]||{din:0,dol:0};
+
+      // إرجاع المبلغ للصندوق
+      await setDoc(doc(db,"funds",loan.fund),
+        {din:fundBal.din+lDin, dol:fundBal.dol+lDol},{merge:true});
+
+      // تسجيل حركة الإيداع في الصندوق
+      await addDoc(collection(db,"fund_txs"),{
+        fundId:loan.fund, fundLabel:loan.fund, type:"إيداع",
+        din:lDin, dol:lDol,
+        note:"سداد سلفة تشغيلية ← "+proj.name+" (إنهاء المشروع)",
+        date:today, createdAt:new Date().toISOString()
+      });
+
+      // إغلاق الدَّيْن
+      await updateDoc(doc(db,"project_loans",loan.id),{
+        status:"paid", paidDate:today, paidBy:"project_close"
+      });
+
+      usedDin += lDin;
+      usedDol += lDol;
+    }
+
+    // ── خطوة ٢: توزيع المتبقي بعد خصم السلف ────────────
+    const rawDin = proj.balDin || 0;
+    const rawDol = proj.balDol || 0;
+    const balDin = Math.max(0, rawDin - usedDin);
+    const balDol = Math.max(0, rawDol - usedDol);
+
     const distributions = [];
     for (const d of distPcts) {
       if (!d.pct) continue;
@@ -229,6 +268,7 @@ export default function App() {
       await setDoc(doc(db, "funds", d.fund),
         { din: cur.din + din, dol: cur.dol + dol }, { merge: true });
       distributions.push({ fund: d.fund, label: d.label, pct: d.pct, din, dol });
+
       // توزيع حصص الشركاء
       if (d.fund === "شركاء") {
         for (const p of PARTNERS) {
@@ -243,16 +283,18 @@ export default function App() {
               partnerId: pId, partnerName: p.name,
               type: "إيداع", din: pDin, dol: pDol,
               note: "أرباح مشروع: " + proj.name,
-              date: new Date().toISOString().split("T")[0],
-              createdAt: new Date().toISOString()
+              date: today, createdAt: new Date().toISOString()
             });
           }
         }
       }
     }
+
     await updateDoc(doc(db, "projects", proj.id), {
       status: "done", distributions,
-      closedAt: new Date().toISOString().split("T")[0]
+      loansRepaid: openLoans.length,
+      loansTotalDin: usedDin,
+      closedAt: today
     });
     setClosingProj(null);
   };
@@ -2103,8 +2145,24 @@ ${form.note?`<div class="row"><span class="lbl">ملاحظة</span><span class="
 
 // ─── شاشة إنهاء وتوزيع الأرباح ───────────────────────────
 function ClosingModal({ proj, funds, onConfirm, onCancel }) {
-  const balDin = proj.balDin || 0;
-  const balDol = proj.balDol || 0;
+  const [loans, setLoans] = React.useState([]);
+
+  React.useEffect(()=>{
+    return onSnapshot(
+      query(collection(db,"project_loans"),
+        where("projectId","==",proj.id),where("status","==","open")),
+      snap=>setLoans(snap.docs.map(d=>({id:d.id,...d.data()})))
+    );
+  },[proj.id]);
+
+  const loanTotalDin = loans.reduce((s,l)=>s+(l.din||0),0);
+  const loanTotalDol = loans.reduce((s,l)=>s+(l.dol||0),0);
+
+  // الميزان بعد خصم السلف
+  const rawDin = proj.balDin || 0;
+  const rawDol = proj.balDol || 0;
+  const balDin = Math.max(0, rawDin - loanTotalDin);
+  const balDol = Math.max(0, rawDol - loanTotalDol);
   const ts = typeStyle(proj.type);
 
   const FUNDS = [
@@ -2117,7 +2175,7 @@ function ClosingModal({ proj, funds, onConfirm, onCancel }) {
   const [pcts, setPcts] = React.useState({ "رأس_المال": 0, "عام": 0, [proj.type]: 0, "شركاء": 0 });
   const [loading, setLoading] = React.useState(false);
   const total = Object.values(pcts).reduce((s, v) => s + (Number(v) || 0), 0);
-  const valid = total === 100 && balDin + balDol > 0;
+  const valid = total === 100 && (balDin + balDol > 0);
 
   const set = (fund, val) => {
     const n = Math.min(100, Math.max(0, Number(val) || 0));
@@ -2150,22 +2208,55 @@ function ClosingModal({ proj, funds, onConfirm, onCancel }) {
 
         <div style={{ padding:"20px 24px" }}>
 
-          {/* الأرباح */}
+          {/* السلف التشغيلية المستحقة */}
+          {loans.length > 0 && (
+            <div style={{ background:"#FFF7ED", borderRadius:12, padding:14,
+              border:"2px solid #F97316", marginBottom:14 }}>
+              <div style={{ fontSize:13, fontWeight:700, color:"#F97316", marginBottom:10 }}>
+                ⚠️ سلف تشغيلية تُسدد أولاً ({loans.length})
+              </div>
+              {loans.map(l=>(
+                <div key={l.id} style={{ display:"flex", justifyContent:"space-between",
+                  padding:"8px 0", borderBottom:"1px solid #FED7AA", fontSize:12 }}>
+                  <span style={{ color:"#92400E" }}>← صندوق {l.fund} · {l.date}</span>
+                  <div>
+                    {(l.din||0)>0&&<span style={{ fontWeight:700, color:"#DC2626" }}>{fNum(l.din)} د.ع</span>}
+                    {(l.dol||0)>0&&<span style={{ fontWeight:700, color:"#2563EB", marginRight:8 }}> {fNum(l.dol)} $</span>}
+                  </div>
+                </div>
+              ))}
+              <div style={{ marginTop:8, display:"flex", justifyContent:"space-between",
+                fontSize:12, fontWeight:700 }}>
+                <span style={{ color:"#92400E" }}>إجمالي السلف المستحقة</span>
+                <div>
+                  {loanTotalDin>0&&<span style={{ color:"#DC2626" }}>{fNum(loanTotalDin)} د.ع</span>}
+                  {loanTotalDol>0&&<span style={{ color:"#2563EB", marginRight:8 }}> {fNum(loanTotalDol)} $</span>}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* الأرباح بعد خصم السلف */}
           <div style={{ background:"#F8FAFC", borderRadius:12, padding:14, marginBottom:20 }}>
             <div style={{ fontSize:12, fontWeight:700, color:"#64748B", marginBottom:10 }}>
-              💰 الأرباح المراد توزيعها
+              {loans.length>0?"💰 الصافي المتاح للتوزيع (بعد خصم السلف)":"💰 الأرباح المراد توزيعها"}
             </div>
+            {loans.length>0&&(
+              <div style={{ fontSize:11, color:"#94A3B8", marginBottom:8 }}>
+                الميزان الكلي {fNum(rawDin)} د.ع − السلف {fNum(loanTotalDin)} د.ع = <strong style={{color:"#16A34A"}}>{fNum(balDin)} د.ع</strong>
+              </div>
+            )}
             <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
               <div style={{ background:"#FFFBEB", borderRadius:10, padding:"10px",
                 textAlign:"center", border:"2px solid #D97706" }}>
-                <div style={{ fontSize:10, color:"#64748B", marginBottom:3 }}>🇮🇶 دينار</div>
+                <div style={{ fontSize:10, color:"#64748B", marginBottom:3 }}>🇮🇶 دينار للتوزيع</div>
                 <div style={{ fontSize:16, fontWeight:700, color:"#D97706" }}>
                   {fNum(balDin)} د.ع
                 </div>
               </div>
               <div style={{ background:"#EFF6FF", borderRadius:10, padding:"10px",
                 textAlign:"center", border:"2px solid #2563EB" }}>
-                <div style={{ fontSize:10, color:"#64748B", marginBottom:3 }}>🇺🇸 دولار</div>
+                <div style={{ fontSize:10, color:"#64748B", marginBottom:3 }}>🇺🇸 دولار للتوزيع</div>
                 <div style={{ fontSize:16, fontWeight:700, color:"#2563EB" }}>
                   {fNum(balDol)} $
                 </div>
