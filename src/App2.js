@@ -734,12 +734,12 @@ td{padding:7px 6px;font-size:10px;text-align:center;border-bottom:1px solid #F1F
             <div style={{ background:"#fff", borderRadius:10, padding:"10px", textAlign:"center" }}>
               <div style={{ fontSize:9, color:"#64748B", marginBottom:3 }}>↓ إيداعات</div>
               <div style={{ fontSize:12, fontWeight:700, color:"#16A34A" }}>{fNum(totIn.din)} د.ع</div>
-              {totIn.dol>0&&<div style={{ fontSize:11, fontWeight:700, color:"#16A34A" }}>{fNum(totIn.dol)} $</div>}
+              <div style={{ fontSize:11, fontWeight:700, color:"#16A34A" }}>{fNum(totIn.dol||0)} $</div>
             </div>
             <div style={{ background:"#fff", borderRadius:10, padding:"10px", textAlign:"center" }}>
               <div style={{ fontSize:9, color:"#64748B", marginBottom:3 }}>↑ صرف</div>
               <div style={{ fontSize:12, fontWeight:700, color:"#DC2626" }}>{fNum(totOut.din)} د.ع</div>
-              {totOut.dol>0&&<div style={{ fontSize:11, fontWeight:700, color:"#DC2626" }}>{fNum(totOut.dol)} $</div>}
+              <div style={{ fontSize:11, fontWeight:700, color:"#DC2626" }}>{fNum(totOut.dol||0)} $</div>
             </div>
           </div>
           <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
@@ -1191,9 +1191,10 @@ td{padding:7px 6px;font-size:10px;text-align:center;border-bottom:1px solid #F1F
                       color:isIn?"#16A34A":"#DC2626" }}>
                       {isIn?"+":"-"}{fNum(t.din)} <span style={{fontSize:10}}>د.ع</span>
                     </div>}
-                    {(t.dol||0)>0&&<div style={{ fontSize:12, fontWeight:700, color:"#2563EB" }}>
-                      {isIn?"+":"-"}{fNum(t.dol)} <span style={{fontSize:10}}>$</span>
-                    </div>}
+                    <div style={{ fontSize:12, fontWeight:700,
+                      color:(t.dol||0)>0?"#2563EB":"#CBD5E1" }}>
+                      {isIn?"+":"-"}{fNum(t.dol||0)} <span style={{fontSize:10}}>$</span>
+                    </div>
                   </div>
                 </div>
               </div>

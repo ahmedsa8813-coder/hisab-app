@@ -2485,9 +2485,9 @@ td{padding:7px 6px;font-size:10px;text-align:center;border-bottom:1px solid #F1F
               <div style={{ fontSize:20, fontWeight:700, color:partner.color }}>{fNum(pf.din)}</div>
               <div style={{ fontSize:12, color:"#64748B" }}>د.ع</div>
             </div>
-            <div style={{ background:"#fff", borderRadius:12, padding:"14px",
-              textAlign:"center", border:"1.5px solid #2563EB30" }}>
-              <div style={{ fontSize:10, color:"#64748B", marginBottom:4 }}>💰 رصيد الدولار</div>
+            <div style={{ background:"#EFF6FF", borderRadius:12, padding:"14px",
+              textAlign:"center", border:"2px solid #2563EB40" }}>
+              <div style={{ fontSize:10, color:"#64748B", marginBottom:4 }}>🇺🇸 رصيد الدولار</div>
               <div style={{ fontSize:20, fontWeight:700, color:"#2563EB" }}>{fNum(pf.dol)}</div>
               <div style={{ fontSize:12, color:"#64748B" }}>$</div>
             </div>
@@ -2668,11 +2668,10 @@ td{padding:7px 6px;font-size:10px;text-align:center;border-bottom:1px solid #F1F
                         {isIn?"+":"-"}{fNum(t.din)} <span style={{fontSize:10}}>د.ع</span>
                       </div>
                     )}
-                    {(t.dol||0) > 0 && (
-                      <div style={{ fontSize:13, fontWeight:700, color:"#2563EB" }}>
-                        {isIn?"+":"-"}{fNum(t.dol)} <span style={{fontSize:10}}>$</span>
-                      </div>
-                    )}
+                    <div style={{ fontSize:13, fontWeight:700,
+                      color:(t.dol||0)>0?"#2563EB":"#CBD5E1" }}>
+                      {isIn?"+":"-"}{fNum(t.dol||0)} <span style={{fontSize:10}}>$</span>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -2686,11 +2685,9 @@ td{padding:7px 6px;font-size:10px;text-align:center;border-bottom:1px solid #F1F
                 <span style={{ fontSize:13, fontWeight:700, color:partner.color }}>
                   {fNum(pf.din)} د.ع
                 </span>
-                {pf.dol > 0 && (
-                  <span style={{ fontSize:12, fontWeight:700, color:"#2563EB", marginRight:10 }}>
-                    {" | "}{fNum(pf.dol)} $
-                  </span>
-                )}
+                <span style={{ fontSize:12, fontWeight:700, color:"#2563EB", marginRight:10 }}>
+                  {" | "}{fNum(pf.dol)} $
+                </span>
               </div>
             </div>
           )}
