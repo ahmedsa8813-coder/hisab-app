@@ -696,6 +696,7 @@ export function ReportsPage({ funds, projects, onBack }) {
     {id:"funds",     label:"تقرير الصناديق",    icon:"💎", color:"#059669", bg:"#ECFDF5"},
     {id:"partners",  label:"تقرير الشركاء",     icon:"👥", color:"#9333EA", bg:"#FAF5FF"},
     {id:"assets",    label:"تقرير الأصول",      icon:"📦", color:"#0891B2", bg:"#ECFEFF"},
+    {id:"employees", label:"تقرير الموظفين",    icon:"👤", color:"#0F172A", bg:"#F1F5F9"},
     {id:"salaries",  label:"تقرير الرواتب",     icon:"👷", color:"#16A34A", bg:"#F0FDF4"},
     {id:"summary",   label:"التقرير الشامل",    icon:"📊", color:"#1D4ED8", bg:"#EFF6FF"},
   ];
@@ -917,6 +918,84 @@ ${HDR}
   </tr>
 </table>
 <div class="ft"><span>شركة باب المشاريع</span><span>طُبع: ${today}</span></div>
+</body></html>`;
+
+    } else if (reportType === "employees") {
+      let list = rptEmps;
+      if (filters.status !== "all") list = list.filter(e=>e.branch===filters.status);
+      list = [...list].sort((a,b)=>(a.branch||"").localeCompare(b.branch||"")||(a.name||"").localeCompare(b.name||""));
+
+      // تجميع حسب الفرع
+      const branches = filters.status==="all"
+        ? ["إشراف","ديكور","مقاولات","واجهات"]
+        : [filters.status];
+
+      let branchSections = "";
+      let grandTotalDin=0, grandTotalDol=0, grandCount=0;
+
+      branches.forEach(branch=>{
+        const bList = list.filter(e=>e.branch===branch);
+        if(!bList.length) return;
+        const totDin = bList.reduce((s,e)=>s+(e.baseDin||0),0);
+        const totDol = bList.reduce((s,e)=>s+(e.baseDol||0),0);
+        grandTotalDin+=totDin; grandTotalDol+=totDol; grandCount+=bList.length;
+
+        let n=0;
+        const rows = bList.map(e=>{
+          n++;
+          const empAdv = advances?.filter?.(a=>a.empId===e.id&&a.status==="pending")||[];
+          const advTotal = empAdv.reduce((s,a)=>s+(a.din||0),0);
+          return `<tr style="background:${n%2===0?"#F8FAFC":"#fff"}">
+            <td>${n}</td>
+            <td style="text-align:right;font-weight:700">${e.name||""}</td>
+            <td>${e.role||""}</td>
+            <td>${e.hireDate||""}</td>
+            <td style="color:#D97706;font-weight:700">${(e.baseDin||0)>0?fNum(e.baseDin)+" د.ع":""}</td>
+            <td style="color:#2563EB;font-weight:700">${(e.baseDol||0)>0?fNum(e.baseDol)+" $":""}</td>
+            <td style="color:#F97316">${advTotal>0?fNum(advTotal)+" د.ع":""}</td>
+          </tr>`;
+        }).join("");
+
+        branchSections += `
+<h3 style="margin:18px 0 8px;font-size:14px;color:#1E293B;
+  border-bottom:2px solid #1E293B;padding-bottom:6px">
+  فرع ${branch} — ${bList.length} موظف | ${fNum(totDin)} د.ع/شهر
+</h3>
+<table style="margin-bottom:14px">
+  <thead><tr>
+    <th>#</th><th style="text-align:right">الموظف</th><th>الوظيفة</th>
+    <th>تاريخ التعيين</th><th>راتب دينار</th><th>راتب دولار</th><th>سلف قائمة</th>
+  </tr></thead>
+  <tbody>${rows}</tbody>
+  <tr class="tot">
+    <td colspan="3">إجمالي فرع ${branch}</td><td></td>
+    <td style="color:#D97706">${fNum(totDin)} د.ع/شهر</td>
+    <td style="color:#2563EB">${totDol>0?fNum(totDol)+" $/شهر":""}</td>
+    <td></td>
+  </tr>
+</table>`;
+      });
+
+      html = `<!DOCTYPE html><html dir="rtl"><head><meta charset="utf-8"/>${STYLE}</head><body>
+${HDR}
+<div class="title">👤 تقرير الموظفين</div>
+<div class="info">
+  ${filters.status!=="all"?"فرع: "+filters.status+" · ":"كل الأفرع · "}
+  ${grandCount} موظف
+</div>
+<div class="sg" style="grid-template-columns:repeat(5,1fr);margin-bottom:14px">
+  <div class="sb"><div class="sl">إجمالي الموظفين</div><div class="sv" style="color:#0F172A">${grandCount}</div></div>
+  ${["إشراف","ديكور","مقاولات","واجهات"].map(b=>`
+  <div class="sb"><div class="sl">فرع ${b}</div>
+    <div class="sv" style="color:#1E293B">${list.filter(e=>e.branch===b).length}</div>
+    <div style="font-size:10px;color:#64748B">${fNum(list.filter(e=>e.branch===b).reduce((s,e)=>s+(e.baseDin||0),0))} د.ع</div>
+  </div>`).join("")}
+</div>
+${branchSections}
+<div class="ft">
+  <span>شركة باب المشاريع — الإجمالي الشهري: ${fNum(grandTotalDin)} د.ع</span>
+  <span>طُبع: ${today}</span>
+</div>
 </body></html>`;
 
     } else if (reportType === "salaries") {
@@ -1174,6 +1253,25 @@ ${HDR}
               </div>
             )}
 
+            {/* فلاتر خاصة بالموظفين */}
+            {reportType === "employees" && (
+              <div>
+                <div style={{fontSize:11,color:"#64748B",fontWeight:600,marginBottom:5}}>الفرع</div>
+                <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:6}}>
+                  {["all","إشراف","ديكور","مقاولات","واجهات"].map(b=>(
+                    <button key={b} onClick={()=>sf("status")(b)} style={{
+                      border:"1.5px solid "+(filters.status===b?"#0F172A":"#E2E8F0"),
+                      borderRadius:8,padding:"8px 4px",cursor:"pointer",fontFamily:"Tahoma",
+                      fontSize:11,fontWeight:600,
+                      background:filters.status===b?"#0F172A":"#fff",
+                      color:filters.status===b?"#fff":"#64748B"}}>
+                      {b==="all"?"الكل":b}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {/* فلاتر خاصة بالرواتب */}
             {reportType === "salaries" && (
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginTop:8}}>
@@ -1233,4 +1331,3 @@ ${HDR}
     </div>
   );
 }
-
