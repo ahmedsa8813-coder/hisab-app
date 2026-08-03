@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { EmployeesPage, ReportsPage } from "./App3";
-import { AssetsPage, OpeningBalancesPage, SettingsPage, ExpensesPage } from "./App4";
+import { AssetsPage, OpeningBalancesPage, SettingsPage, ExpensesPage, DebtsPage } from "./App4";
 import { initializeApp, getApps } from "firebase/app";
 import { getFirestore, collection, addDoc, onSnapshot,
   deleteDoc, doc, updateDoc, setDoc, query, where, getDocs } from "firebase/firestore";
@@ -122,6 +122,9 @@ export default function App2({ onBack }) {
 
   if (page === "settings")
     return <SettingsPage funds={funds} onBack={() => setPage("home")}/>;
+
+  if (page === "debts")
+    return <DebtsPage funds={funds} onBack={() => setPage("home")}/>;
 
   // الصفحة الرئيسية
   const fundsDin    = ALL_FUNDS.reduce((s,f) => s + (funds[f.id]?.din||0), 0);
@@ -370,6 +373,8 @@ export default function App2({ onBack }) {
                 desc:employees.length+" موظف مسجل", color:"#0284C7"},
               {pg:"opening",   icon:"🏁", label:"الأرصدة الافتتاحية",
                 desc:"رصيد بداية الصناديق", color:"#475569"},
+              {pg:"debts",     icon:"💳", label:"الذمم المالية",
+                desc:"طالبة ومطلوبة", color:"#7C2D12"},
             ].map(n=>(
               <button key={n.pg} onClick={()=>setPage(n.pg)}
                 style={{ background:"#fff", border:"1px solid #E2E8F0",
@@ -878,9 +883,16 @@ td{padding:7px 6px;font-size:10px;text-align:center;border-bottom:1px solid #F1F
                 <div style={{ padding:"10px 0 4px", borderTop:"1px solid #E2E8F0", marginTop:4 }}>
                   <div style={{ display:"flex", justifyContent:"space-between", fontSize:12 }}>
                     <span style={{ fontWeight:700, color:"#64748B" }}>إجمالي الديون</span>
-                    <span style={{ fontWeight:700, color:"#DC2626" }}>
-                      {fNum(loans.reduce((s,l)=>s+(l.din||0),0))} د.ع
-                    </span>
+                    <div>
+                      <span style={{ fontWeight:700, color:"#DC2626" }}>
+                        {fNum(loans.reduce((s,l)=>s+(l.din||0),0))} د.ع
+                      </span>
+                      {loans.reduce((s,l)=>s+(l.dol||0),0)>0&&(
+                        <span style={{ fontWeight:700, color:"#2563EB", marginRight:8 }}>
+                          {" | "}{fNum(loans.reduce((s,l)=>s+(l.dol||0),0))} $
+                        </span>
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>

@@ -398,14 +398,15 @@ export function AssetsPage({ funds, onBack }) {
               {(a.unitPriceDin||0)>0&&(
                 <span style={{background:"#FFFBEB",borderRadius:7,padding:"4px 10px",
                   fontSize:11,color:"#D97706",fontWeight:700}}>
-                  {fNum(a.unitPriceDin)} د.ع / وحدة
-                  {(a.qty||0)>1&&<span style={{color:"#94A3B8",fontWeight:400}}> | إجمالي: {fNum((a.totalDin||0))} د.ع</span>}
+                  🇮🇶 {fNum(a.unitPriceDin)} د.ع / وحدة
+                  {(a.qty||0)>1&&<span style={{color:"#94A3B8",fontWeight:400}}> | إجمالي: {fNum(a.totalDin||0)} د.ع</span>}
                 </span>
               )}
               {(a.unitPriceDol||0)>0&&(
                 <span style={{background:"#EFF6FF",borderRadius:7,padding:"4px 10px",
                   fontSize:11,color:"#2563EB",fontWeight:700}}>
-                  {fNum(a.unitPriceDol)} $ / وحدة
+                  🇺🇸 {fNum(a.unitPriceDol)} $ / وحدة
+                  {(a.qty||0)>1&&<span style={{color:"#94A3B8",fontWeight:400}}> | إجمالي: {fNum(a.totalDol||0)} $</span>}
                 </span>
               )}
               {(a.qtyRemaining||0)===0&&(
@@ -703,9 +704,12 @@ export function OpeningBalancesPage({ funds, onBack }) {
                 <span style={{ fontSize:14, fontWeight:700, color:f.color }}>
                   {f.label}
                 </span>
-                {(funds[f.id]?.din||0)>0 && (
+                {((funds[f.id]?.din||0)>0 || (funds[f.id]?.dol||0)>0) && (
                   <span style={{ marginRight:"auto", fontSize:11, color:"#64748B" }}>
-                    الرصيد الحالي: {fNum(funds[f.id]?.din||0)} د.ع
+                    الرصيد الحالي:
+                    {(funds[f.id]?.din||0)>0&&" "+fNum(funds[f.id]?.din)+" د.ع"}
+                    {(funds[f.id]?.din||0)>0&&(funds[f.id]?.dol||0)>0&&" | "}
+                    {(funds[f.id]?.dol||0)>0&&" "+fNum(funds[f.id]?.dol)+" $"}
                   </span>
                 )}
               </div>
@@ -1686,6 +1690,473 @@ export function SettingsPage({ funds, onBack }) {
           شركة باب المشاريع — نظام الحسابات الداخلي
           <br/>Firebase: bab-projects-b7d04 · Vercel: hisab-app-ahmee.vercel.app
         </div>
+
+      </div>
+    </div>
+  );
+}
+
+// ─── صفحة الذمم المالية ──────────────────────────────
+const DEBT_BRANCHES = ["إشراف","ديكور","مقاولات","واجهات","عام"];
+
+export function DebtsPage({ funds, onBack }) {
+  const [tab,      setTab]      = useState("receivable"); // receivable | payable
+  const [filter,   setFilter]   = useState("all");
+  const [debts,    setDebts]    = useState([]);
+  const [showAdd,  setShowAdd]  = useState(false);
+  const [paying,   setPaying]   = useState(null);
+  const [payForm,  setPayForm]  = useState({
+    din:"", dol:"", date: new Date().toISOString().split("T")[0], note:""
+  });
+  const [form, setForm] = useState({
+    type:"receivable",
+    name:"", branch:"إشراف", project:"",
+    din:"", dol:"", dueDate:"", note:""
+  });
+  const sf  = k => v => setForm(f=>({...f,[k]:v}));
+  const psf = k => v => setPayForm(f=>({...f,[k]:v}));
+
+  useEffect(()=>{
+    return onSnapshot(collection(db,"debts"), snap=>{
+      const list=snap.docs.map(d=>({id:d.id,...d.data()}));
+      list.sort((a,b)=>(a.dueDate||"").localeCompare(b.dueDate||""));
+      setDebts(list);
+    });
+  },[]);
+
+  const addDebt = async () => {
+    if(!form.name.trim()||(!Number(form.din)&&!Number(form.dol))) return;
+    const pw=window.prompt("🔒 أدخل الباسورد:");
+    if(!pw)return; if(pw!==PASS){alert("❌ باسورد غلط");return;}
+    await addDoc(collection(db,"debts"),{
+      type: tab, name:form.name.trim(),
+      branch:form.branch, project:form.project.trim(),
+      din:Number(form.din)||0, dol:Number(form.dol)||0,
+      dueDate:form.dueDate, note:form.note.trim(),
+      status:"open", createdAt:new Date().toISOString()
+    });
+    setForm({type:"receivable",name:"",branch:"إشراف",project:"",din:"",dol:"",dueDate:"",note:""});
+    setShowAdd(false);
+  };
+
+  const settle = async () => {
+    if(!paying) return;
+    const din = Number(payForm.din)||0;
+    const dol = Number(payForm.dol)||0;
+    if(!din && !dol) return;
+
+    const pw=window.prompt("🔒 أدخل الباسورد:");
+    if(!pw)return; if(pw!==PASS){alert("❌ باسورد غلط");return;}
+
+    const bal = funds[paying.branch]||{din:0,dol:0};
+    const today = payForm.date;
+
+    if(paying.type==="receivable") {
+      // تحصيل — يُضاف للصندوق
+      await setDoc(doc(db,"funds",paying.branch),
+        {din:bal.din+din, dol:bal.dol+dol},{merge:true});
+      await addDoc(collection(db,"fund_txs"),{
+        fundId:paying.branch, fundLabel:paying.branch, type:"إيداع",
+        din, dol, note:"تحصيل ذمة ← "+paying.name+(paying.project?" ("+paying.project+")":""),
+        date:today, createdAt:new Date().toISOString()
+      });
+    } else {
+      // سداد — يُخصم من الصندوق
+      if(din>0 && din>bal.din){alert("⛔ رصيد الدينار غير كافٍ — المتاح: "+fNum(bal.din)+" د.ع");return;}
+      if(dol>0 && dol>bal.dol){alert("⛔ رصيد الدولار غير كافٍ — المتاح: "+fNum(bal.dol)+" $");return;}
+      await setDoc(doc(db,"funds",paying.branch),
+        {din:bal.din-din, dol:bal.dol-dol},{merge:true});
+      await addDoc(collection(db,"fund_txs"),{
+        fundId:paying.branch, fundLabel:paying.branch, type:"صرف",
+        din, dol, note:"سداد ذمة → "+paying.name,
+        date:today, createdAt:new Date().toISOString()
+      });
+    }
+
+    await updateDoc(doc(db,"debts",paying.id),{
+      status:"paid", paidDin:din, paidDol:dol, paidDate:today,
+      paidNote:payForm.note
+    });
+
+    setPaying(null);
+    setPayForm({din:"",dol:"",date:new Date().toISOString().split("T")[0],note:""});
+  };
+
+  const list = debts.filter(d=>{
+    if(d.type !== tab) return false;
+    if(filter!=="all" && d.branch!==filter) return false;
+    return true;
+  });
+  const open   = list.filter(d=>d.status==="open");
+  const closed = list.filter(d=>d.status==="paid");
+
+  const totOpenDin = open.reduce((s,d)=>s+(d.din||0),0);
+  const totOpenDol = open.reduce((s,d)=>s+(d.dol||0),0);
+
+  const isReceivable = tab === "receivable";
+
+  return (
+    <div style={{minHeight:"100vh",background:"#F1F5F9",fontFamily:"Tahoma",direction:"rtl"}}>
+      <div style={{maxWidth:700,margin:"0 auto",padding:"22px 16px"}}>
+
+        <button onClick={onBack} style={{background:"#fff",border:"1px solid #E2E8F0",
+          borderRadius:10,padding:"8px 16px",fontSize:13,color:"#475569",cursor:"pointer",
+          marginBottom:16,fontFamily:"Tahoma",display:"flex",alignItems:"center",gap:6}}>
+          ← رجوع
+        </button>
+
+        {/* هيدر */}
+        <div style={{background:isReceivable
+          ?"linear-gradient(135deg,#16A34A,#22C55E)"
+          :"linear-gradient(135deg,#DC2626,#EF4444)",
+          borderRadius:16,padding:"20px 24px",marginBottom:16}}>
+          <div style={{fontSize:18,fontWeight:700,color:"#fff",marginBottom:10}}>
+            💳 الذمم المالية
+          </div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10}}>
+            <div style={{background:"rgba(255,255,255,0.15)",borderRadius:10,padding:12,textAlign:"center"}}>
+              <div style={{fontSize:10,color:"rgba(255,255,255,0.7)",marginBottom:3}}>
+                {isReceivable?"📥 يُطالب به":"📤 مستحق علينا"}
+              </div>
+              <div style={{fontSize:14,fontWeight:700,color:"#fff"}}>{open.length} ذمة</div>
+            </div>
+            <div style={{background:"rgba(255,255,255,0.15)",borderRadius:10,padding:12,textAlign:"center"}}>
+              <div style={{fontSize:10,color:"rgba(255,255,255,0.7)",marginBottom:3}}>الإجمالي دينار</div>
+              <div style={{fontSize:14,fontWeight:700,color:"#fff"}}>{fNum(totOpenDin)} د.ع</div>
+            </div>
+            <div style={{background:"rgba(255,255,255,0.15)",borderRadius:10,padding:12,textAlign:"center"}}>
+              <div style={{fontSize:10,color:"rgba(255,255,255,0.7)",marginBottom:3}}>الإجمالي دولار</div>
+              <div style={{fontSize:14,fontWeight:700,color:"#fff"}}>{fNum(totOpenDol)} $</div>
+            </div>
+          </div>
+        </div>
+
+        {/* تبويب نوع الذمة */}
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:12}}>
+          <button onClick={()=>{setTab("receivable");setShowAdd(false);}} style={{
+            border:"none",borderRadius:10,padding:"12px",cursor:"pointer",
+            fontFamily:"Tahoma",fontSize:13,fontWeight:700,
+            background:tab==="receivable"?"#16A34A":"#fff",
+            color:tab==="receivable"?"#fff":"#64748B"}}>
+            📥 الشركة طالبة
+          </button>
+          <button onClick={()=>{setTab("payable");setShowAdd(false);}} style={{
+            border:"none",borderRadius:10,padding:"12px",cursor:"pointer",
+            fontFamily:"Tahoma",fontSize:13,fontWeight:700,
+            background:tab==="payable"?"#DC2626":"#fff",
+            color:tab==="payable"?"#fff":"#64748B"}}>
+            📤 الشركة مطلوبة
+          </button>
+        </div>
+
+        {/* فلتر الفرع */}
+        <div style={{display:"flex",gap:6,marginBottom:12,flexWrap:"wrap"}}>
+          {["all",...DEBT_BRANCHES].map(b=>(
+            <button key={b} onClick={()=>setFilter(b)} style={{
+              border:"1.5px solid "+(filter===b?(isReceivable?"#16A34A":"#DC2626"):"#E2E8F0"),
+              borderRadius:8,padding:"7px 14px",cursor:"pointer",fontFamily:"Tahoma",
+              fontSize:11,fontWeight:600,
+              background:filter===b?(isReceivable?"#F0FDF4":"#FFF1F2"):"#fff",
+              color:filter===b?(isReceivable?"#16A34A":"#DC2626"):"#64748B"}}>
+              {b==="all"?"الكل":b}
+            </button>
+          ))}
+          <button onClick={()=>setShowAdd(v=>!v)} style={{
+            border:"none",borderRadius:8,padding:"7px 16px",cursor:"pointer",
+            fontFamily:"Tahoma",fontSize:11,fontWeight:700,marginRight:"auto",
+            background:showAdd?"#475569":(isReceivable?"#16A34A":"#DC2626"),color:"#fff"}}>
+            {showAdd?"✕ إلغاء":"+ إضافة"}
+          </button>
+        </div>
+
+        {/* فورم الإضافة */}
+        {showAdd && (
+          <div style={{background:"#fff",borderRadius:14,padding:20,
+            border:"2px solid "+(isReceivable?"#16A34A":"#DC2626"),marginBottom:14}}>
+            <div style={{fontSize:14,fontWeight:700,
+              color:isReceivable?"#16A34A":"#DC2626",marginBottom:16}}>
+              {isReceivable?"📥 إضافة ذمة طالبة":"📤 إضافة ذمة مطلوبة"}
+            </div>
+
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:12}}>
+              <div>
+                <div style={{fontSize:12,color:"#64748B",fontWeight:600,marginBottom:5}}>
+                  {isReceivable?"اسم المدين *":"اسم الدائن / الجهة *"}
+                </div>
+                <input placeholder={isReceivable?"اسم صاحب الدين...":"اسم المورد أو الجهة..."}
+                  value={form.name} onChange={e=>sf("name")(e.target.value)}
+                  style={{width:"100%",border:"1px solid #CBD5E1",borderRadius:9,
+                    padding:"10px 13px",fontSize:14,outline:"none",fontFamily:"Tahoma",
+                    direction:"rtl",boxSizing:"border-box",background:"#F8FAFC"}}/>
+              </div>
+              <div>
+                <div style={{fontSize:12,color:"#64748B",fontWeight:600,marginBottom:5}}>
+                  المشروع / الوصف
+                </div>
+                <input placeholder="اسم المشروع أو وصف الدين..."
+                  value={form.project} onChange={e=>sf("project")(e.target.value)}
+                  style={{width:"100%",border:"1px solid #CBD5E1",borderRadius:9,
+                    padding:"10px 13px",fontSize:14,outline:"none",fontFamily:"Tahoma",
+                    direction:"rtl",boxSizing:"border-box",background:"#F8FAFC"}}/>
+              </div>
+            </div>
+
+            {/* الفرع */}
+            <div style={{marginBottom:12}}>
+              <div style={{fontSize:12,color:"#64748B",fontWeight:600,marginBottom:5}}>
+                {isReceivable?"الفرع المستفيد عند التحصيل":"الصندوق الذي سيسدد"}
+              </div>
+              <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:6}}>
+                {DEBT_BRANCHES.map(b=>{
+                  const bal=funds[b]||{din:0,dol:0};
+                  return (
+                    <button key={b} onClick={()=>sf("branch")(b)} style={{
+                      border:"1.5px solid "+(form.branch===b?(isReceivable?"#16A34A":"#DC2626"):"#E2E8F0"),
+                      borderRadius:9,padding:"8px 4px",cursor:"pointer",fontFamily:"Tahoma",
+                      background:form.branch===b?(isReceivable?"#F0FDF4":"#FFF1F2"):"#fff",
+                      textAlign:"center"}}>
+                      <div style={{fontSize:11,fontWeight:700,
+                        color:form.branch===b?(isReceivable?"#16A34A":"#DC2626"):"#64748B"}}>
+                        {b}
+                      </div>
+                      <div style={{fontSize:9,color:"#94A3B8",marginTop:1}}>
+                        {fNum(bal.din)} د.ع
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* المبالغ */}
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:12}}>
+              {[{k:"din",l:"المبلغ دينار",c:"#D97706"},{k:"dol",l:"المبلغ دولار",c:"#2563EB"}].map(({k,l,c})=>(
+                <div key={k}>
+                  <div style={{fontSize:12,color:c,fontWeight:600,marginBottom:5}}>{l}</div>
+                  <input type="text" inputMode="numeric" placeholder="٠" value={form[k]}
+                    onChange={e=>sf(k)(e.target.value.replace(/[^0-9]/g,""))}
+                    style={{width:"100%",border:"1px solid #CBD5E1",borderRadius:9,
+                      padding:"10px 13px",fontSize:14,outline:"none",fontFamily:"Tahoma",
+                      direction:"rtl",boxSizing:"border-box",background:"#F8FAFC"}}/>
+                  {Number(form[k])>0&&(
+                    <div style={{fontSize:11,color:c,marginTop:3,fontWeight:600}}>
+                      ✍️ {w2(Number(form[k]))} {k==="din"?"دينار":"دولار"}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:14}}>
+              <div>
+                <div style={{fontSize:12,color:"#64748B",fontWeight:600,marginBottom:5}}>
+                  تاريخ الاستحقاق
+                </div>
+                <input type="date" value={form.dueDate} onChange={e=>sf("dueDate")(e.target.value)}
+                  style={{width:"100%",border:"1px solid #CBD5E1",borderRadius:9,
+                    padding:"10px",fontSize:13,outline:"none",fontFamily:"Tahoma",
+                    boxSizing:"border-box",background:"#F8FAFC"}}/>
+              </div>
+              <div>
+                <div style={{fontSize:12,color:"#64748B",fontWeight:600,marginBottom:5}}>ملاحظة</div>
+                <input placeholder="أي تفصيل..." value={form.note}
+                  onChange={e=>sf("note")(e.target.value)}
+                  style={{width:"100%",border:"1px solid #CBD5E1",borderRadius:9,
+                    padding:"10px",fontSize:13,outline:"none",fontFamily:"Tahoma",
+                    direction:"rtl",boxSizing:"border-box",background:"#F8FAFC"}}/>
+              </div>
+            </div>
+
+            <button onClick={addDebt}
+              disabled={!form.name.trim()||(!Number(form.din)&&!Number(form.dol))}
+              style={{width:"100%",border:"none",borderRadius:10,padding:"13px",
+                fontSize:14,fontWeight:700,fontFamily:"Tahoma",cursor:"pointer",
+                background:form.name.trim()&&(Number(form.din)||Number(form.dol))
+                  ?(isReceivable?"#16A34A":"#DC2626"):"#E2E8F0",
+                color:form.name.trim()&&(Number(form.din)||Number(form.dol))
+                  ?"#fff":"#94A3B8"}}>
+              ✅ تسجيل الذمة
+            </button>
+          </div>
+        )}
+
+        {/* قائمة المفتوحة */}
+        {open.length===0 ? (
+          <div style={{background:"#fff",borderRadius:14,padding:30,
+            textAlign:"center",color:"#94A3B8",border:"1px solid #E2E8F0",marginBottom:12}}>
+            <div style={{fontSize:36,marginBottom:8}}>💳</div>
+            <div>ما في ذمم مفتوحة</div>
+          </div>
+        ) : open.map(debt=>{
+          const overdue = debt.dueDate && debt.dueDate < new Date().toISOString().split("T")[0];
+          return (
+            <div key={debt.id} style={{background:"#fff",borderRadius:14,
+              padding:"16px 18px",marginBottom:10,border:"1px solid #E2E8F0",
+              borderRight:"5px solid "+(isReceivable?"#16A34A":"#DC2626")}}>
+              <div style={{display:"grid",gridTemplateColumns:"1fr auto",gap:12,alignItems:"start"}}>
+                <div>
+                  <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:6,flexWrap:"wrap"}}>
+                    <span style={{fontSize:15,fontWeight:700,color:"#1E293B"}}>{debt.name}</span>
+                    <span style={{fontSize:11,background:"#F1F5F9",borderRadius:20,
+                      padding:"2px 10px",color:"#475569",fontWeight:600}}>
+                      {debt.branch}
+                    </span>
+                    {overdue && (
+                      <span style={{fontSize:11,background:"#FEF2F2",borderRadius:20,
+                        padding:"2px 10px",color:"#DC2626",fontWeight:700}}>
+                        ⚠️ متأخرة
+                      </span>
+                    )}
+                  </div>
+                  {debt.project && (
+                    <div style={{fontSize:11,color:"#64748B",marginBottom:4}}>
+                      📋 {debt.project}
+                    </div>
+                  )}
+                  <div style={{display:"flex",gap:12,fontSize:12,flexWrap:"wrap"}}>
+                    {(debt.din||0)>0&&(
+                      <span style={{fontWeight:700,color:isReceivable?"#16A34A":"#DC2626"}}>
+                        {fNum(debt.din)} د.ع
+                      </span>
+                    )}
+                    {(debt.dol||0)>0&&(
+                      <span style={{fontWeight:700,color:"#2563EB"}}>
+                        {fNum(debt.dol)} $
+                      </span>
+                    )}
+                    {debt.dueDate&&(
+                      <span style={{color:overdue?"#DC2626":"#64748B"}}>
+                        📅 {debt.dueDate}
+                      </span>
+                    )}
+                    {debt.note&&<span style={{color:"#94A3B8"}}>{debt.note}</span>}
+                  </div>
+                </div>
+                <button onClick={()=>{
+                  setPaying(debt);
+                  setPayForm({din:String(debt.din||""),dol:String(debt.dol||""),
+                    date:new Date().toISOString().split("T")[0],note:""});
+                }} style={{
+                  background:isReceivable?"#F0FDF4":"#FFF1F2",
+                  border:"1.5px solid "+(isReceivable?"#16A34A":"#DC2626"),
+                  borderRadius:9,padding:"8px 14px",cursor:"pointer",
+                  fontSize:12,fontFamily:"Tahoma",fontWeight:700,
+                  color:isReceivable?"#16A34A":"#DC2626",whiteSpace:"nowrap"}}>
+                  {isReceivable?"📥 تحصيل":"📤 سداد"}
+                </button>
+              </div>
+            </div>
+          );
+        })}
+
+        {/* المسددة */}
+        {closed.length>0 && (
+          <div style={{background:"#F8FAFC",borderRadius:12,padding:14,
+            border:"1px solid #E2E8F0",marginTop:8}}>
+            <div style={{fontSize:12,fontWeight:700,color:"#64748B",marginBottom:10}}>
+              ✅ المسددة / المحصّلة ({closed.length})
+            </div>
+            {closed.map(d=>(
+              <div key={d.id} style={{borderRadius:8,padding:"10px 12px",
+                marginBottom:6,background:"#fff",border:"1px solid #E2E8F0",
+                display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                <div>
+                  <span style={{fontSize:12,fontWeight:700,color:"#64748B"}}>{d.name}</span>
+                  <span style={{fontSize:11,color:"#94A3B8",marginRight:8}}>{d.branch}</span>
+                  {d.project&&<span style={{fontSize:11,color:"#94A3B8"}}>· {d.project}</span>}
+                </div>
+                <div style={{textAlign:"left"}}>
+                  {(d.din||0)>0&&<div style={{fontSize:12,fontWeight:700,color:"#16A34A"}}>{fNum(d.din)} د.ع</div>}
+                  <div style={{fontSize:10,color:"#94A3B8"}}>✅ {d.paidDate||""}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* نافذة التحصيل / السداد */}
+        {paying && (
+          <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.55)",
+            zIndex:999,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
+            <div style={{background:"#fff",borderRadius:20,width:"100%",maxWidth:420,
+              boxShadow:"0 24px 80px rgba(0,0,0,0.35)"}}>
+              <div style={{padding:"16px 20px",borderBottom:"1px solid #E2E8F0",
+                display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                <div style={{fontSize:15,fontWeight:700,
+                  color:paying.type==="receivable"?"#16A34A":"#DC2626"}}>
+                  {paying.type==="receivable"?"📥 تحصيل":"📤 سداد"} — {paying.name}
+                </div>
+                <button onClick={()=>setPaying(null)} style={{background:"none",
+                  border:"none",fontSize:20,cursor:"pointer",color:"#64748B"}}>✕</button>
+              </div>
+              <div style={{padding:"18px 20px"}}>
+                {/* معلومات الصندوق */}
+                <div style={{background:"#F8FAFC",borderRadius:10,padding:12,marginBottom:14,fontSize:12}}>
+                  <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
+                    <span style={{color:"#64748B"}}>الفرع / الصندوق</span>
+                    <span style={{fontWeight:700}}>{paying.branch}</span>
+                  </div>
+                  <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
+                    <span style={{color:"#64748B"}}>الرصيد الحالي</span>
+                    <span style={{fontWeight:700,color:"#16A34A"}}>{fNum(funds[paying.branch]?.din||0)} د.ع</span>
+                  </div>
+                  <div style={{display:"flex",justifyContent:"space-between"}}>
+                    <span style={{color:"#64748B"}}>المبلغ المسجّل</span>
+                    <span style={{fontWeight:700,color:paying.type==="receivable"?"#16A34A":"#DC2626"}}>
+                      {fNum(paying.din||0)} د.ع {(paying.dol||0)>0?"| "+fNum(paying.dol)+" $":""}
+                    </span>
+                  </div>
+                </div>
+
+                {[{k:"din",l:"المبلغ دينار",c:"#D97706"},{k:"dol",l:"المبلغ دولار",c:"#2563EB"}].map(({k,l,c})=>(
+                  <div key={k} style={{marginBottom:12}}>
+                    <div style={{fontSize:12,color:c,fontWeight:600,marginBottom:5}}>{l}</div>
+                    <input type="text" inputMode="numeric" placeholder="٠" value={payForm[k]}
+                      onChange={e=>psf(k)(e.target.value.replace(/[^0-9]/g,""))}
+                      style={{width:"100%",border:"1px solid #CBD5E1",borderRadius:9,
+                        padding:"11px 13px",fontSize:14,outline:"none",fontFamily:"Tahoma",
+                        direction:"rtl",boxSizing:"border-box",background:"#F8FAFC"}}/>
+                    {Number(payForm[k])>0&&(
+                      <div style={{fontSize:11,color:c,marginTop:3,fontWeight:600}}>
+                        ✍️ {w2(Number(payForm[k]))} {k==="din"?"دينار":"دولار"}
+                      </div>
+                    )}
+                  </div>
+                ))}
+
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:14}}>
+                  <div>
+                    <div style={{fontSize:12,color:"#64748B",fontWeight:600,marginBottom:5}}>التاريخ</div>
+                    <input type="date" value={payForm.date} onChange={e=>psf("date")(e.target.value)}
+                      style={{width:"100%",border:"1px solid #CBD5E1",borderRadius:9,
+                        padding:"10px",fontSize:13,outline:"none",fontFamily:"Tahoma",
+                        boxSizing:"border-box",background:"#F8FAFC"}}/>
+                  </div>
+                  <div>
+                    <div style={{fontSize:12,color:"#64748B",fontWeight:600,marginBottom:5}}>ملاحظة</div>
+                    <input placeholder="أي تفصيل..." value={payForm.note}
+                      onChange={e=>psf("note")(e.target.value)}
+                      style={{width:"100%",border:"1px solid #CBD5E1",borderRadius:9,
+                        padding:"10px",fontSize:13,outline:"none",fontFamily:"Tahoma",
+                        direction:"rtl",boxSizing:"border-box",background:"#F8FAFC"}}/>
+                  </div>
+                </div>
+
+                <button onClick={settle}
+                  disabled={!Number(payForm.din)&&!Number(payForm.dol)}
+                  style={{width:"100%",border:"none",borderRadius:10,padding:"14px",
+                    fontSize:14,fontWeight:700,fontFamily:"Tahoma",cursor:"pointer",
+                    background:Number(payForm.din)||Number(payForm.dol)
+                      ?(paying.type==="receivable"?"#16A34A":"#DC2626"):"#E2E8F0",
+                    color:Number(payForm.din)||Number(payForm.dol)?"#fff":"#94A3B8"}}>
+                  {paying.type==="receivable"
+                    ?"📥 تأكيد التحصيل وإضافة للصندوق"
+                    :"📤 تأكيد السداد وخصم من الصندوق"}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
       </div>
     </div>

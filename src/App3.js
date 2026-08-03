@@ -258,7 +258,7 @@ ${sal.note?`<div class="row"><span class="lbl">ملاحظة</span><span class="v
       din, dol, date:advForm.date, note:advForm.note,
       status:"pending", createdAt:new Date().toISOString()
     });
-    alert("✅ تم صرف السلفة — "+fNum(din)+" د.ع");
+    alert("✅ تم صرف السلفة — "+fNum(din)+(din>0?" د.ع":"")+((dol>0&&din>0)?" | ":"")+fNum(dol)+(dol>0?" $":""));
     setSelEmp(null); setTab("list");
     setAdvForm({din:"",dol:"",date:new Date().toISOString().split("T")[0],note:""});
   };
@@ -653,7 +653,10 @@ ${sal.note?`<div class="row"><span class="lbl">ملاحظة</span><span class="v
               ))}
               <div style={{marginRight:"auto",fontSize:12,color:"#64748B",
                 padding:"8px 14px",background:"#fff",borderRadius:9,border:"1px solid #E2E8F0"}}>
-                إجمالي: <strong style={{color:"#D97706"}}>{fNum(totalBaseDin)} د.ع/شهر</strong>
+                🇮🇶 <strong style={{color:"#D97706"}}>{fNum(totalBaseDin)} د.ع/شهر</strong>
+                {filtered.reduce((s,e)=>s+(e.baseDol||0),0)>0&&(
+                  <span> | 🇺🇸 <strong style={{color:"#2563EB"}}>{fNum(filtered.reduce((s,e)=>s+(e.baseDol||0),0))} $/شهر</strong></span>
+                )}
               </div>
             </div>
 
@@ -686,12 +689,12 @@ ${sal.note?`<div class="row"><span class="lbl">ملاحظة</span><span class="v
                           <div style={{display:"flex",gap:12,fontSize:12,flexWrap:"wrap"}}>
                             {(emp.baseDin||0)>0&&(
                               <span style={{color:"#D97706",fontWeight:700}}>
-                                💰 {fNum(emp.baseDin)} د.ع/شهر
+                                🇮🇶 {fNum(emp.baseDin)} د.ع/شهر
                               </span>
                             )}
                             {(emp.baseDol||0)>0&&(
                               <span style={{color:"#2563EB",fontWeight:700}}>
-                                💰 {fNum(emp.baseDol)} $/شهر
+                                🇺🇸 {fNum(emp.baseDol)} $/شهر
                               </span>
                             )}
                             {totalAdvDin>0&&(
