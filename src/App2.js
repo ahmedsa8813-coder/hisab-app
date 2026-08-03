@@ -697,6 +697,7 @@ function EmployeesPage({ funds, onBack }) {
   });
   const [salForm,   setSalForm]   = useState({
     month: new Date().toISOString().slice(0,7),
+    fund: "",
     extraDin:"0", extraDol:"0",
     deductDin:"0", deductDol:"0",
     absenceDays:"0", note:""
@@ -741,50 +742,92 @@ function EmployeesPage({ funds, onBack }) {
   };
 
   // ── صرف راتب ─────────────────────────────────────────
-  const paySalary = async () => {
-    if (!selEmp) return;
+  const calcSalary = () => {
     const extra   = Number(salForm.extraDin)||0;
     const deduct  = Number(salForm.deductDin)||0;
     const absence = Number(salForm.absenceDays)||0;
-    const dayRate = selEmp.baseDin ? Math.round(selEmp.baseDin/30) : 0;
+    const dayRate = selEmp ? Math.round((selEmp.baseDin||0)/30) : 0;
     const absAmt  = dayRate * absence;
-    const netDin  = Math.max(0, (selEmp.baseDin||0) + extra - deduct - absAmt);
-    const netDol  = selEmp.baseDol||0;
+    const netDin  = Math.max(0,(selEmp?.baseDin||0)+extra-deduct-absAmt);
+    const netDol  = selEmp?.baseDol||0;
+    return {extra,deduct,absence,dayRate,absAmt,netDin,netDol};
+  };
 
-    // التحقق من رصيد الصندوق
-    const bal = funds[selEmp.branch]||{din:0,dol:0};
-    if(netDin > bal.din){alert("⛔ رصيد صندوق "+selEmp.branch+" غير كافٍ — المتاح: "+fNum(bal.din)+" د.ع");return;}
+  const printSalarySlip = (emp, sal, fund) => {
+    const today = new Date().toISOString().split("T")[0];
+    const html = `<!DOCTYPE html><html dir="rtl"><head><meta charset="utf-8"/>
+<style>*{font-family:Tahoma}body{margin:30px;direction:rtl;max-width:420px}
+.hdr{text-align:center;border-bottom:3px solid #1E293B;padding-bottom:12px;margin-bottom:14px}
+.co{font-size:18px;font-weight:700}.ca{font-size:11px;color:#64748B}
+.title{font-size:15px;font-weight:700;color:#1E293B;margin:12px 0 10px}
+.row{display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid #F1F5F9}
+.lbl{font-size:12px;color:#64748B}.val{font-size:12px;font-weight:700;color:#1E293B}
+.tot{background:#F0FDF4;border-radius:10px;padding:14px;margin:14px 0;text-align:center}
+.footer{text-align:center;font-size:10px;color:#94A3B8;margin-top:16px;border-top:1px dashed #E2E8F0;padding-top:10px}
+</style></head><body>
+<div class="hdr"><div class="co">شركة باب المشاريع</div><div class="ca">بغداد</div></div>
+<div class="title">🧾 وثيقة صرف راتب</div>
+<div class="row"><span class="lbl">الموظف</span><span class="val">${emp.name}</span></div>
+<div class="row"><span class="lbl">الفرع</span><span class="val">${emp.branch}</span></div>
+<div class="row"><span class="lbl">الوظيفة</span><span class="val">${emp.role||""}</span></div>
+<div class="row"><span class="lbl">الشهر</span><span class="val">${sal.month}</span></div>
+<div class="row"><span class="lbl">الصندوق</span><span class="val">${fund}</span></div>
+<div class="row"><span class="lbl">الراتب الأساسي</span><span class="val">${fNum(emp.baseDin||0)} د.ع</span></div>
+${sal.extra>0?`<div class="row"><span class="lbl">بدلات إضافية</span><span class="val" style="color:#16A34A">+${fNum(sal.extra)} د.ع</span></div>`:""}
+${sal.deduct>0?`<div class="row"><span class="lbl">خصومات</span><span class="val" style="color:#DC2626">-${fNum(sal.deduct)} د.ع</span></div>`:""}
+${sal.absence>0?`<div class="row"><span class="lbl">غياب (${sal.absence} يوم)</span><span class="val" style="color:#DC2626">-${fNum(sal.absAmt)} د.ع</span></div>`:""}
+<div class="tot">
+  <div style="font-size:11px;color:#64748B;margin-bottom:4px">صافي الراتب</div>
+  <div style="font-size:26px;font-weight:700;color:#16A34A">${fNum(sal.netDin)} د.ع</div>
+  ${sal.netDol>0?`<div style="font-size:16px;font-weight:700;color:#2563EB">${fNum(sal.netDol)} $</div>`:""}
+  <div style="font-size:12px;color:#64748B;margin-top:4px">✍️ ${w2(sal.netDin)} دينار عراقي</div>
+</div>
+${sal.note?`<div class="row"><span class="lbl">ملاحظة</span><span class="val">${sal.note}</span></div>`:""}
+<div class="footer">توقيع الموظف: _______________&nbsp;&nbsp;&nbsp;توقيع المسؤول: _______________<br/>طُبع: ${today}</div>
+</body></html>`;
+    const w=window.open("","_blank","width=500,height=700");
+    if(!w){alert("السماح بالنوافذ المنبثقة");return;}
+    w.document.write(html);w.document.close();w.focus();setTimeout(()=>w.print(),600);
+  };
+
+  const paySalary = async (withPrint=false) => {
+    if (!selEmp) return;
+    const sal = calcSalary();
+    const fundId = salForm.fund || selEmp.branch;
+    const bal = funds[fundId]||{din:0,dol:0};
+
+    // التحقق من الرصيد
+    if(sal.netDin > bal.din){
+      alert("⛔ رصيد صندوق "+fundId+" غير كافٍ — المطلوب: "+fNum(sal.netDin)+" د.ع، المتاح: "+fNum(bal.din)+" د.ع");
+      return;
+    }
 
     const pw=window.prompt("🔒 صرف راتب "+selEmp.name+" — أدخل الباسورد:");
     if(!pw)return; if(pw!==PASS){alert("❌ باسورد غلط");return;}
 
-    // خصم من الصندوق
-    await setDoc(doc(db,"funds",selEmp.branch),
-      {din:bal.din-netDin, dol:Math.max(0,bal.dol-netDol)},{merge:true});
-
-    // تسجيل حركة الصندوق
+    await setDoc(doc(db,"funds",fundId),
+      {din:bal.din-sal.netDin, dol:Math.max(0,bal.dol-sal.netDol)},{merge:true});
     await addDoc(collection(db,"fund_txs"),{
-      fundId:selEmp.branch, fundLabel:selEmp.branch, type:"صرف",
-      din:netDin, dol:netDol,
+      fundId, fundLabel:fundId, type:"صرف",
+      din:sal.netDin, dol:sal.netDol,
       note:"راتب "+selEmp.name+" — "+salForm.month,
       date:salForm.month+"-01", createdAt:new Date().toISOString()
     });
-
-    // تسجيل الراتب
     await addDoc(collection(db,"salaries"),{
-      empId:selEmp.id, empName:selEmp.name, branch:selEmp.branch,
-      month:salForm.month,
+      empId:selEmp.id, empName:selEmp.name,
+      branch:selEmp.branch, role:selEmp.role||"",
+      fund:fundId, month:salForm.month,
       baseDin:selEmp.baseDin||0, baseDol:selEmp.baseDol||0,
-      extraDin:extra, deductDin:deduct,
-      absenceDays:absence, absenceAmtDin:absAmt,
-      netDin, netDol,
-      note:salForm.note,
-      createdAt:new Date().toISOString()
+      extraDin:sal.extra, deductDin:sal.deduct,
+      absenceDays:sal.absence, absenceAmtDin:sal.absAmt,
+      netDin:sal.netDin, netDol:sal.netDol,
+      note:salForm.note, createdAt:new Date().toISOString()
     });
 
-    alert("✅ تم صرف راتب "+selEmp.name+" — الصافي: "+fNum(netDin)+" د.ع");
+    if(withPrint) printSalarySlip(selEmp, {...sal, month:salForm.month, note:salForm.note}, fundId);
+
     setSelEmp(null); setTab("list");
-    setSalForm({month:new Date().toISOString().slice(0,7),
+    setSalForm({month:new Date().toISOString().slice(0,7),fund:"",
       extraDin:"0",extraDol:"0",deductDin:"0",deductDol:"0",absenceDays:"0",note:""});
   };
 
@@ -972,6 +1015,37 @@ function EmployeesPage({ funds, onBack }) {
               </div>
             </div>
 
+            {/* اختيار الصندوق */}
+            <div style={{marginBottom:12}}>
+              <div style={{fontSize:12,color:"#64748B",fontWeight:600,marginBottom:5}}>
+                الصندوق المصدر *
+              </div>
+              <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:6}}>
+                {[selEmp?.branch||"", "عام"].filter((v,i,a)=>a.indexOf(v)===i).concat(
+                  EMP_BRANCHES.filter(b=>b!==selEmp?.branch)
+                ).map(f=>{
+                  const bal=funds[f]||{din:0,dol:0};
+                  const sel=salForm.fund===f||(salForm.fund===""&&f===selEmp?.branch);
+                  const {netDin}=calcSalary();
+                  const ok=bal.din>=netDin;
+                  return (
+                    <button key={f} onClick={()=>sf("fund")(f)} style={{
+                      border:"1.5px solid "+(sel?"#1E293B":ok?"#16A34A40":"#DC262640"),
+                      borderRadius:9,padding:"8px 6px",cursor:"pointer",fontFamily:"Tahoma",
+                      background:sel?"#1E293B":ok?"#F0FDF4":"#FFF1F2",
+                      textAlign:"center"}}>
+                      <div style={{fontSize:11,fontWeight:700,color:sel?"#fff":ok?"#16A34A":"#DC2626"}}>
+                        {f==="عام"?"🏦 "+f:"🏗️ "+f}
+                      </div>
+                      <div style={{fontSize:10,color:sel?"#94A3B8":ok?"#64748B":"#DC2626"}}>
+                        {fNum(bal.din)} د.ع
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:12}}>
               <div>
                 <div style={{fontSize:12,color:"#64748B",fontWeight:600,marginBottom:5}}>الشهر</div>
@@ -1025,12 +1099,37 @@ function EmployeesPage({ funds, onBack }) {
                   padding:"10px 12px",fontSize:13,outline:"none",fontFamily:"Tahoma",
                   direction:"rtl",boxSizing:"border-box",background:"#F8FAFC"}}/>
             </div>
-            <button onClick={paySalary} style={{
-              width:"100%",border:"none",borderRadius:10,padding:"13px",
-              fontSize:14,fontWeight:700,fontFamily:"Tahoma",cursor:"pointer",
-              background:"#16A34A",color:"#fff"}}>
-              ✅ تأكيد صرف الراتب من صندوق {selEmp.branch}
-            </button>
+            {(()=>{
+              const {netDin}=calcSalary();
+              const fundId=salForm.fund||selEmp.branch;
+              const bal=funds[fundId]||{din:0,dol:0};
+              const ok=bal.din>=netDin;
+              return (
+                <>
+                  {!ok&&(
+                    <div style={{background:"#FFF1F2",borderRadius:10,padding:"10px 14px",
+                      marginBottom:10,fontSize:12,color:"#DC2626",fontWeight:600}}>
+                      ⛔ رصيد صندوق {fundId} غير كافٍ — المتاح: {fNum(bal.din)} د.ع
+                    </div>
+                  )}
+                  <div style={{display:"grid",gridTemplateColumns:"1fr auto",gap:8}}>
+                    <button onClick={()=>paySalary(false)} disabled={!ok} style={{
+                      border:"none",borderRadius:10,padding:"13px",
+                      fontSize:14,fontWeight:700,fontFamily:"Tahoma",cursor:ok?"pointer":"not-allowed",
+                      background:ok?"#16A34A":"#E2E8F0",color:ok?"#fff":"#94A3B8"}}>
+                      ✅ صرف الراتب
+                    </button>
+                    <button onClick={()=>paySalary(true)} disabled={!ok} style={{
+                      border:"1px solid "+(ok?"#16A34A":"#E2E8F0"),borderRadius:10,
+                      padding:"13px 16px",fontSize:13,fontWeight:700,fontFamily:"Tahoma",
+                      cursor:ok?"pointer":"not-allowed",background:"#fff",
+                      color:ok?"#16A34A":"#94A3B8",whiteSpace:"nowrap"}}>
+                      🖨️ صرف وطباعة
+                    </button>
+                  </div>
+                </>
+              );
+            })()}
           </div>
         )}
 
@@ -1203,6 +1302,8 @@ function ReportsPage({ funds, projects, onBack }) {
   const [fundTxs,    setFundTxs]    = useState([]);
   const [partnerTxs, setPartnerTxs] = useState([]);
   const [assets,     setAssets]     = useState([]);
+  const [rptSalaries,setRptSalaries]= useState([]);
+  const [rptEmps,    setRptEmps]    = useState([]);
 
   useEffect(()=>{
     const u1 = onSnapshot(collection(db,"project_txs"), s=>{
@@ -1217,7 +1318,13 @@ function ReportsPage({ funds, projects, onBack }) {
     const u4 = onSnapshot(collection(db,"assets"), s=>{
       setAssets(s.docs.map(d=>({id:d.id,...d.data()})));
     });
-    return ()=>{u1();u2();u3();u4();};
+    const u5 = onSnapshot(collection(db,"salaries"), s=>{
+      setRptSalaries(s.docs.map(d=>({id:d.id,...d.data()})));
+    });
+    const u6 = onSnapshot(collection(db,"employees"), s=>{
+      setRptEmps(s.docs.map(d=>({id:d.id,...d.data()})));
+    });
+    return ()=>{u1();u2();u3();u4();u5();u6();};
   },[]);
 
   const REPORT_TYPES = [
@@ -1225,6 +1332,7 @@ function ReportsPage({ funds, projects, onBack }) {
     {id:"funds",     label:"تقرير الصناديق",    icon:"💎", color:"#059669", bg:"#ECFDF5"},
     {id:"partners",  label:"تقرير الشركاء",     icon:"👥", color:"#9333EA", bg:"#FAF5FF"},
     {id:"assets",    label:"تقرير الأصول",      icon:"📦", color:"#0891B2", bg:"#ECFEFF"},
+    {id:"salaries",  label:"تقرير الرواتب",     icon:"👷", color:"#16A34A", bg:"#F0FDF4"},
     {id:"summary",   label:"التقرير الشامل",    icon:"📊", color:"#1D4ED8", bg:"#EFF6FF"},
   ];
 
@@ -1447,6 +1555,71 @@ ${HDR}
 <div class="ft"><span>شركة باب المشاريع</span><span>طُبع: ${today}</span></div>
 </body></html>`;
 
+    } else if (reportType === "salaries") {
+      let list = rptSalaries.filter(s=>{
+        if(filters.status!=="all" && s.branch!==filters.status) return false;
+        if(filters.partnerId!=="all" && s.empId!==filters.partnerId) return false;
+        if(fromDate && (s.month||"").slice(0,7)<fromDate.slice(0,7)) return false;
+        if(toDate   && (s.month||"").slice(0,7)>toDate.slice(0,7))   return false;
+        return true;
+      }).sort((a,b)=>(b.month||"").localeCompare(a.month||"")||(a.empName||"").localeCompare(b.empName||""));
+
+      const totNet  = list.reduce((s,r)=>s+(r.netDin||0),0);
+      const totBase = list.reduce((s,r)=>s+(r.baseDin||0),0);
+      const totEx   = list.reduce((s,r)=>s+(r.extraDin||0),0);
+      const totDed  = list.reduce((s,r)=>s+(r.deductDin||0),0);
+      const totAbs  = list.reduce((s,r)=>s+(r.absenceAmtDin||0),0);
+
+      let n=0;
+      const rows = list.map(r=>{
+        n++;
+        return `<tr style="background:${n%2===0?"#F8FAFC":"#fff"}">
+          <td>${n}</td>
+          <td style="text-align:right;font-weight:700">${r.empName||""}</td>
+          <td>${r.branch||""}</td>
+          <td>${r.role||""}</td>
+          <td>${r.month||""}</td>
+          <td>${r.fund||r.branch||""}</td>
+          <td style="color:#1E293B">${fNum(r.baseDin||0)} د.ع</td>
+          <td style="color:#16A34A">${(r.extraDin||0)>0?"+"+fNum(r.extraDin)+" د.ع":""}</td>
+          <td style="color:#DC2626">${(r.deductDin||0)>0?"-"+fNum(r.deductDin)+" د.ع":""}</td>
+          <td style="color:#DC2626">${(r.absenceDays||0)>0?r.absenceDays+" يوم / -"+fNum(r.absenceAmtDin||0)+" د.ع":""}</td>
+          <td style="font-weight:700;color:#16A34A">${fNum(r.netDin||0)} د.ع</td>
+        </tr>`;
+      }).join("");
+
+      html = `<!DOCTYPE html><html dir="rtl"><head><meta charset="utf-8"/>${STYLE}</head><body>
+${HDR}
+<div class="title">👷 تقرير الرواتب</div>
+<div class="info">
+  ${filters.status!=="all"?"فرع: "+filters.status+" · ":""}
+  الفترة: ${period} · ${list.length} سجل
+</div>
+<div class="sg" style="grid-template-columns:repeat(5,1fr)">
+  <div class="sb"><div class="sl">إجمالي الرواتب الأساسية</div><div class="sv" style="color:#1E293B">${fNum(totBase)} د.ع</div></div>
+  <div class="sb" style="background:#F0FDF4"><div class="sl">إجمالي البدلات</div><div class="sv" style="color:#16A34A">+${fNum(totEx)} د.ع</div></div>
+  <div class="sb" style="background:#FFF1F2"><div class="sl">إجمالي الخصومات</div><div class="sv" style="color:#DC2626">-${fNum(totDed+totAbs)} د.ع</div></div>
+  <div class="sb" style="background:#F0FDF4;border:2px solid #16A34A"><div class="sl">إجمالي الصافي</div><div class="sv" style="color:#16A34A">${fNum(totNet)} د.ع</div></div>
+  <div class="sb"><div class="sl">عدد السجلات</div><div class="sv" style="color:#0891B2">${list.length}</div></div>
+</div>
+<table>
+  <thead><tr>
+    <th>#</th><th style="text-align:right">الموظف</th><th>الفرع</th><th>الوظيفة</th>
+    <th>الشهر</th><th>الصندوق</th><th>الأساسي</th><th>بدلات</th>
+    <th>خصومات</th><th>غياب</th><th>الصافي</th>
+  </tr></thead>
+  <tbody>${rows}</tbody>
+  <tr class="tot"><td colspan="5">الإجمالي</td><td></td>
+    <td>${fNum(totBase)} د.ع</td>
+    <td style="color:#16A34A">+${fNum(totEx)} د.ع</td>
+    <td style="color:#DC2626">-${fNum(totDed)} د.ع</td>
+    <td style="color:#DC2626">-${fNum(totAbs)} د.ع</td>
+    <td style="color:#16A34A;font-weight:700">${fNum(totNet)} د.ع</td>
+  </tr>
+</table>
+<div class="ft"><span>شركة باب المشاريع</span><span>طُبع: ${today}</span></div>
+</body></html>`;
+
     } else if (reportType === "summary") {
       const fundsDin  = ALL_FUNDS.reduce((s,f)=>s+(funds[f.id]?.din||0),0);
       const fundsDol  = ALL_FUNDS.reduce((s,f)=>s+(funds[f.id]?.dol||0),0);
@@ -1633,6 +1806,34 @@ ${HDR}
                       color:filters.status===v?"#0891B2":"#64748B"
                     }}>{l}</button>
                   ))}
+                </div>
+              </div>
+            )}
+
+            {/* فلاتر خاصة بالرواتب */}
+            {reportType === "salaries" && (
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginTop:8}}>
+                <div>
+                  <div style={{fontSize:11,color:"#64748B",fontWeight:600,marginBottom:5}}>الفرع</div>
+                  <select value={filters.status} onChange={e=>sf("status")(e.target.value)}
+                    style={{width:"100%",border:"1px solid #CBD5E1",borderRadius:9,
+                      padding:"9px 12px",fontSize:13,outline:"none",fontFamily:"Tahoma",
+                      direction:"rtl",boxSizing:"border-box",background:"#F8FAFC",appearance:"none"}}>
+                    <option value="all">كل الأفرع</option>
+                    {["إشراف","ديكور","مقاولات","واجهات"].map(b=>(
+                      <option key={b} value={b}>{b}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <div style={{fontSize:11,color:"#64748B",fontWeight:600,marginBottom:5}}>الموظف</div>
+                  <select value={filters.partnerId} onChange={e=>sf("partnerId")(e.target.value)}
+                    style={{width:"100%",border:"1px solid #CBD5E1",borderRadius:9,
+                      padding:"9px 12px",fontSize:13,outline:"none",fontFamily:"Tahoma",
+                      direction:"rtl",boxSizing:"border-box",background:"#F8FAFC",appearance:"none"}}>
+                    <option value="all">كل الموظفين</option>
+                    {rptEmps.map(e=><option key={e.id} value={e.id}>{e.name} — {e.branch}</option>)}
+                  </select>
                 </div>
               </div>
             )}
