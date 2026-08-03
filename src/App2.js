@@ -119,6 +119,9 @@ export default function App2({ onBack }) {
   if (page === "expenses")
     return <ExpensesPage funds={funds} onBack={() => setPage("home")}/>;
 
+  if (page === "settings")
+    return <SettingsPage funds={funds} onBack={() => setPage("home")}/>;
+
   // الصفحة الرئيسية
   const fundsDin    = ALL_FUNDS.reduce((s,f) => s + (funds[f.id]?.din||0), 0);
   const fundsDol    = ALL_FUNDS.reduce((s,f) => s + (funds[f.id]?.dol||0), 0);
@@ -128,10 +131,11 @@ export default function App2({ onBack }) {
   const totalDol    = fundsDol + activeDol;
 
   const NAV_ITEMS = [
-    {id:"fund",    label:"الصناديق",   icon:"💎"},
-    {id:"reports", label:"التقارير",   icon:"📊"},
-    {id:"assets",  label:"الأصول",     icon:"📦"},
-    {id:"employees",label:"الموظفون",  icon:"👷"},
+    {id:"fund",      label:"الصناديق",   icon:"💎"},
+    {id:"reports",   label:"التقارير",   icon:"📊"},
+    {id:"assets",    label:"الأصول",     icon:"📦"},
+    {id:"employees", label:"الموظفون",   icon:"👷"},
+    {id:"settings",  label:"الإعدادات", icon:"⚙️"},
   ];
 
   return (
@@ -387,58 +391,7 @@ export default function App2({ onBack }) {
           </div>
         </div>
 
-        {/* زر تصفية للاختبار */}
-        <div style={{ marginTop:24, borderTop:"1px dashed #E2E8F0", paddingTop:16 }}>
-          <div style={{ fontSize:11, color:"#94A3B8", marginBottom:10, textAlign:"center" }}>
-            🔧 أدوات الاختبار والإدارة
-          </div>
-          <button onClick={async () => {
-            const pw = window.prompt("🔒 باسورد التصفية:");
-            if (!pw) return;
-            if (pw !== PASS) { alert("❌ باسورد غلط"); return; }
-            const what = window.confirm(
-              "⚠️ تصفية جميع الصناديق؟ — سيتم حذف جميع الأرصدة وسجل الحركات. هذا الإجراء لا يمكن التراجع عنه."
-            );
-            if (!what) return;
-            const ids = ["رأس_المال","عام","شركاء","إشراف","ديكور","مقاولات","واجهات",
-              "partner_إيهاب","partner_أحمد","partner_نور","partner_محمد"];
-            for (const id of ids) {
-              await setDoc(doc(db,"funds",id), { din:0, dol:0 }, { merge:true });
-            }
-            // حذف الحركات
-            const txSnap = await getDocs(collection(db,"fund_txs"));
-            for (const d of txSnap.docs) await deleteDoc(doc(db,"fund_txs",d.id));
-            const ptSnap = await getDocs(collection(db,"partner_txs"));
-            for (const d of ptSnap.docs) await deleteDoc(doc(db,"partner_txs",d.id));
-            alert("✅ تمت تصفية جميع الصناديق");
-          }} style={{
-            width:"100%", border:"1px dashed #DC2626", borderRadius:10,
-            padding:"11px", fontSize:12, fontWeight:700, fontFamily:"Tahoma",
-            background:"#FFF1F2", color:"#DC2626", cursor:"pointer" }}>
-            🗑️ تصفية جميع الصناديق (للاختبار)
-          </button>
-          <button onClick={async () => {
-            const pw = window.prompt("🔒 باسورد:");
-            if (!pw) return;
-            if (pw !== PASS) { alert("❌ باسورد غلط"); return; }
-            if (!window.confirm("حذف جميع البيانات التجريبية؟ لا يمكن التراجع.")) return;
-            const cols = ["fund_txs","partner_txs","salaries","advances",
-              "assets","asset_sales","expenses","expense_payments",
-              "opening_balances","employees"];
-            for (const col of cols) {
-              const snap = await getDocs(collection(db, col));
-              for (const d of snap.docs) await deleteDoc(doc(db, col, d.id));
-            }
-            alert("✅ تم حذف كل البيانات التجريبية");
-          }} style={{
-            width:"100%", border:"1px dashed #94A3B8", borderRadius:10,
-            padding:"11px", fontSize:12, fontWeight:700, fontFamily:"Tahoma",
-            background:"#F8FAFC", color:"#64748B", cursor:"pointer", marginTop:8 }}>
-            🗑️ حذف كل البيانات التجريبية
-          </button>
-        </div>
-
-      </div>
+</div>
     </div>
   );
 }
@@ -2016,6 +1969,369 @@ ${note?`<div class="row"><span class="lbl">ملاحظة</span><span class="val">
             </div>
           </div>
         )}
+
+      </div>
+    </div>
+  );
+}
+
+// ─── صفحة الإعدادات ──────────────────────────────────
+function SettingsPage({ funds, onBack }) {
+  const [importing, setImporting] = useState(false);
+  const [importLog, setImportLog] = useState([]);
+  const [importDone, setImportDone] = useState(false);
+
+  const log = msg => setImportLog(prev => [...prev, msg]);
+
+  // ── تصدير Excel ──────────────────────────────────────
+  const exportExcel = async () => {
+    const pw = window.prompt("🔒 باسورد:");
+    if (!pw) return;
+    if (pw !== PASS) { alert("❌ باسورد غلط"); return; }
+
+    if (!window.XLSX) {
+      await new Promise((res, rej) => {
+        const s = document.createElement("script");
+        s.src = "https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js";
+        s.onload = res; s.onerror = rej;
+        document.head.appendChild(s);
+      });
+    }
+    const XL = window.XLSX;
+    const wb = XL.utils.book_new();
+
+    const fetchCol = async col => {
+      const snap = await getDocs(collection(db, col));
+      return snap.docs.map(d => ({ id:d.id, ...d.data() }));
+    };
+
+    const fundsSnap = await getDocs(collection(db,"funds"));
+    XL.utils.book_append_sheet(wb, XL.utils.json_to_sheet(
+      fundsSnap.docs.map(d=>({ الصندوق:d.id, رصيد_الدينار:d.data().din||0, رصيد_الدولار:d.data().dol||0 }))
+    ), "الصناديق");
+
+    const ftxs = await fetchCol("fund_txs");
+    if(ftxs.length) XL.utils.book_append_sheet(wb, XL.utils.json_to_sheet(
+      ftxs.sort((a,b)=>(a.date||"").localeCompare(b.date||"")).map(t=>({
+        الصندوق:t.fundId, النوع:t.type, الدينار:t.din||0, الدولار:t.dol||0,
+        البيان:t.note||"", التاريخ:t.date||""
+      }))
+    ), "حركات_الصناديق");
+
+    const emps = await fetchCol("employees");
+    if(emps.length) XL.utils.book_append_sheet(wb, XL.utils.json_to_sheet(
+      emps.map(e=>({ الاسم:e.name, الفرع:e.branch, الوظيفة:e.role||"",
+        الراتب_دينار:e.baseDin||0, الراتب_دولار:e.baseDol||0, تاريخ_التعيين:e.hireDate||"" }))
+    ), "الموظفون");
+
+    const sals = await fetchCol("salaries");
+    if(sals.length) XL.utils.book_append_sheet(wb, XL.utils.json_to_sheet(
+      sals.sort((a,b)=>(a.month||"").localeCompare(b.month||"")).map(s=>({
+        الموظف:s.empName, الفرع:s.branch, الشهر:s.month, الأساسي:s.baseDin||0,
+        البدلات:s.extraDin||0, الخصومات:s.deductDin||0, الغياب:s.absenceDays||0,
+        الصافي:s.netDin||0, الصندوق:s.fund||s.branch
+      }))
+    ), "الرواتب");
+
+    const assets = await fetchCol("assets");
+    if(assets.length) XL.utils.book_append_sheet(wb, XL.utils.json_to_sheet(
+      assets.map(a=>({ الاسم:a.name, النوع:a.type, الصندوق:a.fund,
+        الكمية:a.qty||0, المباع:a.soldQty||0, المتبقي:a.qtyRemaining||0,
+        سعر_الوحدة:a.unitPriceDin||0, الإجمالي:a.totalDin||0, التاريخ:a.date||"" }))
+    ), "الأصول");
+
+    const exps = await fetchCol("expenses");
+    if(exps.length) XL.utils.book_append_sheet(wb, XL.utils.json_to_sheet(
+      exps.map(e=>({ الاسم:e.name, النوع:e.type, الجهة:e.party||"",
+        الصندوق:e.fund, الدينار:e.amtDin||0, الدولار:e.amtDol||0, الدورة:e.cycle }))
+    ), "المصاريف_الثابتة");
+
+    const expPays = await fetchCol("expense_payments");
+    if(expPays.length) XL.utils.book_append_sheet(wb, XL.utils.json_to_sheet(
+      expPays.sort((a,b)=>(a.date||"").localeCompare(b.date||"")).map(p=>({
+        البند:p.expenseName, الصندوق:p.fund, الدينار:p.din||0, الدولار:p.dol||0,
+        التاريخ:p.date||"", ملاحظة:p.note||""
+      }))
+    ), "مدفوعات_المصاريف");
+
+    const advs = await fetchCol("advances");
+    if(advs.length) XL.utils.book_append_sheet(wb, XL.utils.json_to_sheet(
+      advs.sort((a,b)=>(a.date||"").localeCompare(b.date||"")).map(a=>({
+        الموظف:a.empName, الفرع:a.branch, الدينار:a.din||0,
+        الدولار:a.dol||0, التاريخ:a.date||"", ملاحظة:a.note||""
+      }))
+    ), "السلف");
+
+    const today = new Date().toISOString().split("T")[0];
+    XL.writeFile(wb, "باب_المشاريع_"+today+".xlsx");
+    alert("✅ تم تصدير البيانات بنجاح");
+  };
+
+  // ── استيراد Excel ─────────────────────────────────────
+  const importExcel = async (file) => {
+    if (!file) return;
+    const pw = window.prompt("🔒 باسورد الاستيراد:");
+    if (!pw) return;
+    if (pw !== PASS) { alert("❌ باسورد غلط"); return; }
+    if (!window.confirm("سيتم استيراد البيانات من الملف. هل تريد المتابعة؟")) return;
+
+    setImporting(true);
+    setImportLog([]);
+    setImportDone(false);
+
+    try {
+      if (!window.XLSX) {
+        await new Promise((res, rej) => {
+          const s = document.createElement("script");
+          s.src = "https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js";
+          s.onload = res; s.onerror = rej;
+          document.head.appendChild(s);
+        });
+      }
+      const XL = window.XLSX;
+      const data = await file.arrayBuffer();
+      const wb = XL.read(data);
+
+      // استيراد الصناديق
+      if (wb.SheetNames.includes("الصناديق")) {
+        const rows = XL.utils.sheet_to_json(wb.Sheets["الصناديق"]);
+        for (const r of rows) {
+          if (r["الصندوق"]) {
+            await setDoc(doc(db,"funds",r["الصندوق"]),
+              { din: Number(r["رصيد_الدينار"])||0, dol: Number(r["رصيد_الدولار"])||0 },
+              { merge:true });
+          }
+        }
+        log("✅ الصناديق: تم استيراد "+rows.length+" صندوق");
+      }
+
+      // استيراد الموظفين
+      if (wb.SheetNames.includes("الموظفون")) {
+        const rows = XL.utils.sheet_to_json(wb.Sheets["الموظفون"]);
+        for (const r of rows) {
+          await addDoc(collection(db,"employees"), {
+            name: r["الاسم"]||"", branch: r["الفرع"]||"",
+            role: r["الوظيفة"]||"",
+            baseDin: Number(r["الراتب_دينار"])||0,
+            baseDol: Number(r["الراتب_دولار"])||0,
+            hireDate: String(r["تاريخ_التعيين"]||""),
+            status:"active", createdAt: new Date().toISOString()
+          });
+        }
+        log("✅ الموظفون: تم استيراد "+rows.length+" موظف");
+      }
+
+      // استيراد الأصول
+      if (wb.SheetNames.includes("الأصول")) {
+        const rows = XL.utils.sheet_to_json(wb.Sheets["الأصول"]);
+        for (const r of rows) {
+          await addDoc(collection(db,"assets"), {
+            name: r["الاسم"]||"", type: r["النوع"]||"",
+            fund: r["الصندوق"]||"",
+            qty: Number(r["الكمية"])||0,
+            soldQty: Number(r["المباع"])||0,
+            qtyRemaining: Number(r["المتبقي"])||0,
+            unitPriceDin: Number(r["سعر_الوحدة"])||0,
+            totalDin: Number(r["الإجمالي"])||0,
+            date: String(r["التاريخ"]||""),
+            status: Number(r["المتبقي"])>0?"active":"sold",
+            createdAt: new Date().toISOString()
+          });
+        }
+        log("✅ الأصول: تم استيراد "+rows.length+" أصل");
+      }
+
+      // استيراد المصاريف الثابتة
+      if (wb.SheetNames.includes("المصاريف_الثابتة")) {
+        const rows = XL.utils.sheet_to_json(wb.Sheets["المصاريف_الثابتة"]);
+        for (const r of rows) {
+          await addDoc(collection(db,"expenses"), {
+            name: r["الاسم"]||"", type: r["النوع"]||"إيجار",
+            party: r["الجهة"]||"", fund: r["الصندوق"]||"عام",
+            amtDin: Number(r["الدينار"])||0,
+            amtDol: Number(r["الدولار"])||0,
+            cycle: r["الدورة"]||"شهري",
+            dueDay:1, status:"active",
+            createdAt: new Date().toISOString()
+          });
+        }
+        log("✅ المصاريف الثابتة: تم استيراد "+rows.length+" بند");
+      }
+
+      // استيراد السلف
+      if (wb.SheetNames.includes("السلف")) {
+        const rows = XL.utils.sheet_to_json(wb.Sheets["السلف"]);
+        for (const r of rows) {
+          await addDoc(collection(db,"advances"), {
+            empName: r["الموظف"]||"", branch: r["الفرع"]||"",
+            din: Number(r["الدينار"])||0, dol: Number(r["الدولار"])||0,
+            date: String(r["التاريخ"]||""), note: r["ملاحظة"]||"",
+            status:"pending", createdAt: new Date().toISOString()
+          });
+        }
+        log("✅ السلف: تم استيراد "+rows.length+" سلفة");
+      }
+
+      setImportDone(true);
+      log("🎉 اكتمل الاستيراد بنجاح!");
+    } catch(e) {
+      log("❌ خطأ: "+e.message);
+    }
+    setImporting(false);
+  };
+
+  // ── تصفية الصناديق ───────────────────────────────────
+  const clearFunds = async () => {
+    const pw = window.prompt("🔒 باسورد التصفية:");
+    if (!pw) return;
+    if (pw !== PASS) { alert("❌ باسورد غلط"); return; }
+    if (!window.confirm("⚠️ تصفية جميع الصناديق؟ لا يمكن التراجع.")) return;
+    const ids = ["رأس_المال","عام","شركاء","إشراف","ديكور","مقاولات","واجهات",
+      "partner_إيهاب","partner_أحمد","partner_نور","partner_محمد"];
+    for (const id of ids) await setDoc(doc(db,"funds",id),{din:0,dol:0},{merge:true});
+    const txSnap = await getDocs(collection(db,"fund_txs"));
+    for (const d of txSnap.docs) await deleteDoc(doc(db,"fund_txs",d.id));
+    const ptSnap = await getDocs(collection(db,"partner_txs"));
+    for (const d of ptSnap.docs) await deleteDoc(doc(db,"partner_txs",d.id));
+    alert("✅ تمت تصفية جميع الصناديق");
+  };
+
+  const clearAll = async () => {
+    const pw = window.prompt("🔒 باسورد:");
+    if (!pw) return;
+    if (pw !== PASS) { alert("❌ باسورد غلط"); return; }
+    if (!window.confirm("حذف جميع البيانات؟ لا يمكن التراجع.")) return;
+    const cols = ["fund_txs","partner_txs","salaries","advances",
+      "assets","asset_sales","expenses","expense_payments","opening_balances","employees"];
+    for (const col of cols) {
+      const snap = await getDocs(collection(db,col));
+      for (const d of snap.docs) await deleteDoc(doc(db,col,d.id));
+    }
+    alert("✅ تم حذف كل البيانات");
+  };
+
+  return (
+    <div style={{minHeight:"100vh",background:"#F1F5F9",fontFamily:"Tahoma",direction:"rtl"}}>
+      <div style={{maxWidth:680,margin:"0 auto",padding:"22px 16px"}}>
+
+        <button onClick={onBack} style={{background:"#fff",border:"1px solid #E2E8F0",
+          borderRadius:10,padding:"8px 16px",fontSize:13,color:"#475569",cursor:"pointer",
+          marginBottom:16,fontFamily:"Tahoma",display:"flex",alignItems:"center",gap:6}}>
+          ← رجوع
+        </button>
+
+        {/* هيدر */}
+        <div style={{background:"linear-gradient(135deg,#1E293B,#334155)",
+          borderRadius:16,padding:"20px 24px",marginBottom:20}}>
+          <div style={{fontSize:18,fontWeight:700,color:"#fff",marginBottom:4}}>
+            ⚙️ الإعدادات والأدوات
+          </div>
+          <div style={{fontSize:12,color:"#94A3B8"}}>
+            إدارة البيانات، النسخ الاحتياطي، واستيراد المعلومات
+          </div>
+        </div>
+
+        {/* النسخ الاحتياطي */}
+        <div style={{background:"#fff",borderRadius:14,padding:20,
+          border:"1px solid #E2E8F0",marginBottom:14}}>
+          <div style={{fontSize:14,fontWeight:700,color:"#1E293B",marginBottom:6}}>
+            📥 النسخ الاحتياطي
+          </div>
+          <div style={{fontSize:12,color:"#64748B",marginBottom:14}}>
+            تصدير كل بيانات النظام إلى ملف Excel يمكن حفظه واستعادته لاحقاً
+          </div>
+          <button onClick={exportExcel} style={{
+            width:"100%",border:"none",borderRadius:10,padding:"13px",
+            fontSize:14,fontWeight:700,fontFamily:"Tahoma",cursor:"pointer",
+            background:"#16A34A",color:"#fff"}}>
+            📤 تصدير كل البيانات إلى Excel
+          </button>
+        </div>
+
+        {/* الاستيراد */}
+        <div style={{background:"#fff",borderRadius:14,padding:20,
+          border:"1px solid #E2E8F0",marginBottom:14}}>
+          <div style={{fontSize:14,fontWeight:700,color:"#1E293B",marginBottom:6}}>
+            📂 استيراد من Excel
+          </div>
+          <div style={{fontSize:12,color:"#64748B",marginBottom:14}}>
+            استعادة البيانات من ملف Excel سبق تصديره من النظام
+          </div>
+
+          <label style={{display:"block",border:"2px dashed #CBD5E1",borderRadius:12,
+            padding:"24px",textAlign:"center",cursor:"pointer",
+            background:"#F8FAFC",marginBottom:importing||importLog.length>0?14:0}}>
+            <input type="file" accept=".xlsx,.xls" style={{display:"none"}}
+              onChange={e=>{ if(e.target.files[0]) importExcel(e.target.files[0]); e.target.value=""; }}/>
+            <div style={{fontSize:32,marginBottom:8}}>📂</div>
+            <div style={{fontSize:13,fontWeight:600,color:"#475569",marginBottom:4}}>
+              اضغط لاختيار ملف Excel
+            </div>
+            <div style={{fontSize:11,color:"#94A3B8"}}>xlsx. أو xls.</div>
+          </label>
+
+          {importing && (
+            <div style={{textAlign:"center",padding:"12px 0",color:"#64748B",fontSize:13}}>
+              ⏳ جاري الاستيراد...
+            </div>
+          )}
+
+          {importLog.length>0 && (
+            <div style={{background:"#F8FAFC",borderRadius:10,padding:14,
+              border:"1px solid #E2E8F0"}}>
+              <div style={{fontSize:12,fontWeight:700,color:"#1E293B",marginBottom:10}}>
+                📋 سجل الاستيراد
+              </div>
+              {importLog.map((msg,i)=>(
+                <div key={i} style={{fontSize:12,color:msg.startsWith("✅")||msg.startsWith("🎉")
+                  ?"#16A34A":msg.startsWith("❌")?"#DC2626":"#64748B",
+                  padding:"4px 0",borderBottom:"1px solid #F1F5F9"}}>
+                  {msg}
+                </div>
+              ))}
+              {importDone && (
+                <button onClick={()=>{setImportLog([]);setImportDone(false);}}
+                  style={{marginTop:10,border:"none",borderRadius:8,padding:"8px 16px",
+                    fontSize:12,fontFamily:"Tahoma",background:"#1E293B",
+                    color:"#fff",cursor:"pointer"}}>
+                  ✅ إغلاق
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* أدوات الاختبار */}
+        <div style={{background:"#fff",borderRadius:14,padding:20,
+          border:"1px solid #E2E8F0",marginBottom:14}}>
+          <div style={{fontSize:14,fontWeight:700,color:"#DC2626",marginBottom:6}}>
+            🔧 أدوات الاختبار
+          </div>
+          <div style={{fontSize:12,color:"#64748B",marginBottom:14}}>
+            استخدم هذه الأدوات بحذر — لا يمكن التراجع عن الحذف
+          </div>
+          <div style={{display:"flex",flexDirection:"column",gap:8}}>
+            <button onClick={clearFunds} style={{
+              border:"1px solid #DC2626",borderRadius:10,padding:"11px",
+              fontSize:12,fontWeight:700,fontFamily:"Tahoma",
+              background:"#FFF1F2",color:"#DC2626",cursor:"pointer"}}>
+              🗑️ تصفية جميع الصناديق (تصفير الأرصدة)
+            </button>
+            <button onClick={clearAll} style={{
+              border:"1px solid #94A3B8",borderRadius:10,padding:"11px",
+              fontSize:12,fontWeight:700,fontFamily:"Tahoma",
+              background:"#F8FAFC",color:"#64748B",cursor:"pointer"}}>
+              🗑️ حذف كل البيانات التجريبية
+            </button>
+          </div>
+        </div>
+
+        {/* معلومات النظام */}
+        <div style={{background:"#F8FAFC",borderRadius:14,padding:16,
+          border:"1px solid #E2E8F0",fontSize:11,color:"#94A3B8",textAlign:"center"}}>
+          شركة باب المشاريع — نظام الحسابات الداخلي
+          <br/>Firebase: bab-projects-b7d04 · Vercel: hisab-app-ahmee.vercel.app
+        </div>
 
       </div>
     </div>
