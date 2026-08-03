@@ -66,7 +66,7 @@ export function EmployeesPage({ funds, onBack }) {
   });
   const [salForm,   setSalForm]   = useState({
     month: new Date().toISOString().slice(0,7),
-    fund: "",
+    fund: "", currency:"دينار",
     extraDin:"0", extraDol:"0",
     deductDin:"0", deductDol:"0",
     absenceDays:"0", note:""
@@ -148,11 +148,15 @@ export function EmployeesPage({ funds, onBack }) {
     const extra   = Number(salForm.extraDin)||0;
     const deduct  = Number(salForm.deductDin)||0;
     const absence = Number(salForm.absenceDays)||0;
+    const currency = salForm.currency || "دينار";
+    if (currency === "دولار") {
+      const netDol = Math.max(0,(selEmp?.baseDol||0)+(Number(salForm.extraDol)||0)-(Number(salForm.deductDol)||0));
+      return {extra:0,deduct:0,absence:0,dayRate:0,absAmt:0,netDin:0,netDol};
+    }
     const dayRate = selEmp ? Math.round((selEmp.baseDin||0)/30) : 0;
     const absAmt  = dayRate * absence;
     const netDin  = Math.max(0,(selEmp?.baseDin||0)+extra-deduct-absAmt);
-    const netDol  = selEmp?.baseDol||0;
-    return {extra,deduct,absence,dayRate,absAmt,netDin,netDol};
+    return {extra,deduct,absence,dayRate,absAmt,netDin,netDol:0};
   };
 
   const printSalarySlip = (emp, sal, fund) => {
@@ -229,7 +233,7 @@ ${sal.note?`<div class="row"><span class="lbl">ملاحظة</span><span class="v
     if(withPrint) printSalarySlip(selEmp, {...sal, month:salForm.month, note:salForm.note}, fundId);
 
     setSelEmp(null); setTab("list");
-    setSalForm({month:new Date().toISOString().slice(0,7),fund:"",
+    setSalForm({month:new Date().toISOString().slice(0,7),fund:"",currency:"دينار",
       extraDin:"0",extraDol:"0",deductDin:"0",deductDol:"0",absenceDays:"0",note:""});
   };
 
@@ -459,6 +463,35 @@ ${sal.note?`<div class="row"><span class="lbl">ملاحظة</span><span class="v
                 </div>
               );
             })()}
+
+            {/* اختيار العملة */}
+            <div style={{marginBottom:12}}>
+              <div style={{fontSize:12,color:"#64748B",fontWeight:600,marginBottom:8}}>العملة</div>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+                {[
+                  {v:"دينار",l:"🇮🇶 دينار عراقي",c:"#D97706",
+                   base:selEmp?.baseDin||0,available:(selEmp?.baseDin||0)>0},
+                  {v:"دولار",l:"🇺🇸 دولار أمريكي",c:"#2563EB",
+                   base:selEmp?.baseDol||0,available:(selEmp?.baseDol||0)>0},
+                ].map(({v,l,c,base,available})=>(
+                  <button key={v} onClick={()=>sf("currency")(v)}
+                    disabled={!available}
+                    style={{
+                      border:"2px solid "+(salForm.currency===v?c:"#E2E8F0"),
+                      borderRadius:10,padding:"10px",cursor:available?"pointer":"not-allowed",
+                      fontFamily:"Tahoma",textAlign:"center",
+                      background:salForm.currency===v?c+"18":"#fff",
+                      opacity:available?1:0.5}}>
+                    <div style={{fontSize:12,fontWeight:700,color:salForm.currency===v?c:"#64748B"}}>
+                      {l}
+                    </div>
+                    <div style={{fontSize:11,color:"#94A3B8",marginTop:2}}>
+                      {fNum(base)} {v==="دينار"?"د.ع":"$"} / شهر
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
 
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:12}}>
               <div>
@@ -701,6 +734,94 @@ ${sal.note?`<div class="row"><span class="lbl">ملاحظة</span><span class="v
               </div>
             )}
           </>
+        )}
+
+        {/* نافذة التعديل */}
+        {editEmp && (
+          <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.55)",
+            zIndex:999,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
+            <div style={{background:"#fff",borderRadius:20,width:"100%",maxWidth:440,
+              maxHeight:"90vh",overflow:"auto",boxShadow:"0 24px 80px rgba(0,0,0,0.35)"}}>
+              <div style={{padding:"16px 20px",borderBottom:"1px solid #E2E8F0",
+                display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                <div style={{fontSize:15,fontWeight:700,color:"#1E293B"}}>✏️ تعديل — {editEmp.name}</div>
+                <button onClick={()=>setEditEmp(null)} style={{background:"none",
+                  border:"none",fontSize:20,cursor:"pointer",color:"#64748B"}}>✕</button>
+              </div>
+              <div style={{padding:"18px 20px"}}>
+                <div style={{marginBottom:12}}>
+                  <div style={{fontSize:12,color:"#64748B",fontWeight:600,marginBottom:5}}>الاسم</div>
+                  <input value={editForm.name||""} onChange={e=>ef2("name")(e.target.value)}
+                    style={{width:"100%",border:"1px solid #CBD5E1",borderRadius:9,
+                      padding:"10px 13px",fontSize:14,outline:"none",fontFamily:"Tahoma",
+                      direction:"rtl",boxSizing:"border-box",background:"#F8FAFC"}}/>
+                </div>
+                <div style={{marginBottom:12}}>
+                  <div style={{fontSize:12,color:"#64748B",fontWeight:600,marginBottom:5}}>الفرع / الصندوق</div>
+                  <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:6}}>
+                    {EMP_BRANCHES.map(b=>(
+                      <button key={b} onClick={()=>ef2("branch")(b)} style={{
+                        border:"1.5px solid "+(editForm.branch===b?"#1E293B":"#E2E8F0"),
+                        borderRadius:8,padding:"7px 4px",cursor:"pointer",fontFamily:"Tahoma",
+                        fontSize:11,fontWeight:600,
+                        background:editForm.branch===b?"#1E293B":"#fff",
+                        color:editForm.branch===b?"#fff":"#64748B"}}>{b}</button>
+                    ))}
+                  </div>
+                </div>
+                <div style={{marginBottom:12}}>
+                  <div style={{fontSize:12,color:"#64748B",fontWeight:600,marginBottom:5}}>الوظيفة</div>
+                  <select value={editForm.role||""} onChange={e=>ef2("role")(e.target.value)}
+                    style={{width:"100%",border:"1px solid #CBD5E1",borderRadius:9,
+                      padding:"10px 12px",fontSize:13,outline:"none",fontFamily:"Tahoma",
+                      direction:"rtl",boxSizing:"border-box",background:"#F8FAFC",appearance:"none"}}>
+                    {EMP_ROLES.map(r=><option key={r} value={r}>{r}</option>)}
+                  </select>
+                </div>
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:12}}>
+                  {[{k:"baseDin",l:"راتب دينار",c:"#D97706"},{k:"baseDol",l:"راتب دولار",c:"#2563EB"}].map(({k,l,c})=>(
+                    <div key={k}>
+                      <div style={{fontSize:12,color:c,fontWeight:600,marginBottom:5}}>{l}</div>
+                      <input type="text" inputMode="numeric" placeholder="٠"
+                        value={editForm[k]||""}
+                        onChange={e=>ef2(k)(e.target.value.replace(/[^0-9]/g,""))}
+                        style={{width:"100%",border:"1px solid #CBD5E1",borderRadius:9,
+                          padding:"10px 13px",fontSize:14,outline:"none",fontFamily:"Tahoma",
+                          direction:"rtl",boxSizing:"border-box",background:"#F8FAFC"}}/>
+                      {Number(editForm[k])>0&&(
+                        <div style={{fontSize:10,color:c,marginTop:2}}>
+                          ✍️ {w2(Number(editForm[k]))} {k==="baseDin"?"دينار":"دولار"}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:14}}>
+                  <div>
+                    <div style={{fontSize:12,color:"#64748B",fontWeight:600,marginBottom:5}}>تاريخ التعيين</div>
+                    <input type="date" value={editForm.hireDate||""}
+                      onChange={e=>ef2("hireDate")(e.target.value)}
+                      style={{width:"100%",border:"1px solid #CBD5E1",borderRadius:9,
+                        padding:"10px",fontSize:13,outline:"none",fontFamily:"Tahoma",
+                        boxSizing:"border-box",background:"#F8FAFC"}}/>
+                  </div>
+                  <div>
+                    <div style={{fontSize:12,color:"#64748B",fontWeight:600,marginBottom:5}}>ملاحظة</div>
+                    <input value={editForm.note||""} onChange={e=>ef2("note")(e.target.value)}
+                      style={{width:"100%",border:"1px solid #CBD5E1",borderRadius:9,
+                        padding:"10px",fontSize:13,outline:"none",fontFamily:"Tahoma",
+                        direction:"rtl",boxSizing:"border-box",background:"#F8FAFC"}}/>
+                  </div>
+                </div>
+                <button onClick={saveEdit} style={{
+                  width:"100%",border:"none",borderRadius:10,padding:"13px",
+                  fontSize:14,fontWeight:700,fontFamily:"Tahoma",cursor:"pointer",
+                  background:"#1E293B",color:"#fff"}}>
+                  ✅ حفظ التعديل
+                </button>
+              </div>
+            </div>
+          </div>
         )}
 
       </div>
@@ -1387,3 +1508,4 @@ ${HDR}
     </div>
   );
 }
+

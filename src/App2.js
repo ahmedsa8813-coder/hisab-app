@@ -521,20 +521,30 @@ td{padding:7px 6px;font-size:10px;text-align:center;border-bottom:1px solid #F1F
             <span style={{ fontSize:28 }}>{fund.icon}</span>
             <span style={{ fontSize:18, fontWeight:700, color:fund.color }}>{fund.label}</span>
           </div>
-          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:8 }}>
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, marginBottom:8 }}>
             <div style={{ background:"#fff", borderRadius:10, padding:"10px", textAlign:"center" }}>
-              <div style={{ fontSize:9, color:"#64748B", marginBottom:3 }}>↓ إيداعات دينار</div>
-              <div style={{ fontSize:13, fontWeight:700, color:"#16A34A" }}>{fNum(totIn.din)} د.ع</div>
+              <div style={{ fontSize:9, color:"#64748B", marginBottom:3 }}>↓ إيداعات</div>
+              <div style={{ fontSize:12, fontWeight:700, color:"#16A34A" }}>{fNum(totIn.din)} د.ع</div>
+              {totIn.dol>0&&<div style={{ fontSize:11, fontWeight:700, color:"#16A34A" }}>{fNum(totIn.dol)} $</div>}
             </div>
             <div style={{ background:"#fff", borderRadius:10, padding:"10px", textAlign:"center" }}>
-              <div style={{ fontSize:9, color:"#64748B", marginBottom:3 }}>↑ صرف دينار</div>
-              <div style={{ fontSize:13, fontWeight:700, color:"#DC2626" }}>{fNum(totOut.din)} د.ع</div>
+              <div style={{ fontSize:9, color:"#64748B", marginBottom:3 }}>↑ صرف</div>
+              <div style={{ fontSize:12, fontWeight:700, color:"#DC2626" }}>{fNum(totOut.din)} د.ع</div>
+              {totOut.dol>0&&<div style={{ fontSize:11, fontWeight:700, color:"#DC2626" }}>{fNum(totOut.dol)} $</div>}
             </div>
-            <div style={{ background:"#fff", borderRadius:10, padding:"10px", textAlign:"center",
+          </div>
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
+            <div style={{ background:fund.bg, borderRadius:10, padding:"12px", textAlign:"center",
               border:"2px solid "+fund.color }}>
-              <div style={{ fontSize:9, color:"#64748B", marginBottom:3 }}>⚖️ الرصيد</div>
-              <div style={{ fontSize:14, fontWeight:700, color:fund.color }}>{fNum(bal.din)} د.ع</div>
-              {bal.dol>0&&<div style={{ fontSize:11, fontWeight:700, color:"#2563EB" }}>{fNum(bal.dol)} $</div>}
+              <div style={{ fontSize:9, color:"#64748B", marginBottom:3 }}>⚖️ رصيد الدينار</div>
+              <div style={{ fontSize:18, fontWeight:700, color:fund.color }}>{fNum(bal.din)}</div>
+              <div style={{ fontSize:10, color:"#94A3B8" }}>د.ع</div>
+            </div>
+            <div style={{ background:"#EFF6FF", borderRadius:10, padding:"12px", textAlign:"center",
+              border:"2px solid #2563EB" }}>
+              <div style={{ fontSize:9, color:"#64748B", marginBottom:3 }}>⚖️ رصيد الدولار</div>
+              <div style={{ fontSize:18, fontWeight:700, color:"#2563EB" }}>{fNum(bal.dol)}</div>
+              <div style={{ fontSize:10, color:"#94A3B8" }}>$</div>
             </div>
           </div>
         </div>
