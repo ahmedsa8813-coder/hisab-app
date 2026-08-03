@@ -36,8 +36,13 @@ function w2(n) {
 const PASS = "1234";
 
 const ALL_FUNDS = [
-  {id:"رأس_المال"},{id:"عام"},{id:"شركاء"},
-  {id:"إشراف"},{id:"ديكور"},{id:"مقاولات"},{id:"واجهات"},
+  {id:"رأس_المال", label:"رأس المال",     icon:"💼"},
+  {id:"عام",       label:"الصندوق العام", icon:"🏦"},
+  {id:"شركاء",     label:"أرباح الشركاء",icon:"👥"},
+  {id:"إشراف",    label:"إشراف",          icon:"👷"},
+  {id:"ديكور",    label:"ديكور",           icon:"🎨"},
+  {id:"مقاولات",  label:"مقاولات",        icon:"🏗️"},
+  {id:"واجهات",   label:"واجهات",          icon:"🏢"},
 ];
 
 
@@ -689,6 +694,7 @@ export function ReportsPage({ funds, projects, onBack }) {
       setRptEmps(s.docs.map(d=>({id:d.id,...d.data()})));
     });
     return ()=>{u1();u2();u3();u4();u5();u6();};
+    // ملاحظة: advances مو محتاج هنا
   },[]);
 
   const REPORT_TYPES = [
@@ -943,8 +949,7 @@ ${HDR}
         let n=0;
         const rows = bList.map(e=>{
           n++;
-          const empAdv = advances?.filter?.(a=>a.empId===e.id&&a.status==="pending")||[];
-          const advTotal = empAdv.reduce((s,a)=>s+(a.din||0),0);
+          const advTotal = 0; // السلف تُعرض في تقرير الرواتب
           return `<tr style="background:${n%2===0?"#F8FAFC":"#fff"}">
             <td>${n}</td>
             <td style="text-align:right;font-weight:700">${e.name||""}</td>
