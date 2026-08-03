@@ -116,6 +116,9 @@ export default function App2({ onBack }) {
   if (page === "opening")
     return <OpeningBalancesPage funds={funds} onBack={() => setPage("home")}/>;
 
+  if (page === "expenses")
+    return <ExpensesPage funds={funds} onBack={() => setPage("home")}/>;
+
   // الصفحة الرئيسية
   const fundsDin    = ALL_FUNDS.reduce((s,f) => s + (funds[f.id]?.din||0), 0);
   const fundsDol    = ALL_FUNDS.reduce((s,f) => s + (funds[f.id]?.dol||0), 0);
@@ -1455,6 +1458,441 @@ function OpeningBalancesPage({ funds, onBack }) {
                 </div>
               </div>
             ))}
+          </div>
+        )}
+
+      </div>
+    </div>
+  );
+}
+
+// ─── صفحة المصاريف الثابتة ───────────────────────────
+const EXPENSE_FUNDS  = ["عام","إشراف","ديكور","مقاولات","واجهات"];
+const EXPENSE_CYCLES = ["شهري","ربع سنوي","نصف سنوي","سنوي","مرة واحدة"];
+const EXPENSE_TYPES  = ["إيجار","اشتراك","صيانة","خدمات","أخرى"];
+
+function ExpensesPage({ funds, onBack }) {
+  const [expenses,  setExpenses]  = useState([]);
+  const [payments,  setPayments]  = useState([]);
+  const [showAdd,   setShowAdd]   = useState(false);
+  const [payTarget, setPayTarget] = useState(null);
+  const [payForm,   setPayForm]   = useState({
+    din:"", dol:"", date: new Date().toISOString().split("T")[0], note:""
+  });
+  const [form, setForm] = useState({
+    name:"", type:"إيجار", party:"", fund:"عام",
+    amtDin:"", amtDol:"", cycle:"شهري",
+    dueDay:"1", note:""
+  });
+  const sf  = k => v => setForm(f=>({...f,[k]:v}));
+  const psf = k => v => setPayForm(f=>({...f,[k]:v}));
+
+  useEffect(()=>{
+    const u1=onSnapshot(collection(db,"expenses"), s=>{
+      const list=s.docs.map(d=>({id:d.id,...d.data()}));
+      list.sort((a,b)=>(a.name||"").localeCompare(b.name||""));
+      setExpenses(list);
+    });
+    const u2=onSnapshot(collection(db,"expense_payments"), s=>{
+      setPayments(s.docs.map(d=>({id:d.id,...d.data()})));
+    });
+    return()=>{u1();u2();};
+  },[]);
+
+  const addExpense = async () => {
+    if(!form.name.trim()||(!Number(form.amtDin)&&!Number(form.amtDol))) return;
+    const pw=window.prompt("🔒 أدخل الباسورد:");
+    if(!pw)return; if(pw!==PASS){alert("❌ باسورد غلط");return;}
+    await addDoc(collection(db,"expenses"),{
+      name:form.name.trim(), type:form.type, party:form.party.trim(),
+      fund:form.fund, amtDin:Number(form.amtDin)||0, amtDol:Number(form.amtDol)||0,
+      cycle:form.cycle, dueDay:Number(form.dueDay)||1,
+      note:form.note.trim(), status:"active",
+      createdAt:new Date().toISOString()
+    });
+    setForm({name:"",type:"إيجار",party:"",fund:"عام",
+      amtDin:"",amtDol:"",cycle:"شهري",dueDay:"1",note:""});
+    setShowAdd(false);
+  };
+
+  const doPay = async (withPrint=false) => {
+    if(!payTarget) return;
+    const din=Number(payForm.din)||(payTarget.amtDin||0);
+    const dol=Number(payForm.dol)||(payTarget.amtDol||0);
+    const bal=funds[payTarget.fund]||{din:0,dol:0};
+    if(din>bal.din){alert("⛔ رصيد صندوق "+payTarget.fund+" غير كافٍ\nالمتاح: "+fNum(bal.din)+" د.ع");return;}
+    const pw=window.prompt("🔒 أدخل الباسورد:");
+    if(!pw)return; if(pw!==PASS){alert("❌ باسورد غلط");return;}
+
+    await setDoc(doc(db,"funds",payTarget.fund),
+      {din:bal.din-din,dol:Math.max(0,bal.dol-dol)},{merge:true});
+    await addDoc(collection(db,"fund_txs"),{
+      fundId:payTarget.fund, fundLabel:payTarget.fund, type:"صرف",
+      din, dol, note:payTarget.name+" ("+payTarget.cycle+")",
+      date:payForm.date, createdAt:new Date().toISOString()
+    });
+    const payDoc = await addDoc(collection(db,"expense_payments"),{
+      expenseId:payTarget.id, expenseName:payTarget.name,
+      expenseType:payTarget.type, party:payTarget.party||"",
+      fund:payTarget.fund, cycle:payTarget.cycle,
+      din, dol, date:payForm.date,
+      note:payForm.note, createdAt:new Date().toISOString()
+    });
+
+    if(withPrint) printReceipt(payTarget, din, dol, payForm.date, payForm.note);
+    setPayTarget(null);
+    setPayForm({din:"",dol:"",date:new Date().toISOString().split("T")[0],note:""});
+  };
+
+  const printReceipt = (exp, din, dol, date, note) => {
+    const html=`<!DOCTYPE html><html dir="rtl"><head><meta charset="utf-8"/>
+<style>*{font-family:Tahoma}body{margin:30px;direction:rtl;max-width:420px}
+.hdr{text-align:center;border-bottom:3px solid #DC2626;padding-bottom:12px;margin-bottom:14px}
+.co{font-size:18px;font-weight:700}.ca{font-size:11px;color:#64748B}
+.title{font-size:15px;font-weight:700;color:#DC2626;margin:12px 0 10px}
+.amount{font-size:28px;font-weight:700;color:#DC2626;text-align:center;margin:14px 0}
+.row{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #F1F5F9}
+.lbl{font-size:12px;color:#64748B}.val{font-size:12px;font-weight:700}
+.footer{text-align:center;font-size:10px;color:#94A3B8;margin-top:16px;
+  border-top:1px dashed #E2E8F0;padding-top:10px}
+</style></head><body>
+<div class="hdr"><div class="co">شركة باب المشاريع</div><div class="ca">بغداد</div></div>
+<div class="title">🏠 إيصال دفع — ${exp.type}</div>
+<div class="amount">${din>0?fNum(din)+" د.ع":""}${din>0&&dol>0?" | ":""} ${dol>0?fNum(dol)+" $":""}</div>
+${din>0?`<div style="text-align:center;font-size:12px;color:#64748B;margin-bottom:10px">✍️ ${w2(din)} دينار عراقي</div>`:""}
+<div class="row"><span class="lbl">البند</span><span class="val">${exp.name}</span></div>
+<div class="row"><span class="lbl">الجهة</span><span class="val">${exp.party||"—"}</span></div>
+<div class="row"><span class="lbl">الصندوق</span><span class="val">${exp.fund}</span></div>
+<div class="row"><span class="lbl">الدورة</span><span class="val">${exp.cycle}</span></div>
+<div class="row"><span class="lbl">التاريخ</span><span class="val">${date}</span></div>
+${note?`<div class="row"><span class="lbl">ملاحظة</span><span class="val">${note}</span></div>`:""}
+<div class="footer">
+  توقيع المستلم: _______________&nbsp;&nbsp;&nbsp;توقيع المسؤول: _______________<br/>
+  شركة باب المشاريع — طُبع: ${new Date().toISOString().split("T")[0]}
+</div>
+</body></html>`;
+    const w=window.open("","_blank","width=500,height=650");
+    if(!w){alert("السماح بالنوافذ المنبثقة");return;}
+    w.document.write(html);w.document.close();w.focus();setTimeout(()=>w.print(),600);
+  };
+
+  const totalMonthlyDin = expenses
+    .filter(e=>e.status==="active"&&e.cycle==="شهري")
+    .reduce((s,e)=>s+(e.amtDin||0),0);
+
+  const getLastPayment = id => payments
+    .filter(p=>p.expenseId===id)
+    .sort((a,b)=>(b.date||"").localeCompare(a.date||""))[0];
+
+  return (
+    <div style={{minHeight:"100vh",background:"#F1F5F9",fontFamily:"Tahoma",direction:"rtl"}}>
+      <div style={{maxWidth:700,margin:"0 auto",padding:"22px 16px"}}>
+
+        <button onClick={onBack} style={{background:"#fff",border:"1px solid #E2E8F0",
+          borderRadius:10,padding:"8px 16px",fontSize:13,color:"#475569",cursor:"pointer",
+          marginBottom:16,fontFamily:"Tahoma",display:"flex",alignItems:"center",gap:6}}>
+          ← رجوع
+        </button>
+
+        {/* هيدر */}
+        <div style={{background:"linear-gradient(135deg,#DC2626,#EF4444)",
+          borderRadius:16,padding:"20px 24px",marginBottom:16}}>
+          <div style={{fontSize:18,fontWeight:700,color:"#fff",marginBottom:12}}>
+            🏠 المصاريف الثابتة
+          </div>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:10}}>
+            <div style={{background:"rgba(255,255,255,0.15)",borderRadius:10,
+              padding:"12px",textAlign:"center"}}>
+              <div style={{fontSize:10,color:"#FCA5A5",marginBottom:3}}>عدد البنود</div>
+              <div style={{fontSize:22,fontWeight:700,color:"#fff"}}>{expenses.length}</div>
+            </div>
+            <div style={{background:"rgba(255,255,255,0.15)",borderRadius:10,
+              padding:"12px",textAlign:"center"}}>
+              <div style={{fontSize:10,color:"#FCA5A5",marginBottom:3}}>الإيجارات الشهرية</div>
+              <div style={{fontSize:16,fontWeight:700,color:"#fff"}}>{fNum(totalMonthlyDin)}</div>
+              <div style={{fontSize:10,color:"#FCA5A5"}}>د.ع/شهر</div>
+            </div>
+            <div style={{background:"rgba(255,255,255,0.15)",borderRadius:10,
+              padding:"12px",textAlign:"center"}}>
+              <div style={{fontSize:10,color:"#FCA5A5",marginBottom:3}}>إجمالي المدفوعات</div>
+              <div style={{fontSize:16,fontWeight:700,color:"#fff"}}>{fNum(payments.reduce((s,p)=>s+(p.din||0),0))}</div>
+              <div style={{fontSize:10,color:"#FCA5A5"}}>د.ع</div>
+            </div>
+          </div>
+        </div>
+
+        {/* زر إضافة */}
+        <button onClick={()=>setShowAdd(v=>!v)} style={{
+          width:"100%",border:"none",borderRadius:12,padding:"13px",
+          fontSize:14,fontWeight:700,fontFamily:"Tahoma",marginBottom:14,
+          background:showAdd?"#475569":"#DC2626",color:"#fff",cursor:"pointer"}}>
+          {showAdd?"✕ إلغاء":"+ إضافة مصروف ثابت"}
+        </button>
+
+        {/* فورم الإضافة */}
+        {showAdd && (
+          <div style={{background:"#fff",borderRadius:14,padding:20,
+            border:"1px solid #E2E8F0",marginBottom:14}}>
+            <div style={{fontSize:14,fontWeight:700,color:"#1E293B",marginBottom:16}}>
+              + مصروف ثابت جديد
+            </div>
+
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:12}}>
+              <div>
+                <div style={{fontSize:12,color:"#64748B",fontWeight:600,marginBottom:5}}>الاسم *</div>
+                <input placeholder="مثال: إيجار مكتب..." value={form.name}
+                  onChange={e=>sf("name")(e.target.value)}
+                  style={{width:"100%",border:"1px solid #CBD5E1",borderRadius:9,
+                    padding:"10px 13px",fontSize:14,outline:"none",fontFamily:"Tahoma",
+                    direction:"rtl",boxSizing:"border-box",background:"#F8FAFC"}}/>
+              </div>
+              <div>
+                <div style={{fontSize:12,color:"#64748B",fontWeight:600,marginBottom:5}}>الجهة / المالك</div>
+                <input placeholder="اسم صاحب العقار أو الشركة..." value={form.party}
+                  onChange={e=>sf("party")(e.target.value)}
+                  style={{width:"100%",border:"1px solid #CBD5E1",borderRadius:9,
+                    padding:"10px 13px",fontSize:14,outline:"none",fontFamily:"Tahoma",
+                    direction:"rtl",boxSizing:"border-box",background:"#F8FAFC"}}/>
+              </div>
+            </div>
+
+            {/* النوع */}
+            <div style={{marginBottom:12}}>
+              <div style={{fontSize:12,color:"#64748B",fontWeight:600,marginBottom:5}}>النوع</div>
+              <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:6}}>
+                {EXPENSE_TYPES.map(t=>(
+                  <button key={t} onClick={()=>sf("type")(t)} style={{
+                    border:"1.5px solid "+(form.type===t?"#DC2626":"#E2E8F0"),
+                    borderRadius:8,padding:"7px 4px",cursor:"pointer",fontFamily:"Tahoma",
+                    fontSize:11,fontWeight:600,
+                    background:form.type===t?"#FFF1F2":"#fff",
+                    color:form.type===t?"#DC2626":"#64748B"}}>{t}</button>
+                ))}
+              </div>
+            </div>
+
+            {/* المبلغ */}
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:12}}>
+              {[{k:"amtDin",l:"المبلغ دينار",c:"#D97706"},{k:"amtDol",l:"المبلغ دولار",c:"#2563EB"}].map(({k,l,c})=>(
+                <div key={k}>
+                  <div style={{fontSize:12,color:c,fontWeight:600,marginBottom:5}}>{l}</div>
+                  <input type="text" inputMode="numeric" placeholder="٠" value={form[k]}
+                    onChange={e=>sf(k)(e.target.value.replace(/[^0-9]/g,""))}
+                    style={{width:"100%",border:"1px solid #CBD5E1",borderRadius:9,
+                      padding:"10px 13px",fontSize:14,outline:"none",fontFamily:"Tahoma",
+                      direction:"rtl",boxSizing:"border-box",background:"#F8FAFC"}}/>
+                  {Number(form[k])>0&&(
+                    <div style={{fontSize:11,color:c,marginTop:3}}>
+                      ✍️ {w2(Number(form[k]))} {k==="amtDin"?"دينار":"دولار"}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            {/* الصندوق والدورة */}
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10,marginBottom:14}}>
+              <div>
+                <div style={{fontSize:12,color:"#64748B",fontWeight:600,marginBottom:5}}>الصندوق</div>
+                <select value={form.fund} onChange={e=>sf("fund")(e.target.value)}
+                  style={{width:"100%",border:"1px solid #CBD5E1",borderRadius:9,
+                    padding:"10px",fontSize:13,outline:"none",fontFamily:"Tahoma",
+                    direction:"rtl",boxSizing:"border-box",background:"#F8FAFC",appearance:"none"}}>
+                  {EXPENSE_FUNDS.map(f=><option key={f} value={f}>{f}</option>)}
+                </select>
+              </div>
+              <div>
+                <div style={{fontSize:12,color:"#64748B",fontWeight:600,marginBottom:5}}>الدورة</div>
+                <select value={form.cycle} onChange={e=>sf("cycle")(e.target.value)}
+                  style={{width:"100%",border:"1px solid #CBD5E1",borderRadius:9,
+                    padding:"10px",fontSize:13,outline:"none",fontFamily:"Tahoma",
+                    direction:"rtl",boxSizing:"border-box",background:"#F8FAFC",appearance:"none"}}>
+                  {EXPENSE_CYCLES.map(c=><option key={c} value={c}>{c}</option>)}
+                </select>
+              </div>
+              <div>
+                <div style={{fontSize:12,color:"#64748B",fontWeight:600,marginBottom:5}}>
+                  يوم الاستحقاق
+                </div>
+                <input type="text" inputMode="numeric" placeholder="1" value={form.dueDay}
+                  onChange={e=>sf("dueDay")(e.target.value.replace(/[^0-9]/g,""))}
+                  style={{width:"100%",border:"1px solid #CBD5E1",borderRadius:9,
+                    padding:"10px",fontSize:14,outline:"none",fontFamily:"Tahoma",
+                    direction:"rtl",boxSizing:"border-box",background:"#F8FAFC",textAlign:"center"}}/>
+              </div>
+            </div>
+
+            <button onClick={addExpense}
+              disabled={!form.name.trim()||(!Number(form.amtDin)&&!Number(form.amtDol))}
+              style={{width:"100%",border:"none",borderRadius:10,padding:"13px",
+                fontSize:14,fontWeight:700,fontFamily:"Tahoma",cursor:"pointer",
+                background:form.name.trim()&&(Number(form.amtDin)||Number(form.amtDol))?"#DC2626":"#E2E8F0",
+                color:form.name.trim()&&(Number(form.amtDin)||Number(form.amtDol))?"#fff":"#94A3B8"}}>
+              ✅ تسجيل المصروف الثابت
+            </button>
+          </div>
+        )}
+
+        {/* قائمة المصاريف */}
+        {expenses.length===0 ? (
+          <div style={{background:"#fff",borderRadius:14,padding:30,
+            textAlign:"center",color:"#94A3B8",border:"1px solid #E2E8F0"}}>
+            <div style={{fontSize:40,marginBottom:8}}>🏠</div>
+            <div>ما في مصاريف ثابتة مسجّلة</div>
+          </div>
+        ) : expenses.map(exp=>{
+          const lastPay = getLastPayment(exp.id);
+          const expPays = payments.filter(p=>p.expenseId===exp.id);
+          const totalPaid = expPays.reduce((s,p)=>s+(p.din||0),0);
+          const bal = funds[exp.fund]||{din:0,dol:0};
+          const canPay = bal.din>=(exp.amtDin||0);
+          return (
+            <div key={exp.id} style={{background:"#fff",borderRadius:14,
+              padding:"16px 18px",marginBottom:10,border:"1px solid #E2E8F0",
+              borderRight:"5px solid #DC2626"}}>
+              <div style={{display:"grid",gridTemplateColumns:"1fr auto",
+                gap:12,alignItems:"start",marginBottom:10}}>
+                <div>
+                  <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4}}>
+                    <span style={{fontSize:15,fontWeight:700,color:"#1E293B"}}>{exp.name}</span>
+                    <span style={{fontSize:11,color:"#DC2626",background:"#FFF1F2",
+                      borderRadius:20,padding:"2px 10px",fontWeight:600}}>{exp.type}</span>
+                    <span style={{fontSize:11,color:"#64748B",background:"#F1F5F9",
+                      borderRadius:20,padding:"2px 10px"}}>{exp.cycle}</span>
+                  </div>
+                  <div style={{fontSize:11,color:"#64748B",marginBottom:4}}>
+                    {exp.party&&"👤 "+exp.party+" · "}
+                    🏦 {exp.fund} · 📅 يوم {exp.dueDay} من كل {exp.cycle==="شهري"?"شهر":"فترة"}
+                  </div>
+                  <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+                    {(exp.amtDin||0)>0&&(
+                      <span style={{fontSize:12,fontWeight:700,color:"#DC2626"}}>
+                        {fNum(exp.amtDin)} د.ع
+                      </span>
+                    )}
+                    {(exp.amtDol||0)>0&&(
+                      <span style={{fontSize:12,fontWeight:700,color:"#2563EB"}}>
+                        {fNum(exp.amtDol)} $
+                      </span>
+                    )}
+                    {totalPaid>0&&(
+                      <span style={{fontSize:11,color:"#64748B"}}>
+                        | إجمالي المدفوع: {fNum(totalPaid)} د.ع
+                      </span>
+                    )}
+                  </div>
+                  {lastPay&&(
+                    <div style={{fontSize:11,color:"#16A34A",marginTop:4}}>
+                      ✅ آخر دفعة: {lastPay.date}
+                    </div>
+                  )}
+                </div>
+                <div style={{display:"flex",flexDirection:"column",gap:6}}>
+                  <button onClick={()=>{
+                    setPayTarget(exp);
+                    setPayForm({
+                      din:String(exp.amtDin||""),
+                      dol:String(exp.amtDol||""),
+                      date:new Date().toISOString().split("T")[0],note:""
+                    });
+                  }} style={{
+                    background:"#FFF1F2",border:"1.5px solid "+(canPay?"#DC2626":"#94A3B8"),
+                    borderRadius:9,padding:"8px 14px",cursor:"pointer",
+                    fontSize:12,fontFamily:"Tahoma",fontWeight:700,
+                    color:canPay?"#DC2626":"#94A3B8"}}>
+                    💸 دفع
+                  </button>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+
+        {/* نافذة الدفع */}
+        {payTarget && (
+          <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.55)",
+            zIndex:999,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
+            <div style={{background:"#fff",borderRadius:20,width:"100%",maxWidth:420,
+              boxShadow:"0 24px 80px rgba(0,0,0,0.35)"}}>
+              <div style={{padding:"16px 20px",borderBottom:"1px solid #E2E8F0",
+                display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                <div style={{fontSize:15,fontWeight:700,color:"#DC2626"}}>
+                  💸 دفع — {payTarget.name}
+                </div>
+                <button onClick={()=>setPayTarget(null)} style={{background:"none",
+                  border:"none",fontSize:20,cursor:"pointer",color:"#64748B"}}>✕</button>
+              </div>
+              <div style={{padding:"18px 20px"}}>
+                {/* معلومات */}
+                <div style={{background:"#FFF1F2",borderRadius:10,padding:12,marginBottom:16,fontSize:12}}>
+                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+                    <div>
+                      <div style={{color:"#64748B",marginBottom:2}}>المبلغ المعتاد</div>
+                      <div style={{fontWeight:700,color:"#DC2626"}}>{fNum(payTarget.amtDin||0)} د.ع</div>
+                    </div>
+                    <div>
+                      <div style={{color:"#64748B",marginBottom:2}}>رصيد {payTarget.fund}</div>
+                      <div style={{fontWeight:700,
+                        color:(funds[payTarget.fund]?.din||0)>=(payTarget.amtDin||0)?"#16A34A":"#DC2626"}}>
+                        {fNum(funds[payTarget.fund]?.din||0)} د.ع
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {[{k:"din",l:"المبلغ دينار",c:"#DC2626"},{k:"dol",l:"المبلغ دولار",c:"#2563EB"}].map(({k,l,c})=>(
+                  <div key={k} style={{marginBottom:12}}>
+                    <div style={{fontSize:12,color:c,fontWeight:600,marginBottom:5}}>{l}</div>
+                    <input type="text" inputMode="numeric" placeholder="٠" value={payForm[k]}
+                      onChange={e=>psf(k)(e.target.value.replace(/[^0-9]/g,""))}
+                      style={{width:"100%",border:"1px solid #CBD5E1",borderRadius:9,
+                        padding:"11px 13px",fontSize:14,outline:"none",fontFamily:"Tahoma",
+                        direction:"rtl",boxSizing:"border-box",background:"#F8FAFC"}}/>
+                    {Number(payForm[k])>0&&(
+                      <div style={{fontSize:11,color:c,marginTop:3}}>
+                        ✍️ {w2(Number(payForm[k]))} {k==="din"?"دينار":"دولار"}
+                      </div>
+                    )}
+                  </div>
+                ))}
+
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:14}}>
+                  <div>
+                    <div style={{fontSize:12,color:"#64748B",fontWeight:600,marginBottom:5}}>التاريخ</div>
+                    <input type="date" value={payForm.date} onChange={e=>psf("date")(e.target.value)}
+                      style={{width:"100%",border:"1px solid #CBD5E1",borderRadius:9,
+                        padding:"10px",fontSize:13,outline:"none",fontFamily:"Tahoma",
+                        boxSizing:"border-box",background:"#F8FAFC"}}/>
+                  </div>
+                  <div>
+                    <div style={{fontSize:12,color:"#64748B",fontWeight:600,marginBottom:5}}>ملاحظة</div>
+                    <input placeholder="شهر، فترة..." value={payForm.note}
+                      onChange={e=>psf("note")(e.target.value)}
+                      style={{width:"100%",border:"1px solid #CBD5E1",borderRadius:9,
+                        padding:"10px",fontSize:13,outline:"none",fontFamily:"Tahoma",
+                        direction:"rtl",boxSizing:"border-box",background:"#F8FAFC"}}/>
+                  </div>
+                </div>
+
+                <div style={{display:"grid",gridTemplateColumns:"1fr auto",gap:8}}>
+                  <button onClick={()=>doPay(false)}
+                    disabled={!Number(payForm.din)&&!Number(payForm.dol)}
+                    style={{border:"none",borderRadius:10,padding:"13px",
+                      fontSize:14,fontWeight:700,fontFamily:"Tahoma",cursor:"pointer",
+                      background:Number(payForm.din)||Number(payForm.dol)?"#DC2626":"#E2E8F0",
+                      color:Number(payForm.din)||Number(payForm.dol)?"#fff":"#94A3B8"}}>
+                    ✅ تأكيد الدفع
+                  </button>
+                  <button onClick={()=>doPay(true)}
+                    disabled={!Number(payForm.din)&&!Number(payForm.dol)}
+                    style={{border:"1px solid #DC2626",borderRadius:10,padding:"13px 16px",
+                      fontSize:13,fontWeight:700,fontFamily:"Tahoma",cursor:"pointer",
+                      background:"#fff",color:"#DC2626",whiteSpace:"nowrap"}}>
+                    🖨️ دفع وطباعة
+                  </button>
+                </div>
+              </div>
+            </div>
           </div>
         )}
 
