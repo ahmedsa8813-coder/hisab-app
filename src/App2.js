@@ -146,79 +146,53 @@ export default function App2({ onBack }) {
     {id:"settings",  label:"الإعدادات", icon:"⚙️"},
   ];
 
+  // Navigation groups
+  const NAV_GROUPS = [
+    {
+      title:"الصناديق", icon:"💎",
+      items:[
+        ...MAIN_FUNDS.map(f=>({id:"fund_"+f.id,label:f.label,icon:f.icon,fund:f})),
+        ...DEPT_FUNDS.map(f=>({id:"fund_"+f.id,label:f.label,icon:f.icon,fund:f})),
+      ]
+    },
+    {
+      title:"الإدارة", icon:"📋",
+      items:[
+        {id:"employees",    label:"الموظفون",          icon:"👷"},
+        {id:"debts",        label:"الذمم المالية",      icon:"💳"},
+        {id:"expenses",     label:"المصاريف الثابتة",  icon:"🏠"},
+        {id:"assets",       label:"الأصول الثابتة",    icon:"📦"},
+        {id:"opening",      label:"الأرصدة الافتتاحية",icon:"🏁"},
+      ]
+    },
+    {
+      title:"التقارير", icon:"📊",
+      items:[
+        {id:"reports",          label:"التقارير العامة",    icon:"📊"},
+        {id:"financial_reports",label:"الميزانية والأرباح", icon:"📈"},
+      ]
+    },
+    {
+      title:"الإعدادات", icon:"⚙️",
+      items:[
+        {id:"settings", label:"الإعدادات والنسخ الاحتياطي", icon:"⚙️"},
+      ]
+    },
+  ];
+
   return (
-    <div style={{ minHeight:"100vh", background:"#F1F5F9",
-      fontFamily:"Tahoma", direction:"rtl", display:"flex" }}>
+    <div style={{ minHeight:"100vh", fontFamily:"Tahoma",
+      direction:"rtl", display:"flex", background:"#F1F5F9" }}>
 
-      {/* ─── سايدبار ─── */}
-      <div style={{ width:230, minHeight:"100vh", background:"#1E293B",
-        display:"flex", flexDirection:"column", flexShrink:0,
-        position:"sticky", top:0, height:"100vh" }}>
-        <div style={{ padding:"24px 20px", borderBottom:"1px solid #334155" }}>
-          <div style={{ fontSize:16, fontWeight:700, color:"#fff" }}>🏢 باب المشاريع</div>
-          <div style={{ fontSize:10, color:"#64748B", marginTop:2 }}>نظام الحسابات الداخلي</div>
-        </div>
-        <div style={{ padding:"16px 20px", borderBottom:"1px solid #334155" }}>
-          <div style={{ fontSize:9, color:"#64748B", marginBottom:8 }}>الجرد الكلي</div>
-          <div style={{ fontSize:18, fontWeight:700, color:"#F59E0B" }}>
-            {fNum(totalDin)} <span style={{fontSize:11,fontWeight:400,color:"#94A3B8"}}>د.ع</span>
-          </div>
-          <div style={{ fontSize:18, fontWeight:700, color:"#60A5FA", marginTop:4 }}>
-            {fNum(totalDol)} <span style={{fontSize:11,fontWeight:400,color:"#64748B"}}>$</span>
-          </div>
-          <div style={{ marginTop:10, borderTop:"1px solid #334155", paddingTop:10 }}>
-            <div style={{ display:"flex", justifyContent:"space-between",
-              fontSize:10, color:"#64748B", marginBottom:4 }}>
-              <span>💎 الصناديق</span>
-              <span style={{color:"#94A3B8"}}>{fNum(fundsDin)} د.ع</span>
-            </div>
-            <div style={{ display:"flex", justifyContent:"space-between",
-              fontSize:10, color:"#64748B" }}>
-              <span>🏗️ مشاريع ({projects.filter(p=>p.status==="active").length})</span>
-              <span style={{color:"#94A3B8"}}>{fNum(activeDin)} د.ع</span>
-            </div>
-          </div>
-        </div>
-        <div style={{ padding:"12px", flex:1 }}>
-          {NAV_ITEMS.map(n=>(
-            <button key={n.id}
-              onClick={()=>n.id==="fund"?null:setPage(n.id)}
-              style={{ width:"100%", background:"transparent", border:"none",
-                borderRadius:10, padding:"11px 14px", cursor:"pointer",
-                fontFamily:"Tahoma", textAlign:"right", display:"flex",
-                alignItems:"center", gap:10, marginBottom:4, color:"#CBD5E1",
-                fontSize:13, fontWeight:600 }}
-              onMouseEnter={e=>e.currentTarget.style.background="rgba(255,255,255,0.08)"}
-              onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
-              <span>{n.icon}</span><span>{n.label}</span>
-            </button>
-          ))}
-        </div>
-        <div style={{ padding:"0 12px 20px" }}>
-          <button onClick={onBack} style={{ width:"100%",
-            background:"rgba(255,255,255,0.05)", border:"1px solid #334155",
-            borderRadius:10, padding:"10px 14px", cursor:"pointer",
-            fontFamily:"Tahoma", color:"#94A3B8", fontSize:12,
-            display:"flex", alignItems:"center", gap:8 }}>
-            <span>←</span><span>رجوع للرئيسية</span>
-          </button>
-        </div>
-      </div>
+      {/* ─── المحتوى (يسار) ─── */}
+      <div style={{ flex:1, overflow:"auto", padding:"28px 28px 28px 20px" }}>
 
-      {/* ─── المحتوى ─── */}
-      <div style={{ flex:1, padding:"28px 32px", overflow:"auto" }}>
-
+        {/* هيدر */}
         <div style={{ marginBottom:24 }}>
-          <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:4 }}>
-            <h1 style={{ margin:0, fontSize:22, fontWeight:700, color:"#1E293B" }}>
-              لوحة الحسابات
-            </h1>
-            <span style={{ fontSize:11, background:"#2563EB", color:"#fff",
-              borderRadius:20, padding:"3px 12px", fontWeight:700, fontFamily:"Tahoma" }}>
-              v2.1 ✅
-            </span>
+          <div style={{ fontSize:22, fontWeight:700, color:"#0F172A" }}>
+            لوحة الحسابات
           </div>
-          <div style={{ fontSize:12, color:"#64748B" }}>
+          <div style={{ fontSize:12, color:"#64748B", marginTop:3 }}>
             {new Date().toLocaleDateString("ar-IQ",{weekday:"long",year:"numeric",month:"long",day:"numeric"})}
           </div>
         </div>
@@ -366,51 +340,113 @@ export default function App2({ onBack }) {
           </div>
         </div>
 
-        {/* روابط سريعة */}
-        <div>
-          <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:14 }}>
-            <div style={{ width:4, height:20, background:"#7C3AED", borderRadius:99 }}/>
-            <span style={{ fontSize:14, fontWeight:700, color:"#475569" }}>أقسام أخرى</span>
+      </div>
+
+      {/* ─── السايدبار الأيمن ─── */}
+      <div style={{ width:260, minHeight:"100vh", background:"#0F172A",
+        display:"flex", flexDirection:"column", flexShrink:0,
+        position:"sticky", top:0, height:"100vh", overflowY:"auto" }}>
+
+        {/* الشعار */}
+        <div style={{ padding:"20px 16px 14px", borderBottom:"1px solid #1E293B" }}>
+          <div style={{ fontSize:17, fontWeight:700, color:"#fff", marginBottom:2 }}>
+            🏢 باب المشاريع
           </div>
-          <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:14 }}>
-            {[
-              {pg:"reports",   icon:"📊", label:"التقارير",
-                desc:"تقارير مالية شاملة", color:"#7C3AED"},
-              {pg:"assets",    icon:"📦", label:"الأصول الثابتة",
-                desc:assets.filter(a=>(a.qtyRemaining||0)>0).length+" صنف نشط", color:"#0891B2"},
-              {pg:"expenses",  icon:"🏠", label:"المصاريف الثابتة",
-                desc:"إيجارات واشتراكات", color:"#DC2626"},
-              {pg:"employees", icon:"👷", label:"الموظفون",
-                desc:employees.length+" موظف مسجل", color:"#0284C7"},
-              {pg:"opening",   icon:"🏁", label:"الأرصدة الافتتاحية",
-                desc:"رصيد بداية الصناديق", color:"#475569"},
-              {pg:"debts",     icon:"💳", label:"الذمم المالية",
-                desc:"طالبة ومطلوبة", color:"#7C2D12"},
-              {pg:"financial_reports", icon:"📈", label:"التقارير المالية",
-                desc:"ميزانية + أرباح وخسائر", color:"#0F172A"},
-            ].map(n=>(
-              <button key={n.pg} onClick={()=>setPage(n.pg)}
-                style={{ background:"#fff", border:"1px solid #E2E8F0",
-                  borderTop:"3px solid "+n.color, borderRadius:16,
-                  padding:"20px", cursor:"pointer", fontFamily:"Tahoma", textAlign:"right",
-                  boxShadow:"0 1px 4px rgba(0,0,0,0.04)", transition:"box-shadow 0.2s" }}
-                onMouseEnter={e=>e.currentTarget.style.boxShadow="0 6px 24px rgba(0,0,0,0.1)"}
-                onMouseLeave={e=>e.currentTarget.style.boxShadow="0 1px 4px rgba(0,0,0,0.04)"}>
-                <div style={{ display:"flex", justifyContent:"space-between",
-                  alignItems:"flex-start", marginBottom:10 }}>
-                  <span style={{ fontSize:11, color:n.color, fontWeight:600 }}>فتح ←</span>
-                  <span style={{ fontSize:28 }}>{n.icon}</span>
-                </div>
-                <div style={{ fontSize:15, fontWeight:700, color:"#1E293B", marginBottom:4 }}>
-                  {n.label}
-                </div>
-                <div style={{ fontSize:11, color:"#94A3B8" }}>{n.desc}</div>
-              </button>
-            ))}
+          <div style={{ fontSize:10, color:"#475569" }}>نظام الحسابات الداخلي</div>
+        </div>
+
+        {/* الجرد الكلي */}
+        <div style={{ margin:"12px 12px 4px", background:"#1E293B",
+          borderRadius:12, padding:"12px 14px" }}>
+          <div style={{ fontSize:9, color:"#475569", fontWeight:700,
+            marginBottom:8, letterSpacing:1 }}>💰 الجرد الكلي</div>
+          <div style={{ display:"flex", justifyContent:"space-between",
+            alignItems:"center", marginBottom:4 }}>
+            <span style={{ fontSize:10, color:"#475569" }}>د.ع</span>
+            <span style={{ fontSize:16, fontWeight:700, color:"#F59E0B" }}>{fNum(totalDin)}</span>
+          </div>
+          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+            <span style={{ fontSize:10, color:"#475569" }}>$</span>
+            <span style={{ fontSize:16, fontWeight:700, color:"#60A5FA" }}>{fNum(totalDol)}</span>
           </div>
         </div>
 
-</div>
+        {/* القوائم المجمعة */}
+        <div style={{ flex:1, padding:"8px" }}>
+          {[
+            {
+              title:"💎 الصناديق", items:[
+                ...MAIN_FUNDS.map(f=>({label:f.label,icon:f.icon,fund:f,sub:fNum(funds[f.id]?.din||0)+" د.ع"})),
+                ...DEPT_FUNDS.map(f=>({label:f.label,icon:f.icon,fund:f,sub:fNum(funds[f.id]?.din||0)+" د.ع"})),
+              ]
+            },
+            {
+              title:"📋 الإدارة", items:[
+                {label:"الموظفون",           icon:"👷", pg:"employees", sub:employees.length+" موظف"},
+                {label:"الذمم المالية",      icon:"💳", pg:"debts",     sub:"طالبة ومطلوبة"},
+                {label:"المصاريف الثابتة",  icon:"🏠", pg:"expenses",  sub:"إيجارات"},
+                {label:"الأصول الثابتة",    icon:"📦", pg:"assets",    sub:assets.filter(a=>(a.qtyRemaining||0)>0).length+" صنف"},
+                {label:"الأرصدة الافتتاحية",icon:"🏁", pg:"opening",   sub:"رصيد البداية"},
+              ]
+            },
+            {
+              title:"📊 التقارير", items:[
+                {label:"التقارير العامة",    icon:"📊", pg:"reports",           sub:""},
+                {label:"الميزانية والأرباح", icon:"📈", pg:"financial_reports", sub:""},
+              ]
+            },
+            {
+              title:"⚙️ الإعدادات", items:[
+                {label:"الإعدادات والنسخ",  icon:"⚙️", pg:"settings", sub:""},
+              ]
+            },
+          ].map((group,gi)=>(
+            <div key={gi} style={{ marginBottom:4 }}>
+              <div style={{ fontSize:9, color:"#334155", fontWeight:700,
+                padding:"10px 10px 4px", letterSpacing:1 }}>
+                {group.title}
+              </div>
+              {group.items.map((item,ii)=>(
+                <button key={ii}
+                  onClick={()=>{
+                    if(item.fund){setSelFund(item.fund);setPage("fund");}
+                    else if(item.pg) setPage(item.pg);
+                  }}
+                  style={{ width:"100%", background:"transparent", border:"none",
+                    borderRadius:8, padding:"8px 10px", cursor:"pointer",
+                    fontFamily:"Tahoma", textAlign:"right", display:"flex",
+                    alignItems:"center", gap:8, marginBottom:1,
+                    color:"#94A3B8", fontSize:12 }}
+                  onMouseEnter={e=>{
+                    e.currentTarget.style.background="#1E293B";
+                    e.currentTarget.style.color="#F1F5F9";
+                  }}
+                  onMouseLeave={e=>{
+                    e.currentTarget.style.background="transparent";
+                    e.currentTarget.style.color="#94A3B8";
+                  }}>
+                  <span style={{fontSize:14,flexShrink:0}}>{item.icon}</span>
+                  <span style={{flex:1,fontWeight:500}}>{item.label}</span>
+                  {item.sub&&<span style={{fontSize:9,color:"#334155",whiteSpace:"nowrap"}}>{item.sub}</span>}
+                </button>
+              ))}
+            </div>
+          ))}
+        </div>
+
+        {/* زر الرجوع */}
+        <div style={{ padding:"10px 12px 18px" }}>
+          <button onClick={onBack} style={{ width:"100%",
+            background:"#1E293B", border:"1px solid #334155",
+            borderRadius:10, padding:"11px", cursor:"pointer",
+            fontFamily:"Tahoma", color:"#64748B", fontSize:12,
+            display:"flex", alignItems:"center", justifyContent:"center", gap:8 }}>
+            ← رجوع للمشاريع
+          </button>
+        </div>
+
+      </div>
+
     </div>
   );
 }
@@ -1205,4 +1241,3 @@ td{padding:7px 6px;font-size:10px;text-align:center;border-bottom:1px solid #F1F
     </div>
   );
 }
-
