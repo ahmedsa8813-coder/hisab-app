@@ -47,7 +47,7 @@ const ALL_FUNDS = [
 
 
 // ─── نظام الرواتب والموظفين ──────────────────────────
-const EMP_BRANCHES = ["إشراف","ديكور","مقاولات","واجهات"];
+const EMP_BRANCHES = ["إشراف","ديكور","مقاولات","واجهات","عام"];
 const EMP_ROLES    = ["مهندس","مشرف","فني","عامل","سائق","إداري","أخرى"];
 
 export function EmployeesPage({ funds, onBack }) {
@@ -74,6 +74,8 @@ export function EmployeesPage({ funds, onBack }) {
   const [advForm,   setAdvForm]   = useState({
     din:"", dol:"", date: new Date().toISOString().split("T")[0], note:""
   });
+  const [editEmp,   setEditEmp]   = useState(null);
+  const [editForm,  setEditForm]  = useState({});
 
   const ef  = k => v => setEmpForm(f=>({...f,[k]:v}));
   const sf  = k => v => setSalForm(f=>({...f,[k]:v}));
@@ -93,6 +95,37 @@ export function EmployeesPage({ funds, onBack }) {
     });
     return()=>{u1();u2();u3();};
   },[]);
+
+  // ── تعديل موظف ───────────────────────────────────────
+  const openEdit = async (emp) => {
+    const pw = window.prompt("🔒 أدخل الباسورد للتعديل:");
+    if (!pw) return;
+    if (pw !== PASS) { alert("❌ باسورد غلط"); return; }
+    setEditEmp(emp);
+    setEditForm({
+      name: emp.name||"", branch: emp.branch||"إشراف",
+      role: emp.role||"عامل",
+      baseDin: String(emp.baseDin||""), baseDol: String(emp.baseDol||""),
+      hireDate: emp.hireDate||"", note: emp.note||""
+    });
+  };
+
+  const saveEdit = async () => {
+    if (!editEmp||!editForm.name.trim()) return;
+    await updateDoc(doc(db,"employees",editEmp.id),{
+      name: editForm.name.trim(),
+      branch: editForm.branch,
+      role: editForm.role,
+      baseDin: Number(editForm.baseDin)||0,
+      baseDol: Number(editForm.baseDol)||0,
+      hireDate: editForm.hireDate,
+      note: editForm.note.trim(),
+    });
+    setEditEmp(null);
+    setEditForm({});
+  };
+
+  const ef2 = k => v => setEditForm(f=>({...f,[k]:v}));
 
   // ── إضافة موظف ──────────────────────────────────────
   const addEmployee = async () => {
@@ -162,7 +195,7 @@ ${sal.note?`<div class="row"><span class="lbl">ملاحظة</span><span class="v
   const paySalary = async (withPrint=false) => {
     if (!selEmp) return;
     const sal = calcSalary();
-    const fundId = salForm.fund || selEmp.branch;
+    const fundId = selEmp.branch; // مثبّت على صندوق الموظف
     const bal = funds[fundId]||{din:0,dol:0};
 
     // التحقق من الرصيد
@@ -384,36 +417,48 @@ ${sal.note?`<div class="row"><span class="lbl">ملاحظة</span><span class="v
               </div>
             </div>
 
-            {/* اختيار الصندوق */}
-            <div style={{marginBottom:12}}>
-              <div style={{fontSize:12,color:"#64748B",fontWeight:600,marginBottom:5}}>
-                الصندوق المصدر *
-              </div>
-              <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:6}}>
-                {[selEmp?.branch||"", "عام"].filter((v,i,a)=>a.indexOf(v)===i).concat(
-                  EMP_BRANCHES.filter(b=>b!==selEmp?.branch)
-                ).map(f=>{
-                  const bal=funds[f]||{din:0,dol:0};
-                  const sel=salForm.fund===f||(salForm.fund===""&&f===selEmp?.branch);
-                  const {netDin}=calcSalary();
-                  const ok=bal.din>=netDin;
-                  return (
-                    <button key={f} onClick={()=>sf("fund")(f)} style={{
-                      border:"1.5px solid "+(sel?"#1E293B":ok?"#16A34A40":"#DC262640"),
-                      borderRadius:9,padding:"8px 6px",cursor:"pointer",fontFamily:"Tahoma",
-                      background:sel?"#1E293B":ok?"#F0FDF4":"#FFF1F2",
-                      textAlign:"center"}}>
-                      <div style={{fontSize:11,fontWeight:700,color:sel?"#fff":ok?"#16A34A":"#DC2626"}}>
-                        {f==="عام"?"🏦 "+f:"🏗️ "+f}
+            {/* الصندوق المخصص للموظف */}
+            {(()=>{
+              const fundId = selEmp?.branch||"";
+              const bal = funds[fundId]||{din:0,dol:0};
+              const {netDin} = calcSalary();
+              const ok = bal.din >= netDin;
+              return (
+                <div style={{marginBottom:12}}>
+                  <div style={{fontSize:12,color:"#64748B",fontWeight:600,marginBottom:8}}>
+                    الصندوق المصدر
+                  </div>
+                  <div style={{borderRadius:10,padding:"12px 14px",
+                    background:ok?"#F0FDF4":"#FFF1F2",
+                    border:"2px solid "+(ok?"#16A34A":"#DC2626")}}>
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                      <div>
+                        <div style={{fontSize:13,fontWeight:700,
+                          color:ok?"#16A34A":"#DC2626"}}>
+                          {fundId==="عام"?"🏦":"🏗️"} صندوق {fundId}
+                        </div>
+                        <div style={{fontSize:11,color:"#64748B",marginTop:2}}>
+                          الرصيد المتاح: {fNum(bal.din)} د.ع
+                        </div>
                       </div>
-                      <div style={{fontSize:10,color:sel?"#94A3B8":ok?"#64748B":"#DC2626"}}>
-                        {fNum(bal.din)} د.ع
+                      <div style={{textAlign:"left"}}>
+                        <div style={{fontSize:11,color:"#64748B"}}>المطلوب</div>
+                        <div style={{fontSize:14,fontWeight:700,
+                          color:ok?"#16A34A":"#DC2626"}}>{fNum(netDin)} د.ع</div>
                       </div>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
+                    </div>
+                    {!ok&&(
+                      <div style={{marginTop:8,fontSize:11,color:"#DC2626",fontWeight:600}}>
+                        ⛔ الرصيد غير كافٍ — العجز: {fNum(netDin-bal.din)} د.ع
+                      </div>
+                    )}
+                  </div>
+                  <div style={{fontSize:11,color:"#94A3B8",marginTop:5}}>
+                    🔒 الصندوق مثبّت على صندوق {fundId} — لا يمكن الصرف من صندوق آخر
+                  </div>
+                </div>
+              );
+            })()}
 
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:12}}>
               <div>
@@ -629,18 +674,24 @@ ${sal.note?`<div class="row"><span class="lbl">ملاحظة</span><span class="v
                             <span style={{color:"#94A3B8"}}>📅 {emp.hireDate}</span>
                           </div>
                         </div>
-                        <div style={{display:"flex",gap:8}}>
+                        <div style={{display:"flex",gap:6}}>
                           <button onClick={()=>{setSelEmp(emp);setTab("salary");}} style={{
                             background:"#F0FDF4",border:"1px solid #16A34A",
-                            borderRadius:9,padding:"7px 14px",cursor:"pointer",
+                            borderRadius:9,padding:"7px 12px",cursor:"pointer",
                             fontSize:12,fontFamily:"Tahoma",fontWeight:700,color:"#16A34A"}}>
                             💰 راتب
                           </button>
                           <button onClick={()=>{setSelEmp(emp);setTab("advance");}} style={{
                             background:"#FFF7ED",border:"1px solid #F97316",
-                            borderRadius:9,padding:"7px 14px",cursor:"pointer",
+                            borderRadius:9,padding:"7px 12px",cursor:"pointer",
                             fontSize:12,fontFamily:"Tahoma",fontWeight:700,color:"#F97316"}}>
                             📤 سلفة
+                          </button>
+                          <button onClick={()=>openEdit(emp)} style={{
+                            background:"#F1F5F9",border:"1px solid #94A3B8",
+                            borderRadius:9,padding:"7px 12px",cursor:"pointer",
+                            fontSize:12,fontFamily:"Tahoma",fontWeight:700,color:"#475569"}}>
+                            ✏️
                           </button>
                         </div>
                       </div>
