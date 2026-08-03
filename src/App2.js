@@ -387,6 +387,57 @@ export default function App2({ onBack }) {
           </div>
         </div>
 
+        {/* زر تصفية للاختبار */}
+        <div style={{ marginTop:24, borderTop:"1px dashed #E2E8F0", paddingTop:16 }}>
+          <div style={{ fontSize:11, color:"#94A3B8", marginBottom:10, textAlign:"center" }}>
+            🔧 أدوات الاختبار والإدارة
+          </div>
+          <button onClick={async () => {
+            const pw = window.prompt("🔒 باسورد التصفية:");
+            if (!pw) return;
+            if (pw !== PASS) { alert("❌ باسورد غلط"); return; }
+            const what = window.confirm(
+              "⚠️ تصفية جميع الصناديق؟ — سيتم حذف جميع الأرصدة وسجل الحركات. هذا الإجراء لا يمكن التراجع عنه."
+            );
+            if (!what) return;
+            const ids = ["رأس_المال","عام","شركاء","إشراف","ديكور","مقاولات","واجهات",
+              "partner_إيهاب","partner_أحمد","partner_نور","partner_محمد"];
+            for (const id of ids) {
+              await setDoc(doc(db,"funds",id), { din:0, dol:0 }, { merge:true });
+            }
+            // حذف الحركات
+            const txSnap = await getDocs(collection(db,"fund_txs"));
+            for (const d of txSnap.docs) await deleteDoc(doc(db,"fund_txs",d.id));
+            const ptSnap = await getDocs(collection(db,"partner_txs"));
+            for (const d of ptSnap.docs) await deleteDoc(doc(db,"partner_txs",d.id));
+            alert("✅ تمت تصفية جميع الصناديق");
+          }} style={{
+            width:"100%", border:"1px dashed #DC2626", borderRadius:10,
+            padding:"11px", fontSize:12, fontWeight:700, fontFamily:"Tahoma",
+            background:"#FFF1F2", color:"#DC2626", cursor:"pointer" }}>
+            🗑️ تصفية جميع الصناديق (للاختبار)
+          </button>
+          <button onClick={async () => {
+            const pw = window.prompt("🔒 باسورد:");
+            if (!pw) return;
+            if (pw !== PASS) { alert("❌ باسورد غلط"); return; }
+            if (!window.confirm("حذف جميع البيانات التجريبية؟ لا يمكن التراجع.")) return;
+            const cols = ["fund_txs","partner_txs","salaries","advances",
+              "assets","asset_sales","expenses","expense_payments",
+              "opening_balances","employees"];
+            for (const col of cols) {
+              const snap = await getDocs(collection(db, col));
+              for (const d of snap.docs) await deleteDoc(doc(db, col, d.id));
+            }
+            alert("✅ تم حذف كل البيانات التجريبية");
+          }} style={{
+            width:"100%", border:"1px dashed #94A3B8", borderRadius:10,
+            padding:"11px", fontSize:12, fontWeight:700, fontFamily:"Tahoma",
+            background:"#F8FAFC", color:"#64748B", cursor:"pointer", marginTop:8 }}>
+            🗑️ حذف كل البيانات التجريبية
+          </button>
+        </div>
+
       </div>
     </div>
   );
