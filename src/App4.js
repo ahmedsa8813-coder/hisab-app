@@ -1559,13 +1559,28 @@ export function SettingsPage({ funds, onBack }) {
     if (!pw) return;
     if (pw !== PASS) { alert("❌ باسورد غلط"); return; }
     if (!window.confirm("حذف جميع البيانات؟ لا يمكن التراجع.")) return;
-    const cols = ["fund_txs","partner_txs","salaries","advances",
-      "assets","asset_sales","expenses","expense_payments","opening_balances","employees"];
+    const cols = ["fund_txs","partner_txs","salaries","advances","assets","asset_sales",
+      "expenses","expense_payments","opening_balances","employees",
+      "internal_loans","project_loans","debts"];
     for (const col of cols) {
       const snap = await getDocs(collection(db,col));
       for (const d of snap.docs) await deleteDoc(doc(db,col,d.id));
     }
     alert("✅ تم حذف كل البيانات");
+  };
+
+  const clearDebts = async () => {
+    const pw = window.prompt("🔒 باسورد:");
+    if (!pw) return;
+    if (pw !== PASS) { alert("❌ باسورد غلط"); return; }
+    if (!window.confirm("تصفية كل الديون؟ لا يمكن التراجع.")) return;
+    const d1 = await getDocs(collection(db,"debts"));
+    for (const d of d1.docs) await deleteDoc(doc(db,"debts",d.id));
+    const d2 = await getDocs(collection(db,"internal_loans"));
+    for (const d of d2.docs) await deleteDoc(doc(db,"internal_loans",d.id));
+    const d3 = await getDocs(collection(db,"project_loans"));
+    for (const d of d3.docs) await deleteDoc(doc(db,"project_loans",d.id));
+    alert("✅ تمت تصفية كل الديون (داخلية وخارجية)");
   };
 
   return (
@@ -1680,6 +1695,12 @@ export function SettingsPage({ funds, onBack }) {
               fontSize:12,fontWeight:700,fontFamily:"Tahoma",
               background:"#F8FAFC",color:"#64748B",cursor:"pointer"}}>
               🗑️ حذف كل البيانات التجريبية
+            </button>
+            <button onClick={clearDebts} style={{
+              border:"1px solid #F97316",borderRadius:10,padding:"11px",
+              fontSize:12,fontWeight:700,fontFamily:"Tahoma",
+              background:"#FFF7ED",color:"#F97316",cursor:"pointer",marginTop:4}}>
+              🗑️ تصفية كل الديون الداخلية والخارجية
             </button>
           </div>
         </div>
