@@ -1853,19 +1853,27 @@ ${note?`<div class="row"><span class="lbl">ملاحظة</span><span class="val">
                   )}
                 </div>
                 <div style={{display:"flex",flexDirection:"column",gap:6}}>
-                  <button onClick={()=>{
-                    setPayTarget(exp);
-                    setPayForm({
-                      din:String(exp.amtDin||""),
-                      dol:String(exp.amtDol||""),
-                      date:new Date().toISOString().split("T")[0],note:""
-                    });
-                  }} style={{
-                    background:"#FFF1F2",border:"1.5px solid "+(canPay?"#DC2626":"#94A3B8"),
-                    borderRadius:9,padding:"8px 14px",cursor:"pointer",
-                    fontSize:12,fontFamily:"Tahoma",fontWeight:700,
-                    color:canPay?"#DC2626":"#94A3B8"}}>
-                    💸 دفع
+                  <button
+                    onClick={()=>{
+                      if (!canPay) return;
+                      setPayTarget(exp);
+                      setPayForm({
+                        din:String(exp.amtDin||""),
+                        dol:String(exp.amtDol||""),
+                        date:new Date().toISOString().split("T")[0],note:""
+                      });
+                    }}
+                    disabled={!canPay}
+                    title={canPay?"":"⛔ رصيد صندوق "+exp.fund+" غير كافٍ"}
+                    style={{
+                      background:canPay?"#FFF1F2":"#F8FAFC",
+                      border:"1.5px solid "+(canPay?"#DC2626":"#E2E8F0"),
+                      borderRadius:9,padding:"8px 14px",
+                      cursor:canPay?"pointer":"not-allowed",
+                      fontSize:12,fontFamily:"Tahoma",fontWeight:700,
+                      color:canPay?"#DC2626":"#CBD5E1",
+                      opacity:canPay?1:0.6}}>
+                    {canPay?"💸 دفع":"⛔ رصيد غير كافٍ"}
                   </button>
                 </div>
               </div>
@@ -1888,22 +1896,57 @@ ${note?`<div class="row"><span class="lbl">ملاحظة</span><span class="val">
                   border:"none",fontSize:20,cursor:"pointer",color:"#64748B"}}>✕</button>
               </div>
               <div style={{padding:"18px 20px"}}>
-                {/* معلومات */}
-                <div style={{background:"#FFF1F2",borderRadius:10,padding:12,marginBottom:16,fontSize:12}}>
-                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
-                    <div>
-                      <div style={{color:"#64748B",marginBottom:2}}>المبلغ المعتاد</div>
-                      <div style={{fontWeight:700,color:"#DC2626"}}>{fNum(payTarget.amtDin||0)} د.ع</div>
-                    </div>
-                    <div>
-                      <div style={{color:"#64748B",marginBottom:2}}>رصيد {payTarget.fund}</div>
-                      <div style={{fontWeight:700,
-                        color:(funds[payTarget.fund]?.din||0)>=(payTarget.amtDin||0)?"#16A34A":"#DC2626"}}>
-                        {fNum(funds[payTarget.fund]?.din||0)} د.ع
+                {/* معلومات الصندوق */}
+                {(()=>{
+                  const payDin = Number(payForm.din)||0;
+                  const payDol = Number(payForm.dol)||0;
+                  const bal = funds[payTarget.fund]||{din:0,dol:0};
+                  const okDin = payDin===0 || bal.din >= payDin;
+                  const okDol = payDol===0 || bal.dol >= payDol;
+                  const ok = okDin && okDol;
+                  return (
+                    <div style={{borderRadius:12,padding:14,marginBottom:16,
+                      background:ok?"#F0FDF4":"#FFF1F2",
+                      border:"2px solid "+(ok?"#16A34A":"#DC2626")}}>
+                      <div style={{fontSize:12,fontWeight:700,
+                        color:ok?"#16A34A":"#DC2626",marginBottom:10}}>
+                        {ok?"✅":"⛔"} صندوق {payTarget.fund}
                       </div>
+                      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,fontSize:12}}>
+                        <div>
+                          <div style={{color:"#64748B",marginBottom:3}}>الرصيد المتاح</div>
+                          <div style={{fontWeight:700,color:ok?"#16A34A":"#DC2626"}}>
+                            {fNum(bal.din)} د.ع
+                          </div>
+                          {bal.dol>0&&<div style={{fontWeight:700,color:"#2563EB"}}>{fNum(bal.dol)} $</div>}
+                        </div>
+                        <div>
+                          <div style={{color:"#64748B",marginBottom:3}}>المبلغ المطلوب</div>
+                          <div style={{fontWeight:700,color:okDin?"#1E293B":"#DC2626"}}>
+                            {fNum(payDin||payTarget.amtDin||0)} د.ع
+                          </div>
+                          {(payDol||payTarget.amtDol||0)>0&&(
+                            <div style={{fontWeight:700,color:okDol?"#1E293B":"#DC2626"}}>
+                              {fNum(payDol||payTarget.amtDol||0)} $
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                      {!okDin&&(
+                        <div style={{marginTop:8,fontSize:11,fontWeight:700,color:"#DC2626",
+                          background:"#FEE2E2",borderRadius:7,padding:"6px 10px"}}>
+                          ⛔ العجز بالدينار: {fNum(payDin-bal.din)} د.ع — لا يمكن الصرف
+                        </div>
+                      )}
+                      {!okDol&&(
+                        <div style={{marginTop:6,fontSize:11,fontWeight:700,color:"#DC2626",
+                          background:"#FEE2E2",borderRadius:7,padding:"6px 10px"}}>
+                          ⛔ العجز بالدولار: {fNum(payDol-bal.dol)} $ — لا يمكن الصرف
+                        </div>
+                      )}
                     </div>
-                  </div>
-                </div>
+                  );
+                })()}
 
                 {[{k:"din",l:"المبلغ دينار",c:"#DC2626"},{k:"dol",l:"المبلغ دولار",c:"#2563EB"}].map(({k,l,c})=>(
                   <div key={k} style={{marginBottom:12}}>
@@ -1939,23 +1982,36 @@ ${note?`<div class="row"><span class="lbl">ملاحظة</span><span class="val">
                   </div>
                 </div>
 
-                <div style={{display:"grid",gridTemplateColumns:"1fr auto",gap:8}}>
-                  <button onClick={()=>doPay(false)}
-                    disabled={!Number(payForm.din)&&!Number(payForm.dol)}
-                    style={{border:"none",borderRadius:10,padding:"13px",
-                      fontSize:14,fontWeight:700,fontFamily:"Tahoma",cursor:"pointer",
-                      background:Number(payForm.din)||Number(payForm.dol)?"#DC2626":"#E2E8F0",
-                      color:Number(payForm.din)||Number(payForm.dol)?"#fff":"#94A3B8"}}>
-                    ✅ تأكيد الدفع
-                  </button>
-                  <button onClick={()=>doPay(true)}
-                    disabled={!Number(payForm.din)&&!Number(payForm.dol)}
-                    style={{border:"1px solid #DC2626",borderRadius:10,padding:"13px 16px",
-                      fontSize:13,fontWeight:700,fontFamily:"Tahoma",cursor:"pointer",
-                      background:"#fff",color:"#DC2626",whiteSpace:"nowrap"}}>
-                    🖨️ دفع وطباعة
-                  </button>
-                </div>
+                {(()=>{
+                  const payDin=Number(payForm.din)||0;
+                  const payDol=Number(payForm.dol)||0;
+                  const bal=funds[payTarget.fund]||{din:0,dol:0};
+                  const hasAmt=(payDin>0||payDol>0);
+                  const okDin=payDin===0||bal.din>=payDin;
+                  const okDol=payDol===0||bal.dol>=payDol;
+                  const canSubmit=hasAmt&&okDin&&okDol;
+                  return (
+                    <div style={{display:"grid",gridTemplateColumns:"1fr auto",gap:8}}>
+                      <button onClick={()=>doPay(false)} disabled={!canSubmit}
+                        style={{border:"none",borderRadius:10,padding:"13px",
+                          fontSize:14,fontWeight:700,fontFamily:"Tahoma",
+                          cursor:canSubmit?"pointer":"not-allowed",
+                          background:canSubmit?"#DC2626":"#E2E8F0",
+                          color:canSubmit?"#fff":"#94A3B8"}}>
+                        {canSubmit?"✅ تأكيد الدفع":"⛔ رصيد غير كافٍ"}
+                      </button>
+                      <button onClick={()=>doPay(true)} disabled={!canSubmit}
+                        style={{border:"1px solid "+(canSubmit?"#DC2626":"#E2E8F0"),
+                          borderRadius:10,padding:"13px 16px",fontSize:13,
+                          fontWeight:700,fontFamily:"Tahoma",
+                          cursor:canSubmit?"pointer":"not-allowed",
+                          background:"#fff",
+                          color:canSubmit?"#DC2626":"#94A3B8",whiteSpace:"nowrap"}}>
+                        🖨️ دفع وطباعة
+                      </button>
+                    </div>
+                  );
+                })()}
               </div>
             </div>
           </div>
