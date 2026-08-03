@@ -355,12 +355,16 @@ export default function App2({ onBack }) {
           </div>
           <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:14 }}>
             {[
-              {pg:"reports", icon:"📊", label:"التقارير",
+              {pg:"reports",   icon:"📊", label:"التقارير",
                 desc:"تقارير مالية شاملة", color:"#7C3AED"},
-              {pg:"assets",  icon:"📦", label:"الأصول الثابتة",
+              {pg:"assets",    icon:"📦", label:"الأصول الثابتة",
                 desc:assets.filter(a=>(a.qtyRemaining||0)>0).length+" صنف نشط", color:"#0891B2"},
-              {pg:"employees",icon:"👷", label:"الموظفون",
+              {pg:"employees", icon:"👷", label:"الموظفون",
                 desc:employees.length+" موظف مسجل", color:"#0284C7"},
+              {pg:"expenses",  icon:"🏠", label:"المصاريف الثابتة",
+                desc:"إيجارات واشتراكات", color:"#DC2626"},
+              {pg:"opening",   icon:"🏁", label:"الأرصدة الافتتاحية",
+                desc:"رصيد بداية الصناديق", color:"#475569"},
             ].map(n=>(
               <button key={n.pg} onClick={()=>setPage(n.pg)}
                 style={{ background:"#fff", border:"1px solid #E2E8F0",
