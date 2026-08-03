@@ -113,6 +113,9 @@ export default function App2({ onBack }) {
   if (page === "assets")
     return <AssetsPage funds={funds} onBack={() => setPage("home")}/>;
 
+  if (page === "opening")
+    return <OpeningBalancesPage funds={funds} onBack={() => setPage("home")}/>;
+
   // الصفحة الرئيسية
   const fundsDin    = ALL_FUNDS.reduce((s,f) => s + (funds[f.id]?.din||0), 0);
   const fundsDol    = ALL_FUNDS.reduce((s,f) => s + (funds[f.id]?.dol||0), 0);
@@ -1187,3 +1190,275 @@ function AssetsPage({ funds, onBack }) {
 }
 
 
+
+// ─── صفحة الأرصدة الافتتاحية ──────────────────────────
+function OpeningBalancesPage({ funds, onBack }) {
+  const ALL = [
+    { id:"رأس_المال", label:"رأس المال",      icon:"💼", color:"#059669", bg:"#ECFDF5" },
+    { id:"عام",       label:"الصندوق العام",  icon:"🏦", color:"#D97706", bg:"#FFFBEB" },
+    { id:"شركاء",     label:"أرباح الشركاء",  icon:"👥", color:"#9333EA", bg:"#FAF5FF" },
+    { id:"إشراف",    label:"صندوق الإشراف",   icon:"👷", color:"#0284C7", bg:"#F0F9FF" },
+    { id:"ديكور",    label:"صندوق الديكور",   icon:"🎨", color:"#DB2777", bg:"#FDF2F8" },
+    { id:"مقاولات",  label:"صندوق المقاولات", icon:"🏗️", color:"#7C3AED", bg:"#F5F3FF" },
+    { id:"واجهات",   label:"صندوق الواجهات",  icon:"🏢", color:"#0891B2", bg:"#ECFEFF" },
+  ];
+
+  const [form,    setForm]    = useState({});
+  const [saved,   setSaved]   = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [history, setHistory] = useState([]);
+
+  // تعبئة الفورم من الأرصدة الحالية
+  useEffect(()=>{
+    const init = {};
+    ALL.forEach(f=>{ init[f.id+"_din"]=String(funds[f.id]?.din||""); init[f.id+"_dol"]=String(funds[f.id]?.dol||""); });
+    setForm(init);
+  },[funds]);
+
+  // جلب سجل الإدخالات الافتتاحية
+  useEffect(()=>{
+    return onSnapshot(collection(db,"opening_balances"), snap=>{
+      const list = snap.docs.map(d=>({id:d.id,...d.data()}));
+      list.sort((a,b)=>(b.createdAt||"").localeCompare(a.createdAt||""));
+      setHistory(list);
+    });
+  },[]);
+
+  const sf = k => v => setForm(f=>({...f,[k]:v}));
+
+  const hasPrevious = history.length > 0;
+
+  const handleSave = async () => {
+    if (hasPrevious) {
+      const confirm = window.confirm(
+        "⚠️ تحذير — تم إدخال أرصدة افتتاحية مسبقاً!\n\n" +
+        "هل تريد تحديث الأرصدة؟ سيتم الكتابة فوق الأرصدة الحالية."
+      );
+      if (!confirm) return;
+    }
+    const pw = window.prompt("🔒 أدخل الباسورد:");
+    if (!pw) return;
+    if (pw !== PASS) { alert("❌ باسورد غلط"); return; }
+
+    setLoading(true);
+    try {
+      // حفظ في سجل الإدخالات
+      const snapshot = {};
+      for (const f of ALL) {
+        snapshot[f.id] = {
+          din: Number(form[f.id+"_din"])||0,
+          dol: Number(form[f.id+"_dol"])||0,
+        };
+      }
+      await addDoc(collection(db,"opening_balances"), {
+        snapshot,
+        createdAt: new Date().toISOString(),
+        date: new Date().toISOString().split("T")[0]
+      });
+
+      // تحديث أرصدة الصناديق
+      for (const f of ALL) {
+        const din = Number(form[f.id+"_din"])||0;
+        const dol = Number(form[f.id+"_dol"])||0;
+        await setDoc(doc(db,"funds",f.id), { din, dol }, { merge: true });
+      }
+
+      setSaved(true);
+      setTimeout(()=>setSaved(false), 2000);
+    } catch(e) {
+      alert("خطأ: " + e.message);
+    }
+    setLoading(false);
+  };
+
+  const totalDin = ALL.reduce((s,f)=>s+(Number(form[f.id+"_din"])||0),0);
+  const totalDol = ALL.reduce((s,f)=>s+(Number(form[f.id+"_dol"])||0),0);
+
+  return (
+    <div style={{ minHeight:"100vh", background:"#F1F5F9",
+      fontFamily:"Tahoma", direction:"rtl" }}>
+      <div style={{ maxWidth:700, margin:"0 auto", padding:"22px 16px" }}>
+
+        <button onClick={onBack} style={{ background:"#fff", border:"1px solid #E2E8F0",
+          borderRadius:10, padding:"8px 16px", fontSize:13, color:"#475569",
+          cursor:"pointer", marginBottom:16, fontFamily:"Tahoma",
+          display:"flex", alignItems:"center", gap:6 }}>← رجوع</button>
+
+        {/* هيدر */}
+        <div style={{ background:"linear-gradient(135deg,#1E293B,#334155)",
+          borderRadius:16, padding:"20px 24px", marginBottom:20 }}>
+          <div style={{ fontSize:18, fontWeight:700, color:"#fff", marginBottom:6 }}>
+            🏁 الأرصدة الافتتاحية
+          </div>
+          <div style={{ fontSize:13, color:"#94A3B8", lineHeight:1.7 }}>
+            أدخل المبالغ الموجودة في كل صندوق عند بدء استخدام النظام.
+            هذه الأرصدة هي نقطة البداية التي تُبنى عليها جميع العمليات.
+          </div>
+          {hasPrevious && (
+            <div style={{ marginTop:12, background:"rgba(251,191,36,0.2)",
+              border:"1px solid rgba(251,191,36,0.4)", borderRadius:10,
+              padding:"10px 14px", fontSize:12, color:"#FCD34D" }}>
+              ⚠️ تم إدخال أرصدة افتتاحية مسبقاً بتاريخ {history[0].date} —
+              أي تعديل سيؤثر على الأرصدة الحالية
+            </div>
+          )}
+        </div>
+
+        {/* ملخص الإجمالي */}
+        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr",
+          gap:12, marginBottom:20 }}>
+          <div style={{ background:"#fff", borderRadius:12, padding:"14px 18px",
+            border:"2px solid #D97706" }}>
+            <div style={{ fontSize:11, color:"#64748B", marginBottom:4 }}>
+              🇮🇶 إجمالي الدينار الافتتاحي
+            </div>
+            <div style={{ fontSize:20, fontWeight:700, color:"#D97706" }}>
+              {fNum(totalDin)}
+            </div>
+            <div style={{ fontSize:11, color:"#94A3B8" }}>د.ع</div>
+            {totalDin>0&&(
+              <div style={{ fontSize:11, color:"#64748B", marginTop:4 }}>
+                ✍️ {w2(totalDin)} دينار عراقي
+              </div>
+            )}
+          </div>
+          <div style={{ background:"#fff", borderRadius:12, padding:"14px 18px",
+            border:"2px solid #2563EB" }}>
+            <div style={{ fontSize:11, color:"#64748B", marginBottom:4 }}>
+              🇺🇸 إجمالي الدولار الافتتاحي
+            </div>
+            <div style={{ fontSize:20, fontWeight:700, color:"#2563EB" }}>
+              {fNum(totalDol)}
+            </div>
+            <div style={{ fontSize:11, color:"#94A3B8" }}>$</div>
+            {totalDol>0&&(
+              <div style={{ fontSize:11, color:"#64748B", marginTop:4 }}>
+                ✍️ {w2(totalDol)} دولار أمريكي
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* جدول الإدخال */}
+        <div style={{ background:"#fff", borderRadius:14, padding:20,
+          border:"1px solid #E2E8F0", marginBottom:16 }}>
+          <div style={{ fontSize:14, fontWeight:700, color:"#1E293B", marginBottom:16 }}>
+            أدخل الرصيد الافتتاحي لكل صندوق
+          </div>
+
+          {ALL.map(f=>(
+            <div key={f.id} style={{ borderRadius:12, padding:"14px 16px",
+              marginBottom:10, background:f.bg,
+              border:"1px solid "+f.color+"30" }}>
+              <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:12 }}>
+                <span style={{ fontSize:20 }}>{f.icon}</span>
+                <span style={{ fontSize:14, fontWeight:700, color:f.color }}>
+                  {f.label}
+                </span>
+                {(funds[f.id]?.din||0)>0 && (
+                  <span style={{ marginRight:"auto", fontSize:11, color:"#64748B" }}>
+                    الرصيد الحالي: {fNum(funds[f.id]?.din||0)} د.ع
+                  </span>
+                )}
+              </div>
+              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
+                <div>
+                  <div style={{ fontSize:11, color:"#D97706", fontWeight:600, marginBottom:5 }}>
+                    🇮🇶 دينار عراقي
+                  </div>
+                  <input type="text" inputMode="numeric" placeholder="٠"
+                    value={form[f.id+"_din"]||""}
+                    onChange={e=>sf(f.id+"_din")(e.target.value.replace(/[^0-9]/g,""))}
+                    style={{ width:"100%", border:"1px solid #CBD5E1", borderRadius:9,
+                      padding:"10px 13px", fontSize:15, outline:"none", fontFamily:"Tahoma",
+                      direction:"rtl", boxSizing:"border-box", background:"#fff",
+                      fontWeight: Number(form[f.id+"_din"])>0?"700":"400",
+                      color: Number(form[f.id+"_din"])>0?f.color:"#94A3B8" }}/>
+                  {Number(form[f.id+"_din"])>0 && (
+                    <div style={{ fontSize:11, color:f.color, marginTop:3, fontWeight:600 }}>
+                      ✍️ {w2(Number(form[f.id+"_din"]))} دينار
+                    </div>
+                  )}
+                </div>
+                <div>
+                  <div style={{ fontSize:11, color:"#2563EB", fontWeight:600, marginBottom:5 }}>
+                    🇺🇸 دولار أمريكي
+                  </div>
+                  <input type="text" inputMode="numeric" placeholder="٠"
+                    value={form[f.id+"_dol"]||""}
+                    onChange={e=>sf(f.id+"_dol")(e.target.value.replace(/[^0-9]/g,""))}
+                    style={{ width:"100%", border:"1px solid #CBD5E1", borderRadius:9,
+                      padding:"10px 13px", fontSize:15, outline:"none", fontFamily:"Tahoma",
+                      direction:"rtl", boxSizing:"border-box", background:"#fff",
+                      fontWeight: Number(form[f.id+"_dol"])>0?"700":"400",
+                      color: Number(form[f.id+"_dol"])>0?"#2563EB":"#94A3B8" }}/>
+                  {Number(form[f.id+"_dol"])>0 && (
+                    <div style={{ fontSize:11, color:"#2563EB", marginTop:3, fontWeight:600 }}>
+                      ✍️ {w2(Number(form[f.id+"_dol"]))} دولار
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* زر الحفظ */}
+        {saved ? (
+          <div style={{ background:"#F0FDF4", border:"2px solid #16A34A",
+            borderRadius:12, padding:"16px", textAlign:"center" }}>
+            <div style={{ fontSize:24, marginBottom:4 }}>✅</div>
+            <div style={{ fontSize:15, fontWeight:700, color:"#16A34A" }}>
+              تم حفظ الأرصدة الافتتاحية بنجاح
+            </div>
+          </div>
+        ) : (
+          <button onClick={handleSave} disabled={loading} style={{
+            width:"100%", border:"none", borderRadius:12, padding:"16px",
+            fontSize:15, fontWeight:700, fontFamily:"Tahoma",
+            cursor:loading?"not-allowed":"pointer",
+            background:loading?"#E2E8F0":"#1E293B",
+            color:loading?"#94A3B8":"#fff" }}>
+            {loading ? "⏳ جاري الحفظ..." : "💾 حفظ الأرصدة الافتتاحية للصناديق"}
+          </button>
+        )}
+
+        {/* السجل السابق */}
+        {history.length > 0 && (
+          <div style={{ background:"#fff", borderRadius:14, padding:16,
+            border:"1px solid #E2E8F0", marginTop:16 }}>
+            <div style={{ fontSize:13, fontWeight:700, color:"#1E293B", marginBottom:12 }}>
+              📋 سجل الإدخالات الافتتاحية ({history.length})
+            </div>
+            {history.slice(0,3).map((h,i)=>(
+              <div key={h.id} style={{ borderRadius:10, padding:"12px 14px",
+                marginBottom:8, background: i===0?"#F0FDF4":"#F8FAFC",
+                border:"1px solid "+(i===0?"#16A34A20":"#E2E8F0") }}>
+                <div style={{ display:"flex", justifyContent:"space-between",
+                  alignItems:"center", marginBottom:8 }}>
+                  <span style={{ fontSize:12, fontWeight:700,
+                    color:i===0?"#16A34A":"#64748B" }}>
+                    {i===0?"✅ الأحدث":""}  {h.date}
+                  </span>
+                </div>
+                <div style={{ display:"flex", gap:12, flexWrap:"wrap", fontSize:11, color:"#64748B" }}>
+                  {ALL.map(f=>{
+                    const din = h.snapshot?.[f.id]?.din||0;
+                    const dol = h.snapshot?.[f.id]?.dol||0;
+                    if(!din&&!dol) return null;
+                    return (
+                      <span key={f.id}>
+                        {f.icon} {f.label}: {din>0?fNum(din)+" د.ع":""}{din>0&&dol>0?" | ":""}{dol>0?fNum(dol)+" $":""}
+                      </span>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+      </div>
+    </div>
+  );
+}
