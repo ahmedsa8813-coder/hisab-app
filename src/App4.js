@@ -862,12 +862,23 @@ function ExpensesPage({ funds, onBack }) {
     const din=Number(payForm.din)||(payTarget.amtDin||0);
     const dol=Number(payForm.dol)||(payTarget.amtDol||0);
     const bal=funds[payTarget.fund]||{din:0,dol:0};
-    if(din>bal.din){alert("⛔ رصيد صندوق "+payTarget.fund+" غير كافٍ\nالمتاح: "+fNum(bal.din)+" د.ع");return;}
+
+    // التحقق من الرصيد — دينار ودولار
+    if(din>0 && din>bal.din){
+      alert("⛔ رصيد الدينار في صندوق "+payTarget.fund+" غير كافٍ — المتاح: "+fNum(bal.din)+" د.ع | المطلوب: "+fNum(din)+" د.ع");
+      return;
+    }
+    if(dol>0 && dol>bal.dol){
+      alert("⛔ رصيد الدولار في صندوق "+payTarget.fund+" غير كافٍ — المتاح: "+fNum(bal.dol)+" $ | المطلوب: "+fNum(dol)+" $");
+      return;
+    }
+    if(!din && !dol){ alert("أدخل المبلغ"); return; }
+
     const pw=window.prompt("🔒 أدخل الباسورد:");
     if(!pw)return; if(pw!==PASS){alert("❌ باسورد غلط");return;}
 
     await setDoc(doc(db,"funds",payTarget.fund),
-      {din:bal.din-din,dol:Math.max(0,bal.dol-dol)},{merge:true});
+      {din: bal.din-din, dol: bal.dol-dol},{merge:true});
     await addDoc(collection(db,"fund_txs"),{
       fundId:payTarget.fund, fundLabel:payTarget.fund, type:"صرف",
       din, dol, note:payTarget.name+" ("+payTarget.cycle+")",
@@ -1097,7 +1108,9 @@ ${note?`<div class="row"><span class="lbl">ملاحظة</span><span class="val">
           const bal = funds[exp.fund]||{din:0,dol:0};
           const needDin = exp.amtDin||0;
           const needDol = exp.amtDol||0;
-          const canPay = (needDin===0||bal.din>=needDin) && (needDol===0||bal.dol>=needDol);
+          const canPayDin = needDin===0 || bal.din>=needDin;
+          const canPayDol = needDol===0 || bal.dol>=needDol;
+          const canPay = canPayDin && canPayDol;
           return (
             <div key={exp.id} style={{background:"#fff",borderRadius:14,
               padding:"16px 18px",marginBottom:10,border:"1px solid #E2E8F0",
@@ -1160,7 +1173,7 @@ ${note?`<div class="row"><span class="lbl">ملاحظة</span><span class="val">
                       fontSize:12,fontFamily:"Tahoma",fontWeight:700,
                       color:canPay?"#DC2626":"#CBD5E1",
                       opacity:canPay?1:0.6}}>
-                    {canPay ? "💸 دفع" : (funds[exp.fund]?.din||0)<(exp.amtDin||0) ? "⛔ دينار غير كافٍ" : "⛔ دولار غير كافٍ"}
+                    {canPay ? "💸 دفع" : !canPayDin ? "⛔ دينار غير كافٍ" : "⛔ دولار غير كافٍ"}
                   </button>
                 </div>
               </div>
