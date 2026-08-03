@@ -209,8 +209,15 @@ export default function App2({ onBack }) {
       <div style={{ flex:1, padding:"28px 32px", overflow:"auto" }}>
 
         <div style={{ marginBottom:24 }}>
-          <h1 style={{ margin:0, marginBottom:4, fontSize:22,
-            fontWeight:700, color:"#1E293B" }}>لوحة الحسابات</h1>
+          <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:4 }}>
+            <h1 style={{ margin:0, fontSize:22, fontWeight:700, color:"#1E293B" }}>
+              لوحة الحسابات
+            </h1>
+            <span style={{ fontSize:11, background:"#2563EB", color:"#fff",
+              borderRadius:20, padding:"3px 12px", fontWeight:700, fontFamily:"Tahoma" }}>
+              v2.1 ✅
+            </span>
+          </div>
           <div style={{ fontSize:12, color:"#64748B" }}>
             {new Date().toLocaleDateString("ar-IQ",{weekday:"long",year:"numeric",month:"long",day:"numeric"})}
           </div>
