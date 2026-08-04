@@ -18,8 +18,113 @@ const TODAY    = new Date().toISOString().split("T")[0];
 const TOMORROW = new Date(Date.now()+86400000).toISOString().split("T")[0];
 const PASS = "1234";
 
+// ─── ترجمات اللغتين ────────────────────────────────
+const T = {
+  ar: {
+    dir:"rtl", fontFamily:"Tahoma",
+    login_title:"بوابة الفورمن", login_name:"الاسم",
+    login_pin:"رمز الدخول", login_btn:"دخول →",
+    factory_title:"🏭 معمل الديكور",
+    logout:"خروج", tab_work:"📋 الأعمال", tab_factory:"🏭 المعمل",
+    tomorrow_plan:"📅 خطة الغد", no_tasks:"ما في مهام محددة لليوم",
+    today_tasks:"📋 مهام اليوم", done:"✅ منجز", partial:"⚠️ جزئي",
+    not_done:"❌ لم ينجز", note_ph:"ملاحظة على هذه المهمة...",
+    report_title:"📤 رفع تقرير الأعمال",
+    report_done:"تم رفع التقرير", report_btn:"✅ رفع تقرير الأعمال",
+    uploading:"⏳ جاري الرفع...",
+    machine_status:"🔧 حالة المكائن", good:"✅ جيدة",
+    needs_maint:"⚠️ تحتاج صيانة", stopped:"❌ متوقفة",
+    fuel:"⛽ الوقود", water:"💧 الماء", liter:"لتر",
+    today_hours:"🕐 ساعات اليوم", gen1:"مولد ١", gen2:"مولد ٢",
+    elec:"كهرباء", hour:"ساعة", total_hours:"📊 الساعات الكلية",
+    gen1_total:"مجموع مولد ١", gen2_total:"مجموع مولد ٢",
+    factory_notes:"ملاحظات عن المعمل...", staff:"👷 الكادر والساعات الإضافية",
+    worker_name:"اسم العامل", ot_hours:"ساعة OT", add_worker:"+ إضافة عامل",
+    factory_report:"📤 رفع تقرير المعمل", factory_reported:"تم رفع تقرير المعمل",
+    site_title:"📍 الموقع", workers_count:"👷 عدد العمال",
+    progress:"📊 نسبة الإنجاز %", works_done:"🔨 الأعمال المنجزة اليوم",
+    works_ph:"اكتب الأعمال المنجزة اليوم...", notes:"📝 ملاحظات",
+    notes_ph:"مشاكل أو احتياجات...", site_report_btn:"📤 رفع تقرير اليوم",
+    site_reported:"تم رفع تقرير اليوم", prev_reports:"📅 آخر التقارير",
+    gen_note_ph:"ملاحظات إضافية...",
+    // Manager
+    mgr_title:"لوحة إدارة العمل", mgr_enter:"رمز الدخول",
+    tab_dashboard:"📊 لوحة المتابعة", tab_plan:"📋 خطة الغد",
+    tab_reports:"📄 التقارير", tab_team:"👷 الفريق",
+    plan_factory:"🏭 معمل", plan_sites:"📍 مواقع خارجية",
+    plan_factory_title:"مهام المعمل ليوم الغد",
+    plan_factory_hint:"كل سطر = مهمة مستقلة تظهر للفورمن",
+    task_ph:"اكتب المهمة...", add_task:"+ إضافة مهمة",
+    gen_note:"ملاحظة عامة", gen_note_mgr_ph:"توجيهات للفورمن...",
+    save_plan:"💾 حفظ خطة الغد", plan_saved:"✅ تم حفظ الخطة",
+    plan_sites_sel:"اختر فورمن الموقع",
+    site_area:"📍 المنطقة", site_area_ph:"مثال: الطابق 2 — غرفة 5",
+    site_goal:"🎯 الهدف", site_goal_ph:"مثال: إنجاز السقف كاملاً",
+    site_tasks:"🔨 الأعمال المطلوبة",
+    site_tasks_ph:"كل سطر = عمل واحد",
+  },
+  en: {
+    dir:"ltr", fontFamily:"Arial",
+    login_title:"Foreman Portal", login_name:"Name",
+    login_pin:"Access Code", login_btn:"Login →",
+    factory_title:"🏭 Decor Factory",
+    logout:"Logout", tab_work:"📋 Work", tab_factory:"🏭 Factory",
+    tomorrow_plan:"📅 Tomorrow's Plan", no_tasks:"No tasks assigned for today",
+    today_tasks:"📋 Today's Tasks", done:"✅ Done", partial:"⚠️ Partial",
+    not_done:"❌ Not Done", note_ph:"Note on this task...",
+    report_title:"📤 Submit Work Report",
+    report_done:"Report Submitted", report_btn:"✅ Submit Work Report",
+    uploading:"⏳ Uploading...",
+    machine_status:"🔧 Machine Status", good:"✅ Good",
+    needs_maint:"⚠️ Needs Maintenance", stopped:"❌ Stopped",
+    fuel:"⛽ Fuel", water:"💧 Water", liter:"Liters",
+    today_hours:"🕐 Today's Hours", gen1:"Generator 1", gen2:"Generator 2",
+    elec:"Electricity", hour:"hrs", total_hours:"📊 Total Hours",
+    gen1_total:"Gen 1 Total", gen2_total:"Gen 2 Total",
+    factory_notes:"Factory notes...", staff:"👷 Staff & Overtime",
+    worker_name:"Worker name", ot_hours:"OT hrs", add_worker:"+ Add Worker",
+    factory_report:"📤 Submit Factory Report", factory_reported:"Factory Report Submitted",
+    site_title:"📍 Site", workers_count:"👷 Workers",
+    progress:"📊 Progress %", works_done:"🔨 Today's Work",
+    works_ph:"Describe today's completed work...", notes:"📝 Notes",
+    notes_ph:"Issues or requests...", site_report_btn:"📤 Submit Today's Report",
+    site_reported:"Today's Report Submitted", prev_reports:"📅 Previous Reports",
+    gen_note_ph:"Additional notes...",
+    // Manager
+    mgr_title:"Work Management Dashboard", mgr_enter:"Access Code",
+    tab_dashboard:"📊 Dashboard", tab_plan:"📋 Tomorrow's Plan",
+    tab_reports:"📄 Reports", tab_team:"👷 Team",
+    plan_factory:"🏭 Factory", plan_sites:"📍 External Sites",
+    plan_factory_title:"Factory Tasks for Tomorrow",
+    plan_factory_hint:"Each line = one task shown to the foreman",
+    task_ph:"Write task...", add_task:"+ Add Task",
+    gen_note:"General Note", gen_note_mgr_ph:"Instructions for foreman...",
+    save_plan:"💾 Save Tomorrow's Plan", plan_saved:"✅ Plan Saved",
+    plan_sites_sel:"Select Site Foreman",
+    site_area:"📍 Area", site_area_ph:"e.g. Floor 2 — Room 5",
+    site_goal:"🎯 Goal", site_goal_ph:"e.g. Complete ceiling",
+    site_tasks:"🔨 Required Work",
+    site_tasks_ph:"Each line = one task",
+  }
+};
+
+// زر تبديل اللغة
+function LangBtn({ lang, setLang }) {
+  return (
+    <button onClick={()=>setLang(l=>l==="ar"?"en":"ar")}
+      style={{background:"rgba(255,255,255,0.12)",border:"none",
+        borderRadius:8,padding:"5px 10px",cursor:"pointer",
+        fontSize:12,fontWeight:700,color:"#fff",display:"flex",
+        alignItems:"center",gap:4}}>
+      {lang==="ar"?"🇬🇧 EN":"🇮🇶 عر"}
+    </button>
+  );
+}
+
 // ─── نظام الفورمن (بوابة الموبايل) ──────────────────
 export function ForemanSystem({ onBack }) {
+  const [lang, setLang] = useState("ar");
+  const t = T[lang];
   const [foreman, setForeman] = useState(null);
   const [name, setName] = useState("");
   const [pin,  setPIN]  = useState("");
@@ -43,14 +148,17 @@ export function ForemanSystem({ onBack }) {
 
   if(!foreman) return (
     <div style={{minHeight:"100vh",background:"#0F172A",
-      fontFamily:"Tahoma",direction:"rtl",
+      fontFamily:t.fontFamily,direction:t.dir,
       display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
       <div style={{background:"#1E293B",borderRadius:24,padding:"36px 28px",
         width:"100%",maxWidth:380,boxShadow:"0 32px 80px rgba(0,0,0,0.6)"}}>
+        <div style={{display:"flex",justifyContent:"flex-end",marginBottom:12}}>
+          <LangBtn lang={lang} setLang={setLang}/>
+        </div>
         <div style={{textAlign:"center",marginBottom:32}}>
           <div style={{fontSize:56,marginBottom:12}}>🦺</div>
           <div style={{fontSize:22,fontWeight:700,color:"#fff",marginBottom:4}}>
-            بوابة الفورمن
+            {t.login_title}
           </div>
           <div style={{fontSize:12,color:"#475569"}}>
             شركة باب المشاريع
@@ -58,7 +166,7 @@ export function ForemanSystem({ onBack }) {
         </div>
         <div style={{marginBottom:14}}>
           <div style={{fontSize:11,color:"#475569",fontWeight:700,
-            marginBottom:6,letterSpacing:1}}>الاسم</div>
+            marginBottom:6,letterSpacing:1}}>{t.login_name}</div>
           <input value={name} onChange={e=>setName(e.target.value)}
             placeholder="أدخل اسمك..."
             style={{width:"100%",background:"#0F172A",border:"1.5px solid #334155",
@@ -68,7 +176,7 @@ export function ForemanSystem({ onBack }) {
         </div>
         <div style={{marginBottom:24}}>
           <div style={{fontSize:11,color:"#475569",fontWeight:700,
-            marginBottom:6,letterSpacing:1}}>رمز الدخول</div>
+            marginBottom:6,letterSpacing:1}}>{t.login_pin}</div>
           <input type="password" value={pin}
             onChange={e=>setPIN(e.target.value)}
             onKeyDown={e=>e.key==="Enter"&&login()}
@@ -82,9 +190,9 @@ export function ForemanSystem({ onBack }) {
           marginBottom:14}}>{err}</div>}
         <button onClick={login} style={{width:"100%",border:"none",
           borderRadius:12,padding:"15px",fontSize:15,fontWeight:700,
-          fontFamily:"Tahoma",cursor:"pointer",
+          fontFamily:t.fontFamily,cursor:"pointer",
           background:"linear-gradient(135deg,#1D4ED8,#3B82F6)",color:"#fff"}}>
-          دخول →
+          {t.login_btn}
         </button>
 
       </div>
@@ -92,12 +200,13 @@ export function ForemanSystem({ onBack }) {
   );
 
   if(foreman.type==="معمل")
-    return <FactoryView foreman={foreman} onLogout={logout}/>;
-  return <SiteView foreman={foreman} onLogout={logout}/>;
+    return <FactoryView foreman={foreman} onLogout={logout} lang={lang}/>;
+  return <SiteView foreman={foreman} onLogout={logout} lang={lang}/>;
 }
 
 // ─── واجهة المعمل للفورمن (موبايل أولاً) ─────────────
-function FactoryView({ foreman, onLogout }) {
+function FactoryView({ foreman, onLogout, lang="ar" }) {
+  const t = T[lang];
   const [tab,          setTab]          = useState("work");
   const [todayPlan,    setTodayPlan]    = useState(null);
   const [tomorrowPlan, setTomorrowPlan] = useState(null);
@@ -130,11 +239,12 @@ function FactoryView({ foreman, onLogout }) {
     return()=>{u1();u2();u3();};
   },[]);
 
-  const S=[
-    {v:"منجز",   c:"#16A34A",bg:"#DCFCE7",e:"✅"},
-    {v:"جزئي",  c:"#D97706",bg:"#FEF3C7",e:"⚠️"},
-    {v:"لم ينجز",c:"#DC2626",bg:"#FEE2E2",e:"❌"},
+  const getS=()=>[
+    {v:"منجز",   label:t.done,    c:"#16A34A",bg:"#DCFCE7",e:"✅"},
+    {v:"جزئي",  label:t.partial,  c:"#D97706",bg:"#FEF3C7",e:"⚠️"},
+    {v:"لم ينجز",label:t.not_done, c:"#DC2626",bg:"#FEE2E2",e:"❌"},
   ];
+  const S=getS();
 
   const submitWork = async () => {
     if(!todayPlan){return;}
@@ -161,6 +271,9 @@ function FactoryView({ foreman, onLogout }) {
     setTimeout(()=>setFactSaved(false),3000);
   };
 
+  const getMachineStatus=()=>[
+    {v:"جيدة",l:t.good},{v:"تحتاج صيانة",l:t.needs_maint},{v:"متوقفة",l:t.stopped}
+  ];
   const MACHINE_STATUS=["جيدة","تحتاج صيانة","متوقفة"];
   const MACHINE_COLORS={
     "جيدة":       {c:"#16A34A",bg:"#DCFCE7",e:"✅"},
@@ -179,7 +292,7 @@ function FactoryView({ foreman, onLogout }) {
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
           <div>
             <div style={{fontSize:16,fontWeight:700,color:"#fff",lineHeight:1}}>
-              🏭 معمل الديكور
+              {t.factory_title}
             </div>
             <div style={{fontSize:11,color:"#475569",marginTop:3}}>
               {foreman.name} · {TODAY}
@@ -197,8 +310,8 @@ function FactoryView({ foreman, onLogout }) {
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",
           gap:6,marginTop:12}}>
           {[
-            {id:"work",    e:"📋",label:"الأعمال"},
-            {id:"factory", e:"🏭",label:"المعمل"},
+            {id:"work",    e:"📋",label:t.tab_work.replace("📋 ","")},
+            {id:"factory", e:"🏭",label:t.tab_factory.replace("🏭 ","")},
           ].map(t=>(
             <button key={t.id} onClick={()=>setTab(t.id)} style={{
               border:"none",borderRadius:10,padding:"10px",cursor:"pointer",
@@ -273,7 +386,7 @@ function FactoryView({ foreman, onLogout }) {
               {!todayPlan?(
                 <div style={{textAlign:"center",padding:"30px 0",color:"#94A3B8"}}>
                   <div style={{fontSize:48,marginBottom:10}}>📭</div>
-                  <div style={{fontSize:14}}>ما في مهام محددة لليوم</div>
+                  <div style={{fontSize:14}}>{t.no_tasks}</div>
                 </div>
               ):(todayPlan.tasks||[]).map((t,i)=>(
                 <div key={i} style={{borderRadius:14,marginBottom:14,
@@ -305,12 +418,12 @@ function FactoryView({ foreman, onLogout }) {
                   <div style={{padding:"12px 14px"}}>
                     <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",
                       gap:8,marginBottom:10}}>
-                      {S.map(s=>(
+                      {getS().map(s=>(
                         <button key={s.v}
                           onClick={()=>setStatuses(p=>({...p,[i]:s.v}))}
                           style={{border:"2px solid "+(statuses[i]===s.v?s.c:"#E2E8F0"),
                             borderRadius:12,padding:"12px 6px",cursor:"pointer",
-                            fontFamily:"Tahoma",fontSize:12,fontWeight:700,
+                            fontFamily:t.fontFamily,fontSize:12,fontWeight:700,
                             background:statuses[i]===s.v?s.bg:"#fff",
                             color:statuses[i]===s.v?s.c:"#94A3B8"}}>
                           <div style={{fontSize:20,marginBottom:4}}>{s.e}</div>
@@ -819,6 +932,8 @@ export function ForemanManagePage() {
   const [mgrErr,   setMgrErr]   = useState("");
   const MANAGER_PIN = "1234"; // نفس الباسورد
 
+  const [lang, setLang] = useState("ar");
+  const t = T[lang];
   const [projects,    setProjects]    = useState([]);
   const [tab,         setTab]         = useState("dashboard");
   const [foremans,    setForemans]    = useState([]);
@@ -878,6 +993,9 @@ export function ForemanManagePage() {
 
   // خطة المعمل
   const [selPlanner,   setSelPlanner]   = useState("factory");
+  const [planSubTab,   setPlanSubTab]   = useState("factory"); // factory | sites
+  // مهام المعمل — كل مهمة سطر نصي بسيط
+  const [factTaskLines, setFactTaskLines] = useState([""]);
   const [planTasks,    setPlanTasks]    = useState([{desc:"",qty:"",note:""}]);
   const [planNote,     setPlanNote]     = useState("");
   const [planSaved,    setPlanSaved]    = useState(false);
@@ -1051,7 +1169,7 @@ ${body}
         </div>
         <div style={{marginBottom:20}}>
           <div style={{fontSize:11,color:"#475569",fontWeight:700,
-            marginBottom:6,letterSpacing:1}}>رمز الدخول</div>
+            marginBottom:6,letterSpacing:1}}>{t.login_pin}</div>
           <input type="password" value={mgrPin}
             onChange={e=>setMgrPin(e.target.value)}
             onKeyDown={e=>e.key==="Enter"&&(
@@ -1102,6 +1220,7 @@ ${body}
             <div style={{fontSize:11,color:"#475569",marginTop:2}}>{TODAY}</div>
           </div>
           <div style={{display:"flex",gap:8,alignItems:"center"}}>
+            <LangBtn lang={lang} setLang={setLang}/>
             <button onClick={()=>printReport("all")} style={{
               background:"#1E293B",border:"1px solid #334155",
               borderRadius:8,padding:"7px 14px",cursor:"pointer",
@@ -1323,32 +1442,22 @@ ${body}
         {/* ─── خطة الغد ─── */}
         {tab==="plan"&&(
           <div>
-            {/* اختيار الفورمن */}
-            <div style={{background:"#fff",borderRadius:14,padding:16,
-              border:"1px solid #E2E8F0",marginBottom:14}}>
-              <div style={{fontSize:13,fontWeight:700,color:"#1E293B",marginBottom:10}}>
-                اختر الفورمن لوضع خطة يوم {TOMORROW}
-              </div>
-              <div style={{display:"flex",flexWrap:"wrap",gap:8}}>
-                <button onClick={()=>setSelPlanner("factory")} style={{
-                  border:"2px solid "+(selPlanner==="factory"?"#0F172A":"#E2E8F0"),
-                  borderRadius:10,padding:"9px 16px",cursor:"pointer",
-                  fontFamily:"Tahoma",fontSize:12,fontWeight:700,
-                  background:selPlanner==="factory"?"#0F172A":"#fff",
-                  color:selPlanner==="factory"?"#fff":"#64748B"}}>
-                  🏭 فورمن المعمل
+            {/* تبويبا معمل / مواقع خارجية */}
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",
+              gap:8,marginBottom:16}}>
+              {[
+                {id:"factory",label:t.plan_factory},
+                {id:"sites",  label:t.plan_sites},
+              ].map(sub=>(
+                <button key={sub.id} onClick={()=>setPlanSubTab(sub.id)} style={{
+                  border:"none",borderRadius:12,padding:"13px",cursor:"pointer",
+                  fontFamily:t.fontFamily,fontSize:13,fontWeight:700,
+                  background:planSubTab===sub.id?"#0F172A":"#fff",
+                  color:planSubTab===sub.id?"#fff":"#64748B",
+                  boxShadow:"0 1px 4px rgba(0,0,0,0.06)"}}>
+                  {sub.label}
                 </button>
-                {siteForemans.map(f=>(
-                  <button key={f.id} onClick={()=>setSelPlanner(f.id)} style={{
-                    border:"2px solid "+(selPlanner===f.id?"#2563EB":"#E2E8F0"),
-                    borderRadius:10,padding:"9px 16px",cursor:"pointer",
-                    fontFamily:"Tahoma",fontSize:12,fontWeight:700,
-                    background:selPlanner===f.id?"#2563EB":"#fff",
-                    color:selPlanner===f.id?"#fff":"#64748B"}}>
-                    📍 {f.name}
-                  </button>
-                ))}
-              </div>
+              ))}
             </div>
 
             {/* خطة المعمل */}
@@ -1457,8 +1566,33 @@ ${body}
               </div>
             )}
 
-            {/* خطة الموقع */}
-            {selPlanner!=="factory"&&(()=>{
+            {/* ─ مواقع خارجية ─ */}
+            {planSubTab==="sites"&&(
+              <div style={{background:"#fff",borderRadius:14,padding:16,
+                border:"1px solid #E2E8F0",marginBottom:14}}>
+                <div style={{fontSize:13,fontWeight:700,color:"#1E293B",marginBottom:10}}>
+                  {t.plan_sites_sel}
+                </div>
+                <div style={{display:"flex",flexWrap:"wrap",gap:8,marginBottom:14}}>
+                  {siteForemans.map(f=>(
+                    <button key={f.id} onClick={()=>setSelPlanner(f.id)} style={{
+                      border:"2px solid "+(selPlanner===f.id?"#2563EB":"#E2E8F0"),
+                      borderRadius:10,padding:"9px 16px",cursor:"pointer",
+                      fontFamily:t.fontFamily,fontSize:12,fontWeight:700,
+                      background:selPlanner===f.id?"#2563EB":"#fff",
+                      color:selPlanner===f.id?"#fff":"#64748B"}}>
+                      📍 {f.name}
+                    </button>
+                  ))}
+                  {siteForemans.length===0&&(
+                    <div style={{fontSize:12,color:"#94A3B8"}}>
+                      ما في فورمن مواقع — أضف من تبويب الفريق
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+            {planSubTab==="sites"&&selPlanner!=="factory"&&(()=>{
               const selF=foremans.find(f=>f.id===selPlanner);
               if(!selF) return null;
               return (
