@@ -708,6 +708,76 @@ function FundPage({ fund, funds, projects=[], onBack }) {
     alert("✅ تم السداد — الدَّيْن مغلق");
   };
 
+  const printTxReceipt = (txData) => {
+    const { type, din, dol, note, date } = txData;
+    const isIn = type === "إيداع";
+    const newDin = isIn ? bal.din+din : bal.din-din;
+    const today = new Date().toISOString().split("T")[0];
+    const html = `<!DOCTYPE html><html dir="rtl"><head><meta charset="utf-8"/>
+<style>
+* { font-family: Tahoma; }
+body { margin: 30px; direction: rtl; max-width: 440px; }
+.hdr { text-align: center; border-bottom: 3px solid ${fund.color};
+  padding-bottom: 14px; margin-bottom: 16px; }
+.co { font-size: 20px; font-weight: 700; color: #1E293B; }
+.ca { font-size: 11px; color: #64748B; margin-top: 2px; }
+.badge { display: inline-block; background: ${isIn?"#F0FDF4":"#FFF1F2"};
+  color: ${isIn?"#16A34A":"#DC2626"}; border-radius: 20px;
+  padding: 4px 16px; font-size: 13px; font-weight: 700; margin: 14px 0 10px; }
+.amount-box { background: ${isIn?"#F0FDF4":"#FFF1F2"};
+  border: 2px solid ${isIn?"#16A34A":"#DC2626"};
+  border-radius: 14px; padding: 18px; text-align: center; margin: 14px 0; }
+.amt { font-size: 30px; font-weight: 700;
+  color: ${isIn?"#16A34A":"#DC2626"}; }
+.amt-sub { font-size: 12px; color: #64748B; margin-top: 4px; }
+.row { display: flex; justify-content: space-between;
+  padding: 9px 0; border-bottom: 1px solid #F1F5F9; }
+.lbl { font-size: 12px; color: #64748B; }
+.val { font-size: 12px; font-weight: 700; color: #1E293B; }
+.footer { margin-top: 20px; border-top: 1px dashed #E2E8F0;
+  padding-top: 12px; text-align: center; font-size: 10px; color: #94A3B8; }
+</style></head><body>
+<div class="hdr">
+  <div class="co">شركة باب المشاريع</div>
+  <div class="ca">بغداد — العرصات</div>
+</div>
+
+<div style="text-align:center">
+  <div style="font-size:28px; margin-bottom:4px">${fund.icon}</div>
+  <div style="font-size:15px; font-weight:700; color:${fund.color}">${fund.label}</div>
+  <div class="badge">${isIn ? "↓ إيداع" : "↑ صرف"}</div>
+</div>
+
+<div class="amount-box">
+  ${din>0 ? `<div class="amt">${isIn?"+":"-"}${fNum(din)}</div>
+  <div class="amt-sub">دينار عراقي · د.ع</div>` : ""}
+  ${din>0&&dol>0 ? `<hr style="border:none;border-top:1px solid #E2E8F0;margin:10px 0"/>` : ""}
+  ${dol>0 ? `<div class="amt" style="color:#2563EB">${isIn?"+":"-"}${fNum(dol)}</div>
+  <div class="amt-sub">دولار أمريكي · $</div>` : ""}
+</div>
+
+<div class="row"><span class="lbl">الصندوق</span><span class="val">${fund.label}</span></div>
+<div class="row"><span class="lbl">نوع الحركة</span><span class="val">${type}</span></div>
+<div class="row"><span class="lbl">التاريخ</span><span class="val">${date}</span></div>
+<div class="row"><span class="lbl">البيان</span><span class="val">${note||"—"}</span></div>
+<div class="row"><span class="lbl">الرصيد قبل</span>
+  <span class="val">${fNum(bal.din)} د.ع</span></div>
+<div class="row"><span class="lbl">الرصيد بعد</span>
+  <span class="val" style="color:${fund.color}">${fNum(Math.max(0,newDin))} د.ع</span></div>
+
+<div class="footer">
+  توقيع المسؤول: _______________<br/>
+  توقيع المستلم: _______________<br/><br/>
+  شركة باب المشاريع · طُبع: ${today}
+</div>
+</body></html>`;
+    const w = window.open("","_blank","width=520,height=700");
+    if(!w){ alert("السماح بالنوافذ المنبثقة"); return false; }
+    w.document.write(html); w.document.close();
+    w.focus(); setTimeout(()=>w.print(), 600);
+    return true;
+  };
+
   const addTx = async () => {
     const din = Number(form.din)||0;
     const dol = Number(form.dol)||0;
@@ -717,6 +787,18 @@ function FundPage({ fund, funds, projects=[], onBack }) {
       if (din > bal.din) { alert("⛔ يتجاوز رصيد الدينار! المتاح: "+fNum(bal.din)+" د.ع"); return; }
       if (dol > bal.dol) { alert("⛔ يتجاوز رصيد الدولار! المتاح: "+fNum(bal.dol)+" $"); return; }
     }
+    const pw = window.prompt("🔒 أدخل الباسورد:");
+    if (!pw) return;
+    if (pw !== PASS) { alert("❌ باسورد غلط"); return; }
+
+    // طباعة الإيصال أولاً — إلزامية
+    const printed = printTxReceipt({
+      type:form.type, din, dol,
+      note:form.note.trim(), date:form.date
+    });
+    if(!printed) return; // لو ما فتحت نافذة الطباعة نوقف
+
+    // حفظ الحركة بعد الطباعة
     await addDoc(collection(db,"fund_txs"), {
       fundId: fund.id, fundLabel: fund.label,
       type: form.type, din, dol,
@@ -726,7 +808,8 @@ function FundPage({ fund, funds, projects=[], onBack }) {
     });
     const newDin = isIn ? bal.din+din : bal.din-din;
     const newDol = isIn ? bal.dol+dol : bal.dol-dol;
-    await setDoc(doc(db,"funds",fund.id), { din:Math.max(0,newDin), dol:Math.max(0,newDol) }, {merge:true});
+    await setDoc(doc(db,"funds",fund.id),
+      { din:Math.max(0,newDin), dol:Math.max(0,newDol) }, {merge:true});
     setForm({ type:form.type, din:"", dol:"", note:"", date:form.date });
     setShowAdd(false);
   };
