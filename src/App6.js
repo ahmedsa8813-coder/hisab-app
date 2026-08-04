@@ -96,15 +96,29 @@ export function ForemanSystem({ onBack }) {
   return <SiteView foreman={foreman} onLogout={logout}/>;
 }
 
-// ─── واجهة المعمل للفورمن ─────────────────────────────
+// ─── واجهة المعمل للفورمن (موبايل أولاً) ─────────────
 function FactoryView({ foreman, onLogout }) {
+  const [tab,          setTab]          = useState("work");
   const [todayPlan,    setTodayPlan]    = useState(null);
   const [tomorrowPlan, setTomorrowPlan] = useState(null);
   const [todayReport,  setTodayReport]  = useState(null);
-  const [statuses, setStatuses] = useState({});
-  const [notes,    setNotes]    = useState({});
-  const [genNote,  setGenNote]  = useState("");
-  const [saving,   setSaving]   = useState(false);
+  const [statuses,     setStatuses]     = useState({});
+  const [notes,        setNotes]        = useState({});
+  const [genNote,      setGenNote]      = useState("");
+  const [saving,       setSaving]       = useState(false);
+
+  const [factReport, setFactReport] = useState({
+    machineStatus:"جيدة",
+    fuel:"", water:"",
+    gen1Hours:"", gen2Hours:"", elecHours:"",
+    gen1Total:"", gen2Total:"",
+    note:"",
+  });
+  const fr = k => v => setFactReport(f=>({...f,[k]:v}));
+
+  const [workers,    setWorkers]    = useState([{name:"",hours:""}]);
+  const [factSaved,  setFactSaved]  = useState(false);
+  const [factSaving, setFactSaving] = useState(false);
 
   useEffect(()=>{
     const u1=onSnapshot(query(collection(db,"factory_plans"),where("date","==",TODAY)),
@@ -116,12 +130,14 @@ function FactoryView({ foreman, onLogout }) {
     return()=>{u1();u2();u3();};
   },[]);
 
-  const S=[{v:"منجز",c:"#16A34A",bg:"#F0FDF4",e:"✅"},
-           {v:"جزئي",c:"#D97706",bg:"#FFFBEB",e:"⚠️"},
-           {v:"لم ينجز",c:"#DC2626",bg:"#FFF1F2",e:"❌"}];
+  const S=[
+    {v:"منجز",   c:"#16A34A",bg:"#DCFCE7",e:"✅"},
+    {v:"جزئي",  c:"#D97706",bg:"#FEF3C7",e:"⚠️"},
+    {v:"لم ينجز",c:"#DC2626",bg:"#FEE2E2",e:"❌"},
+  ];
 
-  const submit = async () => {
-    if(!todayPlan) return;
+  const submitWork = async () => {
+    if(!todayPlan){return;}
     setSaving(true);
     const tasks=(todayPlan.tasks||[]).map((t,i)=>({
       desc:t.desc, status:statuses[i]||"لم ينجز", note:notes[i]||""
@@ -133,136 +149,409 @@ function FactoryView({ foreman, onLogout }) {
     setSaving(false);
   };
 
-  const now=new Date().toLocaleTimeString("ar-IQ",{hour:"2-digit",minute:"2-digit"});
+  const submitFactory = async () => {
+    setFactSaving(true);
+    await setDoc(doc(db,"factory_status",TODAY),{
+      date:TODAY,foremanId:foreman.id,foremanName:foreman.name,
+      ...factReport,
+      workers:workers.filter(w=>w.name.trim()&&w.hours),
+      submittedAt:new Date().toISOString()
+    });
+    setFactSaved(true); setFactSaving(false);
+    setTimeout(()=>setFactSaved(false),3000);
+  };
+
+  const MACHINE_STATUS=["جيدة","تحتاج صيانة","متوقفة"];
+  const MACHINE_COLORS={
+    "جيدة":       {c:"#16A34A",bg:"#DCFCE7",e:"✅"},
+    "تحتاج صيانة":{c:"#D97706",bg:"#FEF3C7",e:"⚠️"},
+    "متوقفة":     {c:"#DC2626",bg:"#FEE2E2",e:"❌"},
+  };
 
   return (
     <div style={{minHeight:"100vh",background:"#F1F5F9",
-      fontFamily:"Tahoma",direction:"rtl"}}>
-      <div style={{maxWidth:560,margin:"0 auto",padding:16}}>
+      fontFamily:"Tahoma",direction:"rtl",
+      maxWidth:480,margin:"0 auto"}}>
 
-        {/* هيدر */}
-        <div style={{background:"#0F172A",borderRadius:18,
-          padding:"16px 20px",marginBottom:16,
-          display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+      {/* ─── هيدر ثابت ─── */}
+      <div style={{position:"sticky",top:0,zIndex:10,
+        background:"#0F172A",padding:"12px 16px"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
           <div>
-            <div style={{fontSize:16,fontWeight:700,color:"#fff"}}>
+            <div style={{fontSize:16,fontWeight:700,color:"#fff",lineHeight:1}}>
               🏭 معمل الديكور
             </div>
-            <div style={{fontSize:10,color:"#475569",marginTop:2}}>
-              {foreman.name} · {TODAY} · {now}
+            <div style={{fontSize:11,color:"#475569",marginTop:3}}>
+              {foreman.name} · {TODAY}
             </div>
           </div>
-          <button onClick={onLogout} style={{background:"#1E293B",
-            border:"none",borderRadius:8,padding:"7px 12px",cursor:"pointer",
-            fontFamily:"Tahoma",color:"#64748B",fontSize:11}}>
+          <button onClick={onLogout}
+            style={{background:"#1E293B",border:"none",borderRadius:10,
+              padding:"8px 14px",cursor:"pointer",
+              fontFamily:"Tahoma",color:"#94A3B8",fontSize:12}}>
             خروج
           </button>
         </div>
 
-        {/* خطة الغد */}
-        {tomorrowPlan&&(
-          <div style={{background:"#fff",borderRadius:16,padding:18,
-            marginBottom:14,border:"2px solid #2563EB"}}>
-            <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:12}}>
-              <div style={{background:"#2563EB",borderRadius:8,
-                padding:"4px 12px",fontSize:11,fontWeight:700,color:"#fff"}}>
-                📅 خطة الغد — {TOMORROW}
+        {/* التبويبان */}
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",
+          gap:6,marginTop:12}}>
+          {[
+            {id:"work",    e:"📋",label:"الأعمال"},
+            {id:"factory", e:"🏭",label:"المعمل"},
+          ].map(t=>(
+            <button key={t.id} onClick={()=>setTab(t.id)} style={{
+              border:"none",borderRadius:10,padding:"10px",cursor:"pointer",
+              fontFamily:"Tahoma",fontSize:13,fontWeight:700,
+              background:tab===t.id?"#2563EB":"rgba(255,255,255,0.07)",
+              color:tab===t.id?"#fff":"#64748B"}}>
+              {t.e} {t.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* ─── محتوى ─── */}
+      <div style={{padding:"14px 14px 100px"}}>
+
+        {/* ════ تبويب الأعمال ════ */}
+        {tab==="work"&&(
+          <div>
+
+            {/* خطة الغد */}
+            {tomorrowPlan&&(
+              <div style={{background:"#EFF6FF",borderRadius:16,
+                padding:16,marginBottom:14,
+                border:"2px solid #2563EB"}}>
+                <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:12}}>
+                  <div style={{background:"#2563EB",borderRadius:8,
+                    padding:"4px 12px",fontSize:11,fontWeight:700,color:"#fff"}}>
+                    📅 خطة الغد
+                  </div>
+                  <span style={{fontSize:11,color:"#2563EB"}}>{TOMORROW}</span>
+                </div>
+                {tomorrowPlan.note&&(
+                  <div style={{background:"#fff",borderRadius:10,
+                    padding:"10px 12px",fontSize:13,color:"#1D4ED8",
+                    fontWeight:600,marginBottom:10}}>💬 {tomorrowPlan.note}</div>
+                )}
+                {(tomorrowPlan.tasks||[]).map((t,i)=>(
+                  <div key={i} style={{background:"#fff",borderRadius:12,
+                    padding:"12px 14px",marginBottom:8,
+                    borderRight:"4px solid #2563EB"}}>
+                    <div style={{fontSize:14,fontWeight:700,color:"#1E293B"}}>
+                      {i+1}. {t.desc}
+                    </div>
+                    {(t.qty||t.material||t.responsible)&&(
+                      <div style={{display:"flex",flexWrap:"wrap",
+                        gap:8,marginTop:6}}>
+                        {t.qty&&<span style={{fontSize:11,background:"#F1F5F9",
+                          borderRadius:6,padding:"2px 8px",color:"#475569"}}>
+                          📦 {t.qty}
+                        </span>}
+                        {t.material&&<span style={{fontSize:11,background:"#FEF3C7",
+                          borderRadius:6,padding:"2px 8px",color:"#92400E"}}>
+                          🪵 {t.material}
+                        </span>}
+                        {t.responsible&&<span style={{fontSize:11,background:"#EDE9FE",
+                          borderRadius:6,padding:"2px 8px",color:"#5B21B6"}}>
+                          👷 {t.responsible}
+                        </span>}
+                      </div>
+                    )}
+                  </div>
+                ))}
               </div>
-            </div>
-            {tomorrowPlan.note&&(
-              <div style={{background:"#EFF6FF",borderRadius:10,
-                padding:"10px 14px",fontSize:12,color:"#1D4ED8",
-                fontWeight:600,marginBottom:10}}>💬 {tomorrowPlan.note}</div>
             )}
-            {(tomorrowPlan.tasks||[]).map((t,i)=>(
-              <div key={i} style={{padding:"10px 14px",borderRadius:10,
-                marginBottom:6,background:"#F8FAFC",
-                border:"1px solid #DBEAFE",borderRight:"4px solid #2563EB",
-                fontSize:12}}>
-                <strong>{i+1}. {t.desc}</strong>
-                {t.qty&&<span style={{color:"#64748B"}}> — {t.qty}</span>}
-                {t.note&&<div style={{color:"#64748B",marginTop:3,fontSize:11}}>
-                  📌 {t.note}</div>}
+
+            {/* مهام اليوم */}
+            <div style={{background:"#fff",borderRadius:16,
+              padding:16,marginBottom:14,border:"1px solid #E2E8F0"}}>
+              <div style={{fontSize:15,fontWeight:700,color:"#0F172A",marginBottom:14}}>
+                📋 مهام اليوم
               </div>
-            ))}
+              {!todayPlan?(
+                <div style={{textAlign:"center",padding:"30px 0",color:"#94A3B8"}}>
+                  <div style={{fontSize:48,marginBottom:10}}>📭</div>
+                  <div style={{fontSize:14}}>ما في مهام محددة لليوم</div>
+                </div>
+              ):(todayPlan.tasks||[]).map((t,i)=>(
+                <div key={i} style={{borderRadius:14,marginBottom:14,
+                  border:"1px solid #E2E8F0",overflow:"hidden"}}>
+                  {/* عنوان المهمة */}
+                  <div style={{background:"#F8FAFC",padding:"12px 16px",
+                    borderBottom:"1px solid #E2E8F0"}}>
+                    <div style={{fontSize:15,fontWeight:700,color:"#1E293B"}}>
+                      {i+1}. {t.desc}
+                    </div>
+                    {(t.qty||t.material||t.responsible)&&(
+                      <div style={{display:"flex",flexWrap:"wrap",gap:6,marginTop:6}}>
+                        {t.qty&&<span style={{fontSize:11,background:"#E2E8F0",
+                          borderRadius:6,padding:"2px 8px",color:"#475569"}}>
+                          📦 {t.qty}
+                        </span>}
+                        {t.material&&<span style={{fontSize:11,background:"#FEF3C7",
+                          borderRadius:6,padding:"2px 8px",color:"#92400E"}}>
+                          🪵 {t.material}
+                        </span>}
+                        {t.responsible&&<span style={{fontSize:11,background:"#EDE9FE",
+                          borderRadius:6,padding:"2px 8px",color:"#5B21B6"}}>
+                          👷 {t.responsible}
+                        </span>}
+                      </div>
+                    )}
+                  </div>
+                  {/* أزرار الحالة */}
+                  <div style={{padding:"12px 14px"}}>
+                    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",
+                      gap:8,marginBottom:10}}>
+                      {S.map(s=>(
+                        <button key={s.v}
+                          onClick={()=>setStatuses(p=>({...p,[i]:s.v}))}
+                          style={{border:"2px solid "+(statuses[i]===s.v?s.c:"#E2E8F0"),
+                            borderRadius:12,padding:"12px 6px",cursor:"pointer",
+                            fontFamily:"Tahoma",fontSize:12,fontWeight:700,
+                            background:statuses[i]===s.v?s.bg:"#fff",
+                            color:statuses[i]===s.v?s.c:"#94A3B8"}}>
+                          <div style={{fontSize:20,marginBottom:4}}>{s.e}</div>
+                          {s.v}
+                        </button>
+                      ))}
+                    </div>
+                    <input placeholder="ملاحظة على هذه المهمة..."
+                      value={notes[i]||""}
+                      onChange={e=>setNotes(p=>({...p,[i]:e.target.value}))}
+                      style={{width:"100%",border:"1px solid #E2E8F0",borderRadius:10,
+                        padding:"10px 14px",fontSize:13,outline:"none",
+                        fontFamily:"Tahoma",direction:"rtl",boxSizing:"border-box",
+                        background:"#F8FAFC"}}/>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* رفع تقرير الأعمال */}
+            {todayPlan&&(
+              <div style={{background:"#fff",borderRadius:16,
+                padding:16,border:"1px solid #E2E8F0"}}>
+                <div style={{fontSize:14,fontWeight:700,color:"#0F172A",marginBottom:12}}>
+                  📤 رفع تقرير الأعمال
+                </div>
+                {todayReport?(
+                  <div style={{background:"#F0FDF4",borderRadius:14,padding:20,
+                    border:"2px solid #16A34A",textAlign:"center"}}>
+                    <div style={{fontSize:48,marginBottom:8}}>✅</div>
+                    <div style={{fontSize:15,fontWeight:700,color:"#16A34A"}}>
+                      تم رفع التقرير
+                    </div>
+                    <div style={{fontSize:12,color:"#64748B",marginTop:4}}>
+                      {todayReport.submittedAt?.slice(11,16)}
+                    </div>
+                  </div>
+                ):(
+                  <>
+                    <textarea value={genNote}
+                      onChange={e=>setGenNote(e.target.value)}
+                      placeholder="ملاحظات إضافية..." rows={3}
+                      style={{width:"100%",border:"1px solid #CBD5E1",borderRadius:12,
+                        padding:"12px 14px",fontSize:14,outline:"none",fontFamily:"Tahoma",
+                        direction:"rtl",boxSizing:"border-box",
+                        resize:"none",marginBottom:14}}/>
+                    <button onClick={submitWork} disabled={saving}
+                      style={{width:"100%",border:"none",borderRadius:14,padding:"16px",
+                        fontSize:16,fontWeight:700,fontFamily:"Tahoma",cursor:"pointer",
+                        background:saving?"#E2E8F0":"#16A34A",
+                        color:saving?"#94A3B8":"#fff"}}>
+                      {saving?"⏳ جاري الرفع...":"✅ رفع تقرير الأعمال"}
+                    </button>
+                  </>
+                )}
+              </div>
+            )}
           </div>
         )}
 
-        {/* خطة اليوم */}
-        <div style={{background:"#fff",borderRadius:16,padding:18,marginBottom:14,
-          border:"1px solid #E2E8F0"}}>
-          <div style={{fontSize:14,fontWeight:700,color:"#1E293B",marginBottom:12}}>
-            📋 مهام اليوم
-          </div>
-          {!todayPlan?(
-            <div style={{textAlign:"center",padding:24,color:"#94A3B8"}}>
-              <div style={{fontSize:36,marginBottom:8}}>📭</div>
-              ما في مهام محددة لليوم
-            </div>
-          ):(todayPlan.tasks||[]).map((t,i)=>(
-            <div key={i} style={{borderRadius:12,padding:14,marginBottom:10,
-              border:"1px solid #E2E8F0",background:"#FAFAFA"}}>
-              <div style={{fontSize:13,fontWeight:600,color:"#1E293B",marginBottom:10}}>
-                {i+1}. {t.desc}
-                {t.qty&&<span style={{color:"#64748B",fontWeight:400}}> — {t.qty}</span>}
+        {/* ════ تبويب المعمل ════ */}
+        {tab==="factory"&&(
+          <div>
+
+            {/* حالة المكائن */}
+            <div style={{background:"#fff",borderRadius:16,
+              padding:16,marginBottom:14,border:"1px solid #E2E8F0"}}>
+              <div style={{fontSize:15,fontWeight:700,color:"#0F172A",marginBottom:14}}>
+                🔧 حالة المكائن
               </div>
-              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",
-                gap:6,marginBottom:8}}>
-                {S.map(s=>(
-                  <button key={s.v} onClick={()=>setStatuses(p=>({...p,[i]:s.v}))}
-                    style={{border:"2px solid "+(statuses[i]===s.v?s.c:"#E2E8F0"),
-                      borderRadius:8,padding:"8px 4px",cursor:"pointer",
-                      fontFamily:"Tahoma",fontSize:11,fontWeight:700,
-                      background:statuses[i]===s.v?s.bg:"#fff",
-                      color:statuses[i]===s.v?s.c:"#94A3B8"}}>
-                    {s.e} {s.v}
-                  </button>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10}}>
+                {MACHINE_STATUS.map(s=>{
+                  const mc=MACHINE_COLORS[s];
+                  const sel=factReport.machineStatus===s;
+                  return (
+                    <button key={s} onClick={()=>fr("machineStatus")(s)} style={{
+                      border:"2px solid "+(sel?mc.c:"#E2E8F0"),
+                      borderRadius:14,padding:"14px 8px",cursor:"pointer",
+                      fontFamily:"Tahoma",fontSize:12,fontWeight:700,
+                      background:sel?mc.bg:"#fff",
+                      color:sel?mc.c:"#94A3B8"}}>
+                      <div style={{fontSize:24,marginBottom:6}}>{mc.e}</div>
+                      {s}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* الوقود والماء */}
+            <div style={{background:"#fff",borderRadius:16,
+              padding:16,marginBottom:14,border:"1px solid #E2E8F0"}}>
+              <div style={{fontSize:15,fontWeight:700,color:"#0F172A",marginBottom:14}}>
+                ⛽ الوقود والماء
+              </div>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+                {[
+                  {k:"fuel", l:"⛽ الوقود",c:"#F97316",unit:"لتر"},
+                  {k:"water",l:"💧 الماء",  c:"#2563EB",unit:"لتر"},
+                ].map(({k,l,c2,unit,c})=>(
+                  <div key={k} style={{background:"#F8FAFC",borderRadius:14,
+                    padding:"14px",textAlign:"center",border:"1px solid #E2E8F0"}}>
+                    <div style={{fontSize:14,fontWeight:700,color:"#475569",
+                      marginBottom:10}}>{l}</div>
+                    <input type="number" placeholder="0"
+                      value={factReport[k]}
+                      onChange={e=>fr(k)(e.target.value)}
+                      style={{width:"100%",border:"2px solid "+c+"30",borderRadius:12,
+                        padding:"12px",fontSize:24,fontWeight:800,outline:"none",
+                        fontFamily:"Tahoma",textAlign:"center",
+                        boxSizing:"border-box",color:c}}/>
+                    <div style={{fontSize:11,color:"#94A3B8",marginTop:6}}>{unit}</div>
+                  </div>
                 ))}
               </div>
-              <input placeholder="ملاحظة..." value={notes[i]||""}
-                onChange={e=>setNotes(p=>({...p,[i]:e.target.value}))}
-                style={{width:"100%",border:"1px solid #E2E8F0",borderRadius:8,
-                  padding:"8px 12px",fontSize:12,outline:"none",fontFamily:"Tahoma",
-                  direction:"rtl",boxSizing:"border-box",background:"#fff"}}/>
             </div>
-          ))}
-        </div>
 
-        {/* تقرير نهاية اليوم */}
-        {todayPlan&&(
-          <div style={{background:"#fff",borderRadius:16,padding:18,
-            marginBottom:14,border:"1px solid #E2E8F0"}}>
-            <div style={{fontSize:14,fontWeight:700,color:"#1E293B",marginBottom:12}}>
-              📤 تقرير نهاية اليوم
+            {/* ساعات اليوم */}
+            <div style={{background:"#fff",borderRadius:16,
+              padding:16,marginBottom:14,border:"1px solid #E2E8F0"}}>
+              <div style={{fontSize:15,fontWeight:700,color:"#0F172A",marginBottom:14}}>
+                🕐 ساعات اليوم
+              </div>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10}}>
+                {[
+                  {k:"gen1Hours",l:"مولد ١", c:"#F97316",e:"🔋"},
+                  {k:"gen2Hours",l:"مولد ٢", c:"#8B5CF6",e:"🔋"},
+                  {k:"elecHours",l:"كهرباء",c:"#2563EB",e:"⚡"},
+                ].map(({k,l,c,e})=>(
+                  <div key={k} style={{background:"#F8FAFC",borderRadius:14,
+                    padding:"14px 10px",textAlign:"center",border:"1px solid #E2E8F0"}}>
+                    <div style={{fontSize:18,marginBottom:4}}>{e}</div>
+                    <div style={{fontSize:11,fontWeight:700,color:c,marginBottom:8}}>{l}</div>
+                    <input type="number" placeholder="0"
+                      value={factReport[k]}
+                      onChange={e=>fr(k)(e.target.value)}
+                      style={{width:"100%",border:"2px solid "+c+"30",borderRadius:10,
+                        padding:"10px 4px",fontSize:22,fontWeight:800,outline:"none",
+                        fontFamily:"Tahoma",textAlign:"center",
+                        boxSizing:"border-box",color:c}}/>
+                    <div style={{fontSize:10,color:"#94A3B8",marginTop:4}}>ساعة</div>
+                  </div>
+                ))}
+              </div>
             </div>
-            {todayReport?(
-              <div style={{background:"#F0FDF4",borderRadius:12,padding:16,
-                border:"2px solid #16A34A",textAlign:"center"}}>
-                <div style={{fontSize:36,marginBottom:6}}>✅</div>
-                <div style={{fontSize:14,fontWeight:700,color:"#16A34A"}}>
-                  تم رفع التقرير
+
+            {/* الساعات الكلية */}
+            <div style={{background:"#fff",borderRadius:16,
+              padding:16,marginBottom:14,border:"1px solid #E2E8F0"}}>
+              <div style={{fontSize:15,fontWeight:700,color:"#0F172A",marginBottom:14}}>
+                📊 الساعات الكلية التراكمية
+              </div>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+                {[
+                  {k:"gen1Total",l:"مجموع مولد ١",c:"#F97316"},
+                  {k:"gen2Total",l:"مجموع مولد ٢",c:"#8B5CF6"},
+                ].map(({k,l,c})=>(
+                  <div key={k} style={{background:"#F8FAFC",borderRadius:14,
+                    padding:"14px",textAlign:"center",border:"1px solid #E2E8F0"}}>
+                    <div style={{fontSize:12,fontWeight:700,color:"#475569",
+                      marginBottom:8}}>{l}</div>
+                    <input type="number" placeholder="0"
+                      value={factReport[k]}
+                      onChange={e=>fr(k)(e.target.value)}
+                      style={{width:"100%",border:"2px solid "+c+"30",borderRadius:12,
+                        padding:"10px",fontSize:22,fontWeight:800,outline:"none",
+                        fontFamily:"Tahoma",textAlign:"center",
+                        boxSizing:"border-box",color:c}}/>
+                    <div style={{fontSize:10,color:"#94A3B8",marginTop:4}}>ساعة</div>
+                  </div>
+                ))}
+              </div>
+              <textarea placeholder="ملاحظات عن المعمل..." rows={2}
+                value={factReport.note} onChange={e=>fr("note")(e.target.value)}
+                style={{width:"100%",border:"1px solid #E2E8F0",borderRadius:12,
+                  padding:"11px 14px",fontSize:13,outline:"none",fontFamily:"Tahoma",
+                  direction:"rtl",boxSizing:"border-box",
+                  resize:"none",marginTop:12}}/>
+            </div>
+
+            {/* الكادر والأوفرتايم */}
+            <div style={{background:"#fff",borderRadius:16,
+              padding:16,marginBottom:14,border:"1px solid #E2E8F0"}}>
+              <div style={{fontSize:15,fontWeight:700,color:"#0F172A",marginBottom:14}}>
+                👷 الكادر والساعات الإضافية
+              </div>
+              {workers.map((w,i)=>(
+                <div key={i} style={{display:"flex",gap:8,
+                  marginBottom:10,alignItems:"center"}}>
+                  <input placeholder={"اسم العامل "+(i+1)}
+                    value={w.name}
+                    onChange={e=>setWorkers(p=>p.map((ww,ii)=>
+                      ii===i?{...ww,name:e.target.value}:ww))}
+                    style={{flex:1,border:"1px solid #CBD5E1",borderRadius:12,
+                      padding:"13px 14px",fontSize:14,outline:"none",
+                      fontFamily:"Tahoma",direction:"rtl",boxSizing:"border-box"}}/>
+                  <div style={{textAlign:"center",width:72}}>
+                    <input type="number" placeholder="0"
+                      value={w.hours}
+                      onChange={e=>setWorkers(p=>p.map((ww,ii)=>
+                        ii===i?{...ww,hours:e.target.value}:ww))}
+                      style={{width:"100%",border:"2px solid #F97316",borderRadius:12,
+                        padding:"13px 4px",fontSize:18,fontWeight:800,outline:"none",
+                        fontFamily:"Tahoma",textAlign:"center",
+                        boxSizing:"border-box",color:"#F97316"}}/>
+                    <div style={{fontSize:9,color:"#94A3B8",marginTop:2}}>ساعة OT</div>
+                  </div>
+                  <button onClick={()=>setWorkers(p=>p.filter((_,ii)=>ii!==i))}
+                    disabled={workers.length===1}
+                    style={{background:"#FEE2E2",border:"none",borderRadius:12,
+                      padding:"13px 12px",cursor:"pointer",
+                      color:"#DC2626",fontSize:18}}>✕</button>
                 </div>
-                <div style={{fontSize:11,color:"#64748B",marginTop:4}}>
-                  {todayReport.submittedAt?.slice(11,16)}
+              ))}
+              <button onClick={()=>setWorkers(p=>[...p,{name:"",hours:""}])}
+                style={{width:"100%",border:"2px dashed #CBD5E1",borderRadius:12,
+                  padding:"13px",fontSize:14,fontFamily:"Tahoma",cursor:"pointer",
+                  background:"transparent",color:"#64748B",marginTop:4}}>
+                + إضافة عامل
+              </button>
+            </div>
+
+            {/* رفع تقرير المعمل */}
+            {factSaved?(
+              <div style={{background:"#F5F3FF",border:"2px solid #8B5CF6",
+                borderRadius:16,padding:24,textAlign:"center"}}>
+                <div style={{fontSize:48,marginBottom:8}}>✅</div>
+                <div style={{fontSize:16,fontWeight:700,color:"#7C3AED"}}>
+                  تم رفع تقرير المعمل
                 </div>
               </div>
             ):(
-              <>
-                <textarea value={genNote} onChange={e=>setGenNote(e.target.value)}
-                  placeholder="ملاحظات إضافية..." rows={3}
-                  style={{width:"100%",border:"1px solid #CBD5E1",borderRadius:10,
-                    padding:"10px 14px",fontSize:13,outline:"none",fontFamily:"Tahoma",
-                    direction:"rtl",boxSizing:"border-box",
-                    resize:"none",marginBottom:12}}/>
-                <button onClick={submit} disabled={saving} style={{
-                  width:"100%",border:"none",borderRadius:12,padding:"14px",
-                  fontSize:14,fontWeight:700,fontFamily:"Tahoma",cursor:"pointer",
-                  background:saving?"#E2E8F0":"#16A34A",
-                  color:saving?"#94A3B8":"#fff"}}>
-                  {saving?"⏳ جاري الرفع...":"📤 رفع تقرير نهاية اليوم"}
-                </button>
-              </>
+              <button onClick={submitFactory} disabled={factSaving}
+                style={{width:"100%",border:"none",borderRadius:16,padding:"18px",
+                  fontSize:16,fontWeight:700,fontFamily:"Tahoma",cursor:"pointer",
+                  background:factSaving?"#E2E8F0":"#7C3AED",
+                  color:factSaving?"#94A3B8":"#fff"}}>
+                {factSaving?"⏳ جاري الرفع...":"📤 رفع تقرير المعمل"}
+              </button>
             )}
+
           </div>
         )}
 
