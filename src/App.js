@@ -79,6 +79,10 @@ const emptyForm = {
 };
 
 export default function App() {
+  // كشف رابط الفورمن — ?foreman=1
+  const isForeman = new URLSearchParams(window.location.search).get("foreman") === "1";
+  if (isForeman) return <ForemanSystem />;
+
   const [page, setPage]       = useState("home");
   const [selProj, setSelProj] = useState(null);
   const [projects, setProjects] = useState([]);
