@@ -84,7 +84,7 @@ export default function App() {
   const isForeman = urlParams.get("foreman") === "1";
   const isManager = urlParams.get("manager") === "1";
   if (isForeman) return <ForemanSystem />;
-  if (isManager) return <ForemanManagePage projects={projects} onBack={()=>window.history.back()} />;
+  if (isManager) return <ForemanManagePage onBack={()=>window.history.back()} />;
 
   const [page, setPage]       = useState("home");
   const [selProj, setSelProj] = useState(null);
@@ -820,6 +820,41 @@ export default function App() {
             onDelete={() => deleteProject(p.id)}
             onEdit={editProject} />
         )}
+        {/* مودال التعديل */}
+        {editId && (
+          <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.5)",
+            zIndex:100, display:"flex", alignItems:"center",
+            justifyContent:"center", padding:20 }}>
+            <div style={{ background:"#fff", borderRadius:16, padding:24,
+              width:"100%", maxWidth:420, direction:"rtl" }}>
+              <div style={{ fontSize:15, fontWeight:700, color:"#1E293B",
+                marginBottom:14 }}>✏️ تعديل المهمة</div>
+              <textarea value={editText}
+                onChange={e=>setEditText(e.target.value)}
+                rows={3}
+                style={{ width:"100%", border:"1.5px solid #CBD5E1",
+                  borderRadius:10, padding:"10px 14px", fontSize:14,
+                  outline:"none", fontFamily:"Tahoma", direction:"rtl",
+                  boxSizing:"border-box", resize:"none", marginBottom:14 }}/>
+              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
+                <button onClick={()=>{ setEditId(null); setEditText(""); }}
+                  style={{ border:"1px solid #E2E8F0", borderRadius:10,
+                    padding:"11px", cursor:"pointer", fontFamily:"Tahoma",
+                    fontSize:13, background:"#fff", color:"#64748B" }}>
+                  إلغاء
+                </button>
+                <button onClick={saveEdit}
+                  disabled={!editText.trim()}
+                  style={{ border:"none", borderRadius:10, padding:"11px",
+                    cursor:"pointer", fontFamily:"Tahoma", fontSize:13,
+                    fontWeight:700, background:"#2563EB", color:"#fff" }}>
+                  💾 حفظ التعديل
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
       </div>
     </div>
   );
@@ -915,19 +950,19 @@ function AdminPage({ onBack }) {
     });
   }, []);
 
+  const [editId,   setEditId]   = useState(null);
+  const [editText, setEditText] = useState("");
+
   const addTask = () => {
     if (!text.trim()) return;
     const proj = activeProjs.find(p => p.id === selProj);
     addDoc(collection(db, "daily_tasks"), {
       text: text.trim(),
-      date: today,
-      done: false,
-      projectId:   proj?.id   || "",
-      projectName: proj?.name || "",
+      date: today, done: false,
+      projectId: proj?.id||"", projectName: proj?.name||"",
       createdAt: new Date().toISOString()
     });
-    setText("");
-    setSelProj("");
+    setText(""); setSelProj("");
   };
 
   const toggleDone = (id, done) => {
@@ -935,7 +970,25 @@ function AdminPage({ onBack }) {
   };
 
   const deleteTask = id => {
+    const pw = window.prompt("🔒 باسورد الحذف:");
+    if(!pw) return;
+    if(pw !== PASS) { alert("❌ باسورد غلط"); return; }
+    if(!window.confirm("حذف هذه المهمة نهائياً؟")) return;
     deleteDoc(doc(db, "daily_tasks", id));
+  };
+
+  const startEdit = (task) => {
+    setEditId(task.id);
+    setEditText(task.text);
+  };
+
+  const saveEdit = () => {
+    if(!editText.trim()) return;
+    const pw = window.prompt("🔒 باسورد التعديل:");
+    if(!pw) return;
+    if(pw !== PASS) { alert("❌ باسورد غلط"); return; }
+    updateDoc(doc(db, "daily_tasks", editId), { text: editText.trim() });
+    setEditId(null); setEditText("");
   };
 
   const todayTasks = tasks.filter(t => t.date === today);

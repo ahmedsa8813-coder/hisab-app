@@ -508,7 +508,8 @@ function SiteView({ foreman, onLogout }) {
 }
 
 // ─── لوحة المدير الاحترافية ───────────────────────────
-export function ForemanManagePage({ projects, onBack }) {
+export function ForemanManagePage({ onBack }) {
+  const [projects,    setProjects]    = useState([]);
   const [tab,         setTab]         = useState("dashboard");
   const [foremans,    setForemans]    = useState([]);
   const [factPlans,   setFactPlans]   = useState([]);
@@ -532,6 +533,8 @@ export function ForemanManagePage({ projects, onBack }) {
   const ff = k => v => setFForm(f=>({...f,[k]:v}));
 
   useEffect(()=>{
+    const u0=onSnapshot(collection(db,"projects"),
+      s=>setProjects(s.docs.map(d=>({id:d.id,...d.data()}))));
     const u1=onSnapshot(collection(db,"foremans"),
       s=>setForemans(s.docs.map(d=>({id:d.id,...d.data()}))));
     const u2=onSnapshot(collection(db,"factory_plans"),
@@ -545,7 +548,7 @@ export function ForemanManagePage({ projects, onBack }) {
         .sort((a,b)=>b.date.localeCompare(a.date))));
     const u5=onSnapshot(collection(db,"site_plans"),
       s=>setSitePlans(s.docs.map(d=>({id:d.id,...d.data()}))));
-    return()=>{u1();u2();u3();u4();u5();};
+    return()=>{u0();u1();u2();u3();u4();u5();};
   },[]);
 
   const activeProjects=(projects||[]).filter(p=>p.status==="active"&&p.type==="ديكور");
@@ -816,7 +819,24 @@ ${body}
                   </button>
                 )}
               </div>
-              {siteForemans.length===0?(
+              {foremans.length===0?(
+                <div style={{background:"#F8FAFC",borderRadius:12,padding:24,
+                  textAlign:"center",border:"2px dashed #E2E8F0"}}>
+                  <div style={{fontSize:36,marginBottom:10}}>👷</div>
+                  <div style={{fontSize:14,fontWeight:700,color:"#1E293B",marginBottom:6}}>
+                    ابدأ بإضافة الفريق
+                  </div>
+                  <div style={{fontSize:12,color:"#64748B",marginBottom:14}}>
+                    اذهب لتبويب 👷 الفريق → أضف فورمن معمل وفورمن لكل موقع
+                  </div>
+                  <button onClick={()=>setTab("team")} style={{
+                    border:"none",borderRadius:10,padding:"10px 24px",
+                    cursor:"pointer",fontFamily:"Tahoma",fontSize:13,fontWeight:700,
+                    background:"#0F172A",color:"#fff"}}>
+                    + إضافة الفريق الآن
+                  </button>
+                </div>
+              ):siteForemans.length===0?(
                 <div style={{textAlign:"center",padding:"20px 0",color:"#94A3B8",fontSize:12}}>
                   ما في مواقع مضافة — أضف فورمن موقع من تبويب الفريق
                 </div>
