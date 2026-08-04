@@ -180,21 +180,41 @@ export default function App2({ onBack }) {
     },
   ];
 
+  const P = isMobile ? "16px" : "28px 28px 28px 20px";
+
   return (
     <div style={{ minHeight:"100vh", fontFamily:"Tahoma",
-      direction:"rtl", display:"flex", background:"#F1F5F9" }}>
+      direction:"rtl", display:"flex", background:"#F1F5F9",
+      position:"relative" }}>
 
-      {/* ─── المحتوى (يسار) ─── */}
-      <div style={{ flex:1, overflow:"auto", padding:"28px 28px 28px 20px" }}>
+      {/* ─── Mobile Overlay ─── */}
+      {isMobile && sideOpen && (
+        <div onClick={()=>setSideOpen(false)}
+          style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.5)",
+            zIndex:40 }}/>
+      )}
+
+      {/* ─── المحتوى ─── */}
+      <div style={{ flex:1, overflow:"auto", padding:P }}>
 
         {/* هيدر */}
-        <div style={{ marginBottom:24 }}>
-          <div style={{ fontSize:22, fontWeight:700, color:"#0F172A" }}>
-            لوحة الحسابات
+        <div style={{ marginBottom:isMobile?16:24,
+          display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+          <div>
+            <div style={{ fontSize:isMobile?18:22, fontWeight:700, color:"#0F172A" }}>
+              لوحة الحسابات
+            </div>
+            <div style={{ fontSize:11, color:"#64748B", marginTop:2 }}>
+              {new Date().toLocaleDateString("ar-IQ",{weekday:"long",year:"numeric",month:"long",day:"numeric"})}
+            </div>
           </div>
-          <div style={{ fontSize:12, color:"#64748B", marginTop:3 }}>
-            {new Date().toLocaleDateString("ar-IQ",{weekday:"long",year:"numeric",month:"long",day:"numeric"})}
-          </div>
+          {/* زر القائمة للموبايل */}
+          {isMobile && (
+            <button onClick={()=>setSideOpen(v=>!v)} style={{
+              background:"#0F172A", border:"none", borderRadius:10,
+              padding:"10px 14px", cursor:"pointer", color:"#fff",
+              fontSize:18, lineHeight:1 }}>☰</button>
+          )}
         </div>
 
         {/* كبطاقات الجرد */}
@@ -235,7 +255,7 @@ export default function App2({ onBack }) {
             <div style={{ width:4, height:20, background:"#059669", borderRadius:99 }}/>
             <span style={{ fontSize:14, fontWeight:700, color:"#475569" }}>الصناديق الرئيسية</span>
           </div>
-          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:14 }}>
+          <div style={{ display:"grid", gridTemplateColumns:isMobile?"1fr":"1fr 1fr 1fr", gap:isMobile?10:14 }}>
             {MAIN_FUNDS.map(f=>{
               const bal=funds[f.id]||{din:0,dol:0};
               return (
@@ -258,7 +278,7 @@ export default function App2({ onBack }) {
                     </div>
                   </div>
                   {f.id==="شركاء" ? (
-                    <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr 1fr 1fr", gap:8 }}>
+                    <div style={{ display:"grid", gridTemplateColumns:isMobile?"1fr 1fr":"1fr 1fr 1fr 1fr 1fr", gap:8 }}>
                       {/* الإجمالي */}
                       <div style={{ background:f.bg, borderRadius:10, padding:"12px", textAlign:"center" }}>
                         <div style={{ fontSize:9, color:"#64748B", marginBottom:3 }}>الإجمالي</div>
@@ -315,7 +335,7 @@ export default function App2({ onBack }) {
             <div style={{ width:4, height:20, background:"#D97706", borderRadius:99 }}/>
             <span style={{ fontSize:14, fontWeight:700, color:"#475569" }}>صناديق الأقسام</span>
           </div>
-          <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:14 }}>
+          <div style={{ display:"grid", gridTemplateColumns:isMobile?"1fr 1fr":"repeat(4,1fr)", gap:isMobile?10:14 }}>
             {DEPT_FUNDS.map(f=>{
               const bal=funds[f.id]||{din:0,dol:0};
               return (
@@ -351,9 +371,17 @@ export default function App2({ onBack }) {
       </div>
 
       {/* ─── السايدبار الأيمن ─── */}
-      <div style={{ width:260, minHeight:"100vh", background:"#0F172A",
+      <div style={{
+        width:isMobile?280:260,
+        minHeight:"100vh", background:"#0F172A",
         display:"flex", flexDirection:"column", flexShrink:0,
-        position:"sticky", top:0, height:"100vh", overflowY:"auto" }}>
+        position:isMobile?"fixed":"sticky",
+        top:0, right:0, height:"100vh", overflowY:"auto",
+        zIndex:isMobile?50:1,
+        transform:isMobile?(sideOpen?"translateX(0)":"translateX(100%)"):"none",
+        transition:"transform 0.3s ease",
+        boxShadow:isMobile?"−8px 0 30px rgba(0,0,0,0.4)":"none"
+      }}>
 
         {/* الشعار */}
         <div style={{ padding:"20px 16px 14px", borderBottom:"1px solid #1E293B" }}>
@@ -419,6 +447,7 @@ export default function App2({ onBack }) {
                   onClick={()=>{
                     if(item.fund){setSelFund(item.fund);setPage("fund");}
                     else if(item.pg) setPage(item.pg);
+                    setSideOpen(false);
                   }}
                   style={{ width:"100%", background:"transparent", border:"none",
                     borderRadius:8, padding:"8px 10px", cursor:"pointer",
@@ -477,7 +506,8 @@ function FundPage({ fund, funds, projects=[], onBack }) {
     date: new Date().toISOString().split("T")[0], note:""
   });
   const plf = k => v => setProjLoanForm(f=>({...f,[k]:v}));
-  const activeProjects = projects.filter(p=>p.status==="active");
+  // فقط مشاريع نفس الفرع
+  const activeProjects = projects.filter(p=>p.status==="active" && p.type===fund.id);
 
   const giveProjLoanFromFund = async () => {
     if (!projLoanForm.projectId) { alert("اختر مشروعاً أولاً"); return; }
@@ -841,7 +871,9 @@ td{padding:7px 6px;font-size:10px;text-align:center;border-bottom:1px solid #F1F
               <div style={{ fontSize:12, color:"#64748B", fontWeight:600, marginBottom:5 }}>المشروع المستفيد *</div>
               {activeProjects.length===0 ? (
                 <div style={{ fontSize:12, color:"#94A3B8", padding:10,
-                  background:"#F8FAFC", borderRadius:9 }}>ما في مشاريع نشطة</div>
+                  background:"#F8FAFC", borderRadius:9 }}>
+                  ما في مشاريع {fund.label} نشطة
+                </div>
               ) : (
                 <select value={projLoanForm.projectId}
                   onChange={e=>plf("projectId")(e.target.value)}
@@ -911,6 +943,9 @@ td{padding:7px 6px;font-size:10px;text-align:center;border-bottom:1px solid #F1F
             </button>
           </div>
         )}
+
+        {/* ─── إقراض الصندوق العام ─── */}
+        {isBranch && <LendToGeneralSection fund={fund} funds={funds} bal={bal}/>}
 
         {/* فورم الإضافة */}
         {showAdd && (
@@ -1246,6 +1281,188 @@ td{padding:7px 6px;font-size:10px;text-align:center;border-bottom:1px solid #F1F
           })}
         </div>
       </div>
+    </div>
+  );
+}
+
+
+// ─── مكوّن إقراض الصندوق العام ──────────────────────────
+function LendToGeneralSection({ fund, funds, bal }) {
+  const [show,    setShow]    = useState(false);
+  const [genLoans,setGenLoans]= useState([]);
+  const [form,    setForm]    = useState({
+    din:"", dol:"", date:new Date().toISOString().split("T")[0], note:""
+  });
+  const sf = k => v => setForm(f=>({...f,[k]:v}));
+
+  useEffect(()=>{
+    return onSnapshot(
+      query(collection(db,"internal_loans"),
+        where("fromFund","==",fund.id),
+        where("toFund","==","عام"),
+        where("status","==","open")),
+      snap=>setGenLoans(snap.docs.map(d=>({id:d.id,...d.data()})))
+    );
+  },[fund.id]);
+
+  const lendToGeneral = async () => {
+    const din=Number(form.din)||0, dol=Number(form.dol)||0;
+    if(!din&&!dol) return;
+    if(din>bal.din){alert("⛔ رصيد الدينار غير كافٍ — المتاح: "+fNum(bal.din)+" د.ع");return;}
+    if(dol>bal.dol){alert("⛔ رصيد الدولار غير كافٍ — المتاح: "+fNum(bal.dol)+" $");return;}
+    const pw=window.prompt("🔒 باسورد:");
+    if(!pw)return; if(pw!==PASS){alert("❌ باسورد غلط");return;}
+
+    const genBal=funds["عام"]||{din:0,dol:0};
+    await setDoc(doc(db,"funds",fund.id),{din:bal.din-din,dol:bal.dol-dol},{merge:true});
+    await setDoc(doc(db,"funds","عام"),{din:genBal.din+din,dol:genBal.dol+dol},{merge:true});
+    await addDoc(collection(db,"fund_txs"),{fundId:fund.id,fundLabel:fund.label,type:"صرف",
+      din,dol,note:"قرض للصندوق العام: "+form.note,
+      date:form.date,createdAt:new Date().toISOString()});
+    await addDoc(collection(db,"fund_txs"),{fundId:"عام",fundLabel:"الصندوق العام",type:"إيداع",
+      din,dol,note:"قرض من صندوق "+fund.label+": "+form.note,
+      date:form.date,createdAt:new Date().toISOString()});
+    await addDoc(collection(db,"internal_loans"),{
+      fromFund:fund.id, fromLabel:fund.label,
+      toFund:"عام", toLabel:"الصندوق العام",
+      din, dol, note:form.note, date:form.date,
+      status:"open", createdAt:new Date().toISOString()
+    });
+    setForm({din:"",dol:"",date:new Date().toISOString().split("T")[0],note:""});
+    setShow(false);
+    alert("✅ تم إقراض الصندوق العام من صندوق "+fund.label);
+  };
+
+  const repayFromGeneral = async (loan) => {
+    const pw=window.prompt("🔒 باسورد السداد:");
+    if(!pw)return; if(pw!==PASS){alert("❌ باسورد غلط");return;}
+    const genBal=funds["عام"]||{din:0,dol:0};
+    if((loan.din||0)>genBal.din){alert("⛔ رصيد الصندوق العام غير كافٍ للسداد");return;}
+    const today=new Date().toISOString().split("T")[0];
+    const fBal=funds[fund.id]||{din:0,dol:0};
+    await setDoc(doc(db,"funds","عام"),
+      {din:genBal.din-(loan.din||0),dol:genBal.dol-(loan.dol||0)},{merge:true});
+    await setDoc(doc(db,"funds",fund.id),
+      {din:fBal.din+(loan.din||0),dol:fBal.dol+(loan.dol||0)},{merge:true});
+    await addDoc(collection(db,"fund_txs"),{fundId:"عام",fundLabel:"الصندوق العام",type:"صرف",
+      din:loan.din||0,dol:loan.dol||0,note:"سداد قرض لصندوق "+fund.label,
+      date:today,createdAt:new Date().toISOString()});
+    await addDoc(collection(db,"fund_txs"),{fundId:fund.id,fundLabel:fund.label,type:"إيداع",
+      din:loan.din||0,dol:loan.dol||0,note:"سداد قرض من الصندوق العام",
+      date:today,createdAt:new Date().toISOString()});
+    await updateDoc(doc(db,"internal_loans",loan.id),{status:"paid",paidDate:today});
+    alert("✅ سدد الصندوق العام قرضه لصندوق "+fund.label);
+  };
+
+  return (
+    <div style={{marginBottom:14}}>
+      {/* ديون العام لهذا الصندوق */}
+      {genLoans.length>0&&(
+        <div style={{background:"#FFFBEB",borderRadius:12,padding:14,
+          border:"2px solid #D97706",marginBottom:10}}>
+          <div style={{fontSize:13,fontWeight:700,color:"#D97706",marginBottom:10}}>
+            💰 ديون الصندوق العام لهذا الصندوق ({genLoans.length})
+          </div>
+          {genLoans.map(l=>(
+            <div key={l.id} style={{background:"#fff",borderRadius:9,
+              padding:"10px 12px",marginBottom:8,border:"1px solid #FDE68A"}}>
+              <div style={{display:"flex",justifyContent:"space-between",
+                alignItems:"start",marginBottom:8}}>
+                <div>
+                  <div style={{fontSize:12,fontWeight:700,color:"#D97706"}}>
+                    العام مدين لصندوق {fund.label}
+                  </div>
+                  <div style={{fontSize:11,color:"#64748B",marginTop:2}}>
+                    📅 {l.date}{l.note&&" · "+l.note}
+                  </div>
+                </div>
+                <div style={{textAlign:"left"}}>
+                  {(l.din||0)>0&&<div style={{fontSize:14,fontWeight:700,
+                    color:"#DC2626"}}>{fNum(l.din)} د.ع</div>}
+                  {(l.dol||0)>0&&<div style={{fontSize:12,fontWeight:700,
+                    color:"#2563EB"}}>{fNum(l.dol)} $</div>}
+                </div>
+              </div>
+              <button onClick={()=>repayFromGeneral(l)} style={{
+                width:"100%",border:"none",borderRadius:8,padding:"9px",
+                fontSize:12,fontWeight:700,fontFamily:"Tahoma",cursor:"pointer",
+                background:(funds["عام"]?.din||0)>=(l.din||0)?"#D97706":"#E2E8F0",
+                color:(funds["عام"]?.din||0)>=(l.din||0)?"#fff":"#94A3B8"}}>
+                {(funds["عام"]?.din||0)>=(l.din||0)
+                  ?"↩️ سداد العام لصندوق "+fund.label
+                  :"⛔ رصيد العام غير كافٍ (ناقص "+fNum((l.din||0)-(funds["عام"]?.din||0))+" د.ع)"}
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* زر إقراض العام */}
+      <button onClick={()=>setShow(v=>!v)} style={{
+        width:"100%",border:"2px solid #D97706",borderRadius:12,padding:"11px",
+        fontSize:13,fontWeight:700,fontFamily:"Tahoma",cursor:"pointer",
+        background:show?"#D97706":"#FFFBEB",color:show?"#fff":"#D97706",
+        marginBottom:show?10:0}}>
+        {show?"✕ إلغاء":"🏦 إقراض الصندوق العام"}
+      </button>
+
+      {show&&(
+        <div style={{background:"#FFFBEB",borderRadius:14,padding:16,
+          border:"2px solid #D97706"}}>
+          <div style={{fontSize:13,fontWeight:700,color:"#D97706",marginBottom:12}}>
+            🏦 إقراض الصندوق العام من صندوق {fund.label}
+          </div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:12}}>
+            {[{k:"din",l:"مبلغ الدينار",c:"#D97706",av:bal.din},
+              {k:"dol",l:"مبلغ الدولار",c:"#2563EB",av:bal.dol}].map(({k,l,c,av})=>{
+              const v=Number(form[k])||0, ok=v===0||av>=v;
+              return (
+                <div key={k}>
+                  <div style={{fontSize:12,color:c,fontWeight:600,marginBottom:5}}>{l}</div>
+                  <input type="text" inputMode="numeric" placeholder="٠" value={form[k]}
+                    onChange={e=>sf(k)(e.target.value.replace(/[^0-9]/g,""))}
+                    style={{width:"100%",border:"1.5px solid "+(v>0&&!ok?"#DC2626":"#CBD5E1"),
+                      borderRadius:9,padding:"10px 13px",fontSize:14,outline:"none",
+                      fontFamily:"Tahoma",direction:"rtl",
+                      boxSizing:"border-box",background:"#fff"}}/>
+                  {v>0&&(
+                    <div style={{fontSize:11,marginTop:3,fontWeight:600,color:ok?c:"#DC2626"}}>
+                      {ok?"✍️ "+w2(v)+" "+(k==="din"?"دينار":"دولار")
+                        +" — متبقي: "+fNum(av-v)+(k==="din"?" د.ع":" $")
+                        :"⛔ يتجاوز الرصيد"}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:12}}>
+            <div>
+              <div style={{fontSize:12,color:"#64748B",fontWeight:600,marginBottom:5}}>التاريخ</div>
+              <input type="date" value={form.date} onChange={e=>sf("date")(e.target.value)}
+                style={{width:"100%",border:"1px solid #CBD5E1",borderRadius:9,
+                  padding:"10px",fontSize:13,outline:"none",fontFamily:"Tahoma",
+                  boxSizing:"border-box",background:"#fff"}}/>
+            </div>
+            <div>
+              <div style={{fontSize:12,color:"#64748B",fontWeight:600,marginBottom:5}}>السبب</div>
+              <input placeholder="سبب القرض..." value={form.note}
+                onChange={e=>sf("note")(e.target.value)}
+                style={{width:"100%",border:"1px solid #CBD5E1",borderRadius:9,
+                  padding:"10px",fontSize:13,outline:"none",fontFamily:"Tahoma",
+                  direction:"rtl",boxSizing:"border-box",background:"#fff"}}/>
+            </div>
+          </div>
+          <button onClick={lendToGeneral}
+            disabled={!Number(form.din)&&!Number(form.dol)}
+            style={{width:"100%",border:"none",borderRadius:10,padding:"13px",
+              fontSize:14,fontWeight:700,fontFamily:"Tahoma",cursor:"pointer",
+              background:Number(form.din)||Number(form.dol)?"#D97706":"#E2E8F0",
+              color:Number(form.din)||Number(form.dol)?"#fff":"#94A3B8"}}>
+            ✅ إقراض الصندوق العام من صندوق {fund.label}
+          </button>
+        </div>
+      )}
     </div>
   );
 }
