@@ -667,6 +667,10 @@ export function ForemanManagePage({ projects, onBack }) {
   const [planTasks,  setPlanTasks]  = useState([{desc:"",qty:"",note:""}]);
   const [planNote,   setPlanNote]   = useState("");
   const [planSaved,  setPlanSaved]  = useState(false);
+  const [selForeman, setSelForeman] = useState("factory"); // "factory" | foreman.id
+  const [sitePlanTask,setSitePlanTask]=useState("");
+  const [sitePlanNote,setSitePlanNote]=useState("");
+  const [sitePlanSaved,setSitePlanSaved]=useState(false);
 
   useEffect(()=>{
     const u1=onSnapshot(collection(db,"foremans"),
@@ -749,7 +753,7 @@ export function ForemanManagePage({ projects, onBack }) {
           gap:8,marginBottom:16}}>
           {[
             {id:"reports", label:"📊 التقارير"},
-            {id:"plan",    label:"📋 خطة الغد"},
+            {id:"plan",    label:"📋 خطة الغد للكل"},
             {id:"foremans",label:"👷 الفورمن"},
           ].map(t=>(
             <button key={t.id} onClick={()=>setTab(t.id)} style={{
@@ -859,13 +863,44 @@ export function ForemanManagePage({ projects, onBack }) {
 
         {/* ─── خطة الغد ─── */}
         {tab==="plan"&&(
-          <div style={{background:"#fff",borderRadius:14,padding:20,
-            border:"1px solid #E2E8F0"}}>
+          <div>
+            {/* اختيار الفورمن */}
+            <div style={{background:"#fff",borderRadius:14,padding:16,
+              border:"1px solid #E2E8F0",marginBottom:14}}>
+              <div style={{fontSize:13,fontWeight:700,color:"#1E293B",marginBottom:10}}>
+                📋 اختر من تريد وضع خطة الغد له
+              </div>
+              <div style={{display:"flex",flexWrap:"wrap",gap:8}}>
+                <button onClick={()=>setSelForeman("factory")} style={{
+                  border:"2px solid "+(selForeman==="factory"?"#0F172A":"#E2E8F0"),
+                  borderRadius:9,padding:"8px 16px",cursor:"pointer",
+                  fontFamily:"Tahoma",fontSize:12,fontWeight:700,
+                  background:selForeman==="factory"?"#0F172A":"#fff",
+                  color:selForeman==="factory"?"#fff":"#64748B"}}>
+                  🏭 فورمن المعمل
+                </button>
+                {foremans.filter(f=>f.type==="موقع").map(f=>(
+                  <button key={f.id} onClick={()=>setSelForeman(f.id)} style={{
+                    border:"2px solid "+(selForeman===f.id?"#2563EB":"#E2E8F0"),
+                    borderRadius:9,padding:"8px 16px",cursor:"pointer",
+                    fontFamily:"Tahoma",fontSize:12,fontWeight:700,
+                    background:selForeman===f.id?"#2563EB":"#fff",
+                    color:selForeman===f.id?"#fff":"#64748B"}}>
+                    📍 {f.name} — {f.projectName||"موقع"}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* خطة المعمل */}
+            {selForeman==="factory"&&(
+            <div style={{background:"#fff",borderRadius:14,padding:20,
+              border:"1px solid #E2E8F0"}}>
             <div style={{fontSize:14,fontWeight:700,color:"#1E293B",marginBottom:4}}>
-              📋 خطة المعمل ليوم {TOMORROW}
+              🏭 خطة المعمل — {TOMORROW}
             </div>
             <div style={{fontSize:11,color:"#64748B",marginBottom:16}}>
-              الفورمن سيشوف هذه المهام غداً عند الدخول
+              تطلع لفورمن المعمل غداً فور دخوله
             </div>
 
             {planTasks.map((t,i)=>(
@@ -931,7 +966,7 @@ export function ForemanManagePage({ projects, onBack }) {
                 borderRadius:12,padding:14,textAlign:"center"}}>
                 <div style={{fontSize:24}}>✅</div>
                 <div style={{fontSize:14,fontWeight:700,color:"#16A34A"}}>
-                  تم حفظ خطة الغد
+                  تم حفظ خطة المعمل ليوم الغد
                 </div>
               </div>
             ):(
@@ -941,10 +976,93 @@ export function ForemanManagePage({ projects, onBack }) {
                   fontSize:14,fontWeight:700,fontFamily:"Tahoma",cursor:"pointer",
                   background:planTasks.some(t=>t.desc.trim())?"#0F172A":"#E2E8F0",
                   color:planTasks.some(t=>t.desc.trim())?"#fff":"#94A3B8"}}>
-                💾 حفظ خطة يوم {TOMORROW}
+                💾 حفظ خطة المعمل ليوم {TOMORROW}
               </button>
             )}
           </div>
+          )}
+
+          {/* خطة موقع الفورمن */}
+          {selForeman!=="factory"&&(()=>{
+            const selF=foremans.find(f=>f.id===selForeman);
+            if(!selF) return null;
+
+            const saveSitePlan = async () => {
+              if(!sitePlanTask.trim()) return;
+              const tasks = sitePlanTask.split("\n")
+                .filter(t=>t.trim())
+                .map(t=>({desc:t.trim(),note:""}));
+              await setDoc(doc(db,"site_plans",selF.projectId+"_"+TOMORROW),{
+                projectId:selF.projectId,
+                projectName:selF.projectName||"",
+                foremanId:selF.id,
+                date:TOMORROW,
+                tasks,
+                note:sitePlanNote,
+                createdAt:new Date().toISOString()
+              });
+              setSitePlanSaved(true);
+              setTimeout(()=>setSitePlanSaved(false),2000);
+            };
+
+            return (
+              <div style={{background:"#fff",borderRadius:14,padding:20,
+                border:"1px solid #E2E8F0"}}>
+                <div style={{fontSize:14,fontWeight:700,color:"#1E293B",marginBottom:4}}>
+                  📍 خطة موقع {selF.name} — {TOMORROW}
+                </div>
+                <div style={{fontSize:11,color:"#64748B",marginBottom:16}}>
+                  تطلع لـ {selF.name} غداً فور دخوله على حسابه
+                </div>
+
+                <div style={{marginBottom:12}}>
+                  <div style={{fontSize:12,color:"#64748B",fontWeight:600,marginBottom:5}}>
+                    🔨 المهام المطلوبة (كل سطر = مهمة)
+                  </div>
+                  <textarea value={sitePlanTask}
+                    onChange={e=>setSitePlanTask(e.target.value)}
+                    placeholder="مثال: كل سطر مهمة — إكمال سقف غرفة 5 / دهان الجدران / تركيب إضاءة"
+                    rows={5}
+                    style={{width:"100%",border:"1px solid #CBD5E1",borderRadius:10,
+                      padding:"10px 14px",fontSize:13,outline:"none",fontFamily:"Tahoma",
+                      direction:"rtl",boxSizing:"border-box",resize:"none"}}/>
+                </div>
+
+                <div style={{marginBottom:14}}>
+                  <div style={{fontSize:12,color:"#64748B",fontWeight:600,marginBottom:5}}>
+                    💬 ملاحظة توجيهية
+                  </div>
+                  <input value={sitePlanNote}
+                    onChange={e=>setSitePlanNote(e.target.value)}
+                    placeholder="أي توجيهات إضافية للفورمن..."
+                    style={{width:"100%",border:"1px solid #CBD5E1",borderRadius:9,
+                      padding:"10px 14px",fontSize:13,outline:"none",fontFamily:"Tahoma",
+                      direction:"rtl",boxSizing:"border-box"}}/>
+                </div>
+
+                {sitePlanSaved?(
+                  <div style={{background:"#F0FDF4",border:"2px solid #16A34A",
+                    borderRadius:12,padding:14,textAlign:"center"}}>
+                    <div style={{fontSize:24}}>✅</div>
+                    <div style={{fontSize:14,fontWeight:700,color:"#16A34A"}}>
+                      تم حفظ خطة موقع {selF.name} ليوم الغد
+                    </div>
+                  </div>
+                ):(
+                  <button onClick={saveSitePlan}
+                    disabled={!sitePlanTask.trim()}
+                    style={{width:"100%",border:"none",borderRadius:12,padding:"14px",
+                      fontSize:14,fontWeight:700,fontFamily:"Tahoma",cursor:"pointer",
+                      background:sitePlanTask.trim()?"#2563EB":"#E2E8F0",
+                      color:sitePlanTask.trim()?"#fff":"#94A3B8"}}>
+                    💾 حفظ خطة {selF.name} ليوم {TOMORROW}
+                  </button>
+                )}
+              </div>
+            );
+          })()}
+
+        </div>
         )}
 
         {/* ─── الفورمن ─── */}
