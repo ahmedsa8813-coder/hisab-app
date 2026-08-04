@@ -323,19 +323,22 @@ function FactoryView({ foreman, onLogout, lang="ar" }) {
       submittedAt:new Date().toISOString()
     });
 
-    // إرسال الأوفرتايم لصفحة الرواتب
+    // إرسال الأوفرتايم — سجل واحد لكل موظف في اليوم (لا تكرار)
+    const month = TODAY.slice(0,7); // مثال: 2026-08
     for(const w of validWorkers){
-      await addDoc(collection(db,"overtime_records"),{
-        workerName:w.empName,
-        empId:w.empId,
-        hours:Number(w.hours)||0,
-        date:TODAY,
-        source:"معمل الديكور",
-        foremanName:foreman.name,
-        branch:"ديكور",
-        status:"pending", // معلق — ينتظر موافقة المدير المالي
-        createdAt:new Date().toISOString()
-      });
+      const docId = w.empId+"_"+TODAY; // مفتاح فريد: موظف + يوم
+      await setDoc(doc(db,"overtime_records",docId),{
+        empId:    w.empId,
+        empName:  w.empName,
+        date:     TODAY,
+        month:    month,
+        hours:    Number(w.hours)||0,
+        source:   "معمل الديكور",
+        foremanName: foreman.name,
+        branch:   "ديكور",
+        status:   "pending",
+        updatedAt: new Date().toISOString()
+      },{merge:false}); // overwrite لو موجود بنفس اليوم
     }
 
     setFactSaved(true); setFactSaving(false);

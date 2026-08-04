@@ -96,7 +96,7 @@ export function EmployeesPage({ funds, onBack }) {
       setAdvances(s.docs.map(d=>({id:d.id,...d.data()})));
     });
     const u4=onSnapshot(
-      query(collection(db,"overtime_records"),where("status","==","pending")),
+      collection(db,"overtime_records"),
       s=>setOtRecords(s.docs.map(d=>({id:d.id,...d.data()}))
         .sort((a,b)=>b.date.localeCompare(a.date)))
     );
@@ -155,19 +155,23 @@ export function EmployeesPage({ funds, onBack }) {
   const empOT = React.useMemo(()=>{
     if(!selEmp) return [];
     return otRecords.filter(r=>
-      // مطابقة بالـ ID أولاً (الأدق)
-      r.empId===selEmp.id ||
-      // ثم بالاسم كـ fallback
-      (r.workerName||"").trim()===( selEmp.name||"").trim()
-    );
-  },[selEmp,otRecords]);
+      // مطابقة بالـ ID + الشهر المحدد
+      (r.empId===selEmp.id||
+       (r.workerName||"").trim()===(selEmp.name||"").trim()) &&
+      (r.month===salForm.month || r.date?.startsWith(salForm.month))
+    ).sort((a,b)=>a.date.localeCompare(b.date));
+  },[selEmp,otRecords,salForm.month]);
 
   const empOTPayDin = React.useMemo(()=>{
     if(!selEmp||!selEmp.baseDin) return 0;
-    const WORK_DAYS=26,WORK_HOURS=10;
+    const WORK_DAYS=30, WORK_HOURS=8; // 30 يوم، 8 ساعات
     const totalHours=empOT.reduce((s,r)=>s+(Number(r.hours)||0),0);
     return Math.round(selEmp.baseDin/WORK_DAYS/WORK_HOURS*totalHours);
   },[empOT,selEmp]);
+
+  // أجر ساعة الأوفرتايم
+  const otHourlyRate = selEmp?.baseDin>0
+    ? Math.round(selEmp.baseDin/30/8) : 0;
 
   // تطبيق OT تلقائياً على extraDin لما يُختار موظف
   React.useEffect(()=>{
@@ -485,35 +489,90 @@ ${sal.note?`<div class="row"><span class="lbl">ملاحظة</span><span class="v
               </div>
             </div>
 
-            {/* بطاقة الأوفرتايم */}
+            {/* ─── جرد الأوفرتايم للشهر ─── */}
             {empOT.length>0&&(
-              <div style={{background:"#FFF7ED",borderRadius:12,
-                padding:14,marginBottom:14,border:"2px solid #F97316"}}>
+              <div style={{background:"#FFF7ED",borderRadius:14,
+                padding:16,marginBottom:14,border:"2px solid #F97316"}}>
+                {/* هيدر */}
                 <div style={{display:"flex",justifyContent:"space-between",
-                  alignItems:"center",marginBottom:10}}>
-                  <span style={{fontSize:13,fontWeight:700,color:"#F97316"}}>
-                    ⏱️ أوفرتايم مستحق هذا الشهر
-                  </span>
-                  <span style={{fontSize:12,fontWeight:700,color:"#F97316"}}>
-                    {empOT.reduce((s,r)=>s+(Number(r.hours)||0),0)} ساعة
-                  </span>
-                </div>
-                {empOT.map(ot=>(
-                  <div key={ot.id} style={{display:"flex",justifyContent:"space-between",
-                    padding:"5px 0",borderBottom:"1px solid #FED7AA",fontSize:11}}>
-                    <span style={{color:"#92400E"}}>📅 {ot.date} · {ot.source}</span>
-                    <span style={{fontWeight:700,color:"#F97316"}}>{ot.hours} ساعة</span>
+                  alignItems:"center",marginBottom:12}}>
+                  <div>
+                    <div style={{fontSize:13,fontWeight:700,color:"#F97316"}}>
+                      ⏱️ جرد الأوفرتايم — {salForm.month}
+                    </div>
+                    <div style={{fontSize:10,color:"#92400E",marginTop:2}}>
+                      أجر الساعة: {fNum(otHourlyRate)} د.ع
+                      (الراتب {fNum(selEmp?.baseDin||0)} ÷ 30 ÷ 8)
+                    </div>
                   </div>
-                ))}
-                <div style={{marginTop:10,display:"flex",justifyContent:"space-between",
-                  fontSize:12,fontWeight:700}}>
-                  <span style={{color:"#92400E"}}>تكلفة الأوفرتايم</span>
-                  <span style={{color:"#DC2626",fontSize:14}}>
-                    {fNum(empOTPayDin)} د.ع
-                  </span>
+                  <div style={{textAlign:"left"}}>
+                    <div style={{fontSize:20,fontWeight:800,color:"#F97316"}}>
+                      {empOT.reduce((s,r)=>s+(Number(r.hours)||0),0)}
+                    </div>
+                    <div style={{fontSize:9,color:"#92400E"}}>ساعة إجمالي</div>
+                  </div>
                 </div>
-                <div style={{fontSize:10,color:"#94A3B8",marginTop:4}}>
-                  ✅ أُضيف تلقائياً لحقل "إضافي" أدناه
+
+                {/* جدول الأيام */}
+                <div style={{borderRadius:10,overflow:"hidden",
+                  border:"1px solid #FED7AA",marginBottom:12}}>
+                  <div style={{display:"grid",gridTemplateColumns:"1fr 60px 80px 90px",
+                    background:"#F97316",padding:"6px 10px"}}>
+                    {["التاريخ","ساعات","أجر/ساعة","المبلغ"].map(h=>(
+                      <div key={h} style={{fontSize:9,fontWeight:700,
+                        color:"#fff",textAlign:"center"}}>{h}</div>
+                    ))}
+                  </div>
+                  {empOT.map((ot,i)=>{
+                    const hrs=Number(ot.hours)||0;
+                    const amt=Math.round((selEmp?.baseDin||0)/30/8*hrs);
+                    return (
+                      <div key={ot.id} style={{display:"grid",
+                        gridTemplateColumns:"1fr 60px 80px 90px",
+                        padding:"7px 10px",
+                        background:i%2===0?"#fff":"#FFF7ED",
+                        borderBottom:"1px solid #FEF3C7"}}>
+                        <div style={{fontSize:11,color:"#92400E"}}>
+                          📅 {ot.date}
+                        </div>
+                        <div style={{fontSize:12,fontWeight:700,
+                          color:"#F97316",textAlign:"center"}}>
+                          {hrs}
+                        </div>
+                        <div style={{fontSize:10,color:"#64748B",textAlign:"center"}}>
+                          {fNum(otHourlyRate)}
+                        </div>
+                        <div style={{fontSize:11,fontWeight:700,
+                          color:"#DC2626",textAlign:"center"}}>
+                          {fNum(amt)} د.ع
+                        </div>
+                      </div>
+                    );
+                  })}
+                  {/* المجموع */}
+                  <div style={{display:"grid",
+                    gridTemplateColumns:"1fr 60px 80px 90px",
+                    padding:"8px 10px",background:"#FEF3C7",
+                    borderTop:"2px solid #F97316"}}>
+                    <div style={{fontSize:11,fontWeight:700,color:"#92400E"}}>
+                      الإجمالي
+                    </div>
+                    <div style={{fontSize:13,fontWeight:800,
+                      color:"#F97316",textAlign:"center"}}>
+                      {empOT.reduce((s,r)=>s+(Number(r.hours)||0),0)}
+                    </div>
+                    <div/>
+                    <div style={{fontSize:13,fontWeight:800,
+                      color:"#DC2626",textAlign:"center"}}>
+                      {fNum(empOTPayDin)} د.ع
+                    </div>
+                  </div>
+                </div>
+
+                <div style={{fontSize:10,color:"#92400E",
+                  background:"#FEF3C7",borderRadius:8,padding:"6px 10px"}}>
+                  ✅ مبلغ الأوفرتايم ({fNum(empOTPayDin)} د.ع) أُضيف تلقائياً
+                  لحقل "بدل إضافي" أدناه
                 </div>
               </div>
             )}
