@@ -939,6 +939,7 @@ export function ForemanManagePage() {
   const [foremans,    setForemans]    = useState([]);
   const [factPlans,   setFactPlans]   = useState([]);
   const [factReports, setFactReports] = useState([]);
+  const [factStatus,  setFactStatus]  = useState([]);
   const [siteReports, setSiteReports] = useState([]);
   const [sitePlans,   setSitePlans]   = useState([]);
 
@@ -1022,17 +1023,21 @@ export function ForemanManagePage() {
     const u3=onSnapshot(collection(db,"factory_reports"),
       s=>setFactReports(s.docs.map(d=>({id:d.id,...d.data()}))
         .sort((a,b)=>b.date.localeCompare(a.date))));
+    const u3b=onSnapshot(collection(db,"factory_status"),
+      s=>setFactStatus(s.docs.map(d=>({id:d.id,...d.data()}))
+        .sort((a,b)=>b.date.localeCompare(a.date))));
     const u4=onSnapshot(collection(db,"site_reports"),
       s=>setSiteReports(s.docs.map(d=>({id:d.id,...d.data()}))
         .sort((a,b)=>b.date.localeCompare(a.date))));
     const u5=onSnapshot(collection(db,"site_plans"),
       s=>setSitePlans(s.docs.map(d=>({id:d.id,...d.data()}))));
-    return()=>{u0();u1();u2();u3();u4();u5();};
+    return()=>{u0();u1();u2();u3();u3b();u4();u5();};
   },[]);
 
   const activeProjects=(projects||[]).filter(p=>p.status==="active"&&p.type==="ديكور");
   const siteForemans=foremans.filter(f=>f.type==="موقع");
   const todayFactReport=factReports.find(r=>r.date===TODAY);
+  const todayFactStatus=factStatus.find(r=>r.date===TODAY);
   const todaySiteReports=siteReports.filter(r=>r.date===TODAY);
 
   const savePlan = async () => {
@@ -1333,6 +1338,87 @@ ${body}
                 </div>
               )}
             </div>
+
+            {/* تقرير المعمل — الحالة اليومية */}
+            {todayFactStatus&&(
+              <div style={{background:"#fff",borderRadius:14,padding:18,
+                border:"1px solid #E2E8F0",marginBottom:14}}>
+                <div style={{display:"flex",justifyContent:"space-between",
+                  alignItems:"center",marginBottom:14}}>
+                  <span style={{fontSize:14,fontWeight:700,color:"#1E293B"}}>
+                    🏭 حالة المعمل اليوم
+                  </span>
+                  <span style={{fontSize:11,color:"#64748B"}}>
+                    {todayFactStatus.submittedAt?.slice(11,16)}
+                  </span>
+                </div>
+
+                {/* بطاقات الأرقام */}
+                <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",
+                  gap:8,marginBottom:14}}>
+                  {[
+                    {l:"🔧 المكائن",v:todayFactStatus.machineStatus,
+                      c:todayFactStatus.machineStatus==="جيدة"?"#16A34A"
+                        :todayFactStatus.machineStatus==="تحتاج صيانة"?"#D97706":"#DC2626"},
+                    {l:"⛽ وقود",v:(todayFactStatus.fuel||"0")+" L",c:"#F97316"},
+                    {l:"💧 ماء",v:(todayFactStatus.water||"0")+" L",c:"#2563EB"},
+                    {l:"⚡ كهرباء",v:(todayFactStatus.elecHours||"0")+" س",c:"#2563EB"},
+                  ].map((s,i)=>(
+                    <div key={i} style={{background:"#F8FAFC",borderRadius:10,
+                      padding:"10px 8px",textAlign:"center",border:"1px solid #E2E8F0"}}>
+                      <div style={{fontSize:9,color:"#64748B",marginBottom:3}}>{s.l}</div>
+                      <div style={{fontSize:13,fontWeight:800,color:s.c}}>{s.v}</div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* المولدات */}
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",
+                  gap:8,marginBottom:14}}>
+                  {[
+                    {l:"🔋 مولد ١ — اليوم",v:todayFactStatus.gen1Hours||"0",unit:"ساعة",c:"#F97316"},
+                    {l:"🔋 مولد ٢ — اليوم",v:todayFactStatus.gen2Hours||"0",unit:"ساعة",c:"#8B5CF6"},
+                    {l:"مجموع مولد ١",v:todayFactStatus.gen1Total||"0",unit:"ساعة تراكمية",c:"#F97316"},
+                    {l:"مجموع مولد ٢",v:todayFactStatus.gen2Total||"0",unit:"ساعة تراكمية",c:"#8B5CF6"},
+                  ].map((s,i)=>(
+                    <div key={i} style={{background:i<2?"#FFF7ED":"#F5F3FF",
+                      borderRadius:10,padding:"10px 12px",border:"1px solid #E2E8F0"}}>
+                      <div style={{fontSize:9,color:"#64748B",marginBottom:3}}>{s.l}</div>
+                      <div style={{fontSize:18,fontWeight:800,color:s.c}}>
+                        {s.v}
+                        <span style={{fontSize:10,fontWeight:400,color:"#94A3B8",
+                          marginRight:4}}>{s.unit}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* الكادر */}
+                {(todayFactStatus.workers||[]).length>0&&(
+                  <div>
+                    <div style={{fontSize:11,fontWeight:700,color:"#475569",
+                      marginBottom:8}}>👷 الكادر والأوفرتايم</div>
+                    {(todayFactStatus.workers||[]).map((w,i)=>(
+                      <div key={i} style={{display:"flex",justifyContent:"space-between",
+                        padding:"6px 10px",borderRadius:8,marginBottom:4,
+                        background:"#F8FAFC",fontSize:12}}>
+                        <span style={{color:"#1E293B",fontWeight:600}}>{w.name}</span>
+                        <span style={{color:"#F97316",fontWeight:700}}>
+                          +{w.hours} ساعة OT
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {todayFactStatus.note&&(
+                  <div style={{background:"#F8FAFC",borderRadius:8,
+                    padding:"8px 12px",fontSize:11,color:"#64748B",marginTop:10}}>
+                    📝 {todayFactStatus.note}
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* حالة المواقع */}
             <div style={{background:"#fff",borderRadius:14,padding:18,
