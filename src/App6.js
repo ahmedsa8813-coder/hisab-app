@@ -123,8 +123,8 @@ function LangBtn({ lang, setLang }) {
 
 // ─── نظام الفورمن (بوابة الموبايل) ──────────────────
 export function ForemanSystem({ onBack }) {
-  const [lang, setLang] = useState("ar");
-  const t = T[lang];
+  const [lang, setLang] = useState(null);
+  const t = T[lang||"ar"];
   const [foreman, setForeman] = useState(null);
   const [name, setName] = useState("");
   const [pin,  setPIN]  = useState("");
@@ -146,13 +146,56 @@ export function ForemanSystem({ onBack }) {
 
   const logout = () => { setForeman(null); setName(""); setPIN(""); };
 
+  // شاشة اختيار اللغة أولاً
+  if(!lang) return (
+    <div style={{minHeight:"100vh",background:"#0F172A",
+      display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+      <div style={{background:"#1E293B",borderRadius:24,padding:"40px 28px",
+        width:"100%",maxWidth:360,boxShadow:"0 32px 80px rgba(0,0,0,0.6)",
+        textAlign:"center"}}>
+        <div style={{fontSize:56,marginBottom:14}}>🦺</div>
+        <div style={{fontSize:20,fontWeight:700,color:"#fff",marginBottom:4}}>
+          شركة باب المشاريع
+        </div>
+        <div style={{fontSize:12,color:"#475569",marginBottom:32}}>
+          اختر اللغة · Choose Language
+        </div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+          <button onClick={()=>setLang("ar")} style={{
+            background:"#1E3A8A",border:"none",
+            borderRadius:16,padding:"22px 14px",cursor:"pointer"}}>
+            <div style={{fontSize:36,marginBottom:8}}>🇮🇶</div>
+            <div style={{fontSize:18,fontWeight:700,color:"#fff",fontFamily:"Tahoma"}}>
+              عربي
+            </div>
+          </button>
+          <button onClick={()=>setLang("en")} style={{
+            background:"#1E3A8A",border:"none",
+            borderRadius:16,padding:"22px 14px",cursor:"pointer"}}>
+            <div style={{fontSize:36,marginBottom:8}}>🇬🇧</div>
+            <div style={{fontSize:18,fontWeight:700,color:"#fff",fontFamily:"Arial"}}>
+              English
+            </div>
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+
   if(!foreman) return (
     <div style={{minHeight:"100vh",background:"#0F172A",
       fontFamily:t.fontFamily,direction:t.dir,
       display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
       <div style={{background:"#1E293B",borderRadius:24,padding:"36px 28px",
         width:"100%",maxWidth:380,boxShadow:"0 32px 80px rgba(0,0,0,0.6)"}}>
-        <div style={{display:"flex",justifyContent:"flex-end",marginBottom:12}}>
+        <div style={{display:"flex",justifyContent:"space-between",
+          alignItems:"center",marginBottom:16}}>
+          <button onClick={()=>setLang(null)} style={{
+            background:"rgba(255,255,255,0.08)",border:"none",
+            borderRadius:8,padding:"5px 10px",cursor:"pointer",
+            color:"#64748B",fontSize:12}}>
+            ←
+          </button>
           <LangBtn lang={lang} setLang={setLang}/>
         </div>
         <div style={{textAlign:"center",marginBottom:32}}>
@@ -1826,7 +1869,7 @@ ${body}
 
             {/* سجل تقارير المواقع */}
             <div style={{background:"#fff",borderRadius:14,padding:18,
-              border:"1px solid #E2E8F0"}}>
+              border:"1px solid #E2E8F0",marginBottom:14}}>
               <div style={{fontSize:13,fontWeight:700,color:"#1E293B",marginBottom:12}}>
                 📍 سجل تقارير المواقع
               </div>
@@ -1851,6 +1894,145 @@ ${body}
                   <div style={{fontSize:11,color:"#475569"}}>{r.tasks}</div>
                 </div>
               ))}
+            </div>
+
+            {/* ─── سجل حالة المعمل اليومي ─── */}
+            <div style={{background:"#fff",borderRadius:14,padding:18,
+              border:"1px solid #E2E8F0",marginBottom:14}}>
+              <div style={{display:"flex",justifyContent:"space-between",
+                alignItems:"center",marginBottom:14}}>
+                <span style={{fontSize:13,fontWeight:700,color:"#1E293B"}}>
+                  🏭 سجل حالة المعمل اليومي
+                </span>
+                <button onClick={()=>{
+                  const now=new Date();
+                  const mon=now.toISOString().slice(0,7);
+                  const monthRecs=factStatus.filter(r=>r.date.startsWith(mon));
+                  const totalGen1=monthRecs.reduce((s,r)=>s+Number(r.gen1Hours||0),0);
+                  const totalGen2=monthRecs.reduce((s,r)=>s+Number(r.gen2Hours||0),0);
+                  const totalElec=monthRecs.reduce((s,r)=>s+Number(r.elecHours||0),0);
+                  const lastGen1Total=monthRecs.length?monthRecs[0].gen1Total||0:0;
+                  const lastGen2Total=monthRecs.length?monthRecs[0].gen2Total||0:0;
+                  const html=`<!DOCTYPE html><html dir="rtl"><head><meta charset="utf-8"/>
+<style>*{font-family:Tahoma}body{margin:24px;direction:rtl}
+h2{color:#0F172A;border-bottom:2px solid #0F172A;padding-bottom:8px}
+table{width:100%;border-collapse:collapse;margin:10px 0;font-size:11px}
+th{background:#0F172A;color:#fff;padding:7px 8px;text-align:center}
+td{padding:7px 8px;border-bottom:1px solid #F1F5F9;text-align:center}
+.sum{background:#F8FAFC;font-weight:700}
+</style></head><body>
+<div style="text-align:center;border-bottom:2px solid #0F172A;padding-bottom:10px;margin-bottom:14px">
+  <div style="font-size:20px;font-weight:700">شركة باب المشاريع</div>
+  <div style="font-size:12px;color:#64748B">جرد معمل الديكور — ${mon}</div>
+</div>
+<h2>ملخص الشهر</h2>
+<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin:12px 0">
+  <div style="background:#FFF7ED;border-radius:8px;padding:12px;text-align:center">
+    <div style="font-size:10px;color:#64748B">مجموع ساعات مولد ١</div>
+    <div style="font-size:22px;font-weight:700;color:#F97316">${totalGen1} ساعة</div>
+  </div>
+  <div style="background:#F5F3FF;border-radius:8px;padding:12px;text-align:center">
+    <div style="font-size:10px;color:#64748B">مجموع ساعات مولد ٢</div>
+    <div style="font-size:22px;font-weight:700;color:#8B5CF6">${totalGen2} ساعة</div>
+  </div>
+  <div style="background:#EFF6FF;border-radius:8px;padding:12px;text-align:center">
+    <div style="font-size:10px;color:#64748B">مجموع ساعات الكهرباء</div>
+    <div style="font-size:22px;font-weight:700;color:#2563EB">${totalElec} ساعة</div>
+  </div>
+</div>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px">
+  <div style="background:#FFF7ED;border-radius:8px;padding:10px;text-align:center">
+    <div style="font-size:10px;color:#64748B">الساعات الكلية مولد ١</div>
+    <div style="font-size:18px;font-weight:700;color:#F97316">${lastGen1Total} ساعة</div>
+  </div>
+  <div style="background:#F5F3FF;border-radius:8px;padding:10px;text-align:center">
+    <div style="font-size:10px;color:#64748B">الساعات الكلية مولد ٢</div>
+    <div style="font-size:18px;font-weight:700;color:#8B5CF6">${lastGen2Total} ساعة</div>
+  </div>
+</div>
+<h2>السجل اليومي</h2>
+<table>
+<thead><tr>
+  <th>التاريخ</th><th>المكائن</th><th>وقود</th><th>ماء</th>
+  <th>مولد١</th><th>مولد٢</th><th>كهرباء</th>
+  <th>مولد١ كلي</th><th>مولد٢ كلي</th>
+</tr></thead>
+<tbody>
+${monthRecs.map(r=>`<tr>
+  <td>${r.date}</td>
+  <td style="color:${r.machineStatus==="جيدة"?"green":r.machineStatus==="تحتاج صيانة"?"orange":"red"}">${r.machineStatus}</td>
+  <td>${r.fuel||0}L</td><td>${r.water||0}L</td>
+  <td>${r.gen1Hours||0}س</td><td>${r.gen2Hours||0}س</td><td>${r.elecHours||0}س</td>
+  <td>${r.gen1Total||0}س</td><td>${r.gen2Total||0}س</td>
+</tr>`).join("")}
+<tr class="sum">
+  <td>المجموع</td><td>—</td><td>—</td><td>—</td>
+  <td>${totalGen1}س</td><td>${totalGen2}س</td><td>${totalElec}س</td>
+  <td colspan="2">—</td>
+</tr>
+</tbody></table>
+<div style="margin-top:12px;font-size:10px;color:#94A3B8;text-align:center">
+  طُبع: ${new Date().toISOString().slice(0,16).replace("T"," ")}
+</div>
+</body></html>`;
+                  const w=window.open("","_blank","width=900,height=700");
+                  if(!w){alert("السماح بالنوافذ");return;}
+                  w.document.write(html);w.document.close();
+                  w.focus();setTimeout(()=>w.print(),700);
+                }} style={{background:"#0F172A",border:"none",borderRadius:8,
+                  padding:"7px 14px",cursor:"pointer",fontFamily:"Tahoma",
+                  color:"#fff",fontSize:11}}>
+                  🖨️ جرد الشهر
+                </button>
+              </div>
+
+              {/* جدول السجل */}
+              {factStatus.length===0?(
+                <div style={{textAlign:"center",padding:"20px 0",color:"#94A3B8",fontSize:12}}>
+                  ما في سجلات بعد
+                </div>
+              ):(
+                <div style={{overflowX:"auto"}}>
+                  <table style={{width:"100%",borderCollapse:"collapse",fontSize:11}}>
+                    <thead>
+                      <tr style={{background:"#0F172A"}}>
+                        {["التاريخ","المكائن","وقود","ماء","م١","م٢","كهرباء","م١ كلي","م٢ كلي"].map(h=>(
+                          <th key={h} style={{color:"#fff",padding:"7px 8px",
+                            textAlign:"center",fontFamily:"Tahoma",fontWeight:600}}>
+                            {h}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {factStatus.slice(0,31).map((r,i)=>(
+                        <tr key={r.id} style={{background:i%2===0?"#fff":"#F8FAFC",
+                          borderBottom:"1px solid #F1F5F9"}}>
+                          <td style={{padding:"7px 8px",textAlign:"center",
+                            fontWeight:r.date===TODAY?700:400,
+                            color:r.date===TODAY?"#2563EB":"#1E293B"}}>
+                            {r.date}
+                          </td>
+                          <td style={{padding:"7px 8px",textAlign:"center",
+                            color:r.machineStatus==="جيدة"?"#16A34A"
+                              :r.machineStatus==="تحتاج صيانة"?"#D97706":"#DC2626",
+                            fontWeight:700,fontSize:12}}>
+                            {r.machineStatus==="جيدة"?"✅":
+                             r.machineStatus==="تحتاج صيانة"?"⚠️":"❌"}
+                          </td>
+                          {[r.fuel,r.water,r.gen1Hours,r.gen2Hours,r.elecHours,
+                            r.gen1Total,r.gen2Total].map((v,vi)=>(
+                            <td key={vi} style={{padding:"7px 8px",textAlign:"center",
+                              color:"#475569"}}>
+                              {v||"—"}
+                            </td>
+                          ))}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
           </div>
         )}
