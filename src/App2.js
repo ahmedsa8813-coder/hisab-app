@@ -259,24 +259,32 @@ export default function App2({ onBack }) {
                   </div>
                   {f.id==="شركاء" ? (
                     <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr 1fr 1fr", gap:8 }}>
+                      {/* الإجمالي */}
                       <div style={{ background:f.bg, borderRadius:10, padding:"12px", textAlign:"center" }}>
                         <div style={{ fontSize:9, color:"#64748B", marginBottom:3 }}>الإجمالي</div>
-                        <div style={{ fontSize:16, fontWeight:700, color:f.color }}>{fNum(bal.din)}</div>
-                        <div style={{ fontSize:9, color:"#94A3B8" }}>د.ع</div>
+                        <div style={{ fontSize:14, fontWeight:700, color:f.color }}>{fNum(bal.din)}</div>
+                        <div style={{ fontSize:9, color:"#94A3B8", marginBottom:4 }}>د.ع</div>
+                        <div style={{ fontSize:12, fontWeight:700, color:"#2563EB" }}>{fNum(bal.dol||0)}</div>
+                        <div style={{ fontSize:9, color:"#94A3B8" }}>$</div>
                       </div>
+                      {/* حصة كل شريك */}
                       {[{n:"إيهاب",c:"#2563EB"},{n:"أحمد",c:"#D97706"},
                         {n:"نور",c:"#059669"},{n:"محمد",c:"#7C3AED"}].map(p=>{
-                        const pf=funds["partner_"+p.n]||{din:0};
+                        const pf=funds["partner_"+p.n]||{din:0,dol:0};
                         return (
                           <div key={p.n} style={{ background:"#F8FAFC", borderRadius:10,
                             padding:"12px", textAlign:"center" }}>
                             <div style={{ fontSize:9, color:p.c, fontWeight:700, marginBottom:3 }}>
                               م.{p.n}
                             </div>
-                            <div style={{ fontSize:15, fontWeight:700, color:p.c }}>
+                            <div style={{ fontSize:13, fontWeight:700, color:p.c }}>
                               {fNum(pf.din)}
                             </div>
-                            <div style={{ fontSize:9, color:"#94A3B8" }}>د.ع</div>
+                            <div style={{ fontSize:9, color:"#94A3B8", marginBottom:4 }}>د.ع</div>
+                            <div style={{ fontSize:11, fontWeight:700, color:"#2563EB" }}>
+                              {fNum(pf.dol||0)}
+                            </div>
+                            <div style={{ fontSize:9, color:"#94A3B8" }}>$</div>
                           </div>
                         );
                       })}
