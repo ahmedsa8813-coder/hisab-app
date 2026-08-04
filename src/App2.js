@@ -215,176 +215,237 @@ export default function App2({ onBack }) {
       {/* ─── المحتوى ─── */}
       <div style={{ flex:1, overflow:"auto", padding:P }}>
 
-        {/* هيدر */}
-        <div style={{ marginBottom:isMobile?16:24,
-          display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+        {/* ── تاريخ وموبايل ── */}
+        <div style={{display:"flex",alignItems:"center",
+          justifyContent:"space-between",marginBottom:isMobile?12:20}}>
           <div>
-            <div style={{ fontSize:isMobile?18:22, fontWeight:700, color:"#0F172A" }}>
+            <div style={{fontSize:isMobile?16:20,fontWeight:700,color:"#0F172A"}}>
               لوحة الحسابات
             </div>
-            <div style={{ fontSize:11, color:"#64748B", marginTop:2 }}>
+            <div style={{fontSize:11,color:"#94A3B8",marginTop:2}}>
               {new Date().toLocaleDateString("ar-IQ",{weekday:"long",year:"numeric",month:"long",day:"numeric"})}
             </div>
           </div>
-          {/* زر القائمة للموبايل */}
-          {isMobile && (
+          {isMobile&&(
             <button onClick={()=>setSideOpen(v=>!v)} style={{
-              background:"#0F172A", border:"none", borderRadius:10,
-              padding:"10px 14px", cursor:"pointer", color:"#fff",
-              fontSize:18, lineHeight:1 }}>☰</button>
+              background:"#0F172A",border:"none",borderRadius:10,
+              padding:"10px 14px",cursor:"pointer",color:"#fff",fontSize:18}}>☰</button>
           )}
         </div>
 
-        {/* كبطاقات الجرد */}
-        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr",
-          gap:16, marginBottom:28 }}>
+        {/* ── الجرد الكلي ── */}
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",
+          gap:10,marginBottom:isMobile?12:18}}>
           {[
-            {label:"🇮🇶 إجمالي الدينار", val:fNum(totalDin), unit:"د.ع",
-              sub1:"صناديق: "+fNum(fundsDin), sub2:"مشاريع: "+fNum(activeDin),
-              g:"linear-gradient(135deg,#D97706,#F59E0B)", sh:"rgba(217,119,6,0.25)"},
-            {label:"🇺🇸 إجمالي الدولار", val:fNum(totalDol), unit:"$",
-              sub1:"صناديق: "+fNum(fundsDol), sub2:"مشاريع: "+fNum(activeDol),
-              g:"linear-gradient(135deg,#1D4ED8,#3B82F6)", sh:"rgba(29,78,216,0.25)"},
-          ].map((card,i)=>(
-            <div key={i} style={{ background:card.g, borderRadius:18,
-              padding:"24px 28px", boxShadow:"0 8px 30px "+card.sh }}>
-              <div style={{ fontSize:12, color:"rgba(255,255,255,0.7)", marginBottom:8 }}>
-                {card.label}
+            {icon:"🇮🇶",label:"الجرد الكلي — دينار",val:fNum(totalDin),unit:"د.ع",
+             sub:"صناديق "+fNum(fundsDin)+" | مشاريع "+fNum(activeDin),
+             g:"135deg,#92400E,#D97706",glow:"#D97706"},
+            {icon:"🇺🇸",label:"الجرد الكلي — دولار",val:fNum(totalDol),unit:"$",
+             sub:"صناديق "+fNum(fundsDol)+" | مشاريع "+fNum(activeDol),
+             g:"135deg,#1E3A8A,#2563EB",glow:"#2563EB"},
+          ].map((s,i)=>(
+            <div key={i} style={{background:"linear-gradient("+s.g+")",
+              borderRadius:16,padding:isMobile?"14px 16px":"20px 22px",
+              boxShadow:"0 4px 20px "+s.glow+"33",position:"relative",overflow:"hidden"}}>
+              <div style={{position:"absolute",top:-20,left:-20,width:80,height:80,
+                background:"rgba(255,255,255,0.06)",borderRadius:"50%"}}/>
+              <div style={{fontSize:10,color:"rgba(255,255,255,0.6)",marginBottom:6}}>
+                {s.icon} {s.label}
               </div>
-              <div style={{ fontSize:34, fontWeight:700, color:"#fff", marginBottom:2 }}>
-                {card.val}
+              <div style={{fontSize:isMobile?24:32,fontWeight:800,color:"#fff",
+                letterSpacing:-1,marginBottom:2,lineHeight:1}}>
+                {s.val}
               </div>
-              <div style={{ fontSize:13, color:"rgba(255,255,255,0.6)", marginBottom:16 }}>
-                {card.unit}
+              <div style={{fontSize:12,color:"rgba(255,255,255,0.45)",marginBottom:10}}>
+                {s.unit}
               </div>
-              <div style={{ display:"flex", gap:20, fontSize:11,
-                color:"rgba(255,255,255,0.6)", borderTop:"1px solid rgba(255,255,255,0.15)",
-                paddingTop:12 }}>
-                <span>{card.sub1}</span>
-                <span>{card.sub2}</span>
+              <div style={{fontSize:9,color:"rgba(255,255,255,0.35)",
+                borderTop:"1px solid rgba(255,255,255,0.1)",paddingTop:8}}>
+                {s.sub}
               </div>
             </div>
           ))}
         </div>
 
-        {/* الصناديق الرئيسية */}
-        <div style={{ marginBottom:24 }}>
-          <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:14 }}>
-            <div style={{ width:4, height:20, background:"#059669", borderRadius:99 }}/>
-            <span style={{ fontSize:14, fontWeight:700, color:"#475569" }}>الصناديق الرئيسية</span>
+        {/* ── مشاريع نشطة ── */}
+        {projects.filter(p=>p.status==="active").length>0&&(
+          <div style={{background:"#fff",borderRadius:12,border:"1px solid #E2E8F0",
+            padding:"12px 16px",marginBottom:isMobile?12:18}}>
+            <div style={{display:"flex",justifyContent:"space-between",
+              alignItems:"center",marginBottom:10}}>
+              <span style={{fontSize:12,fontWeight:700,color:"#1E293B"}}>
+                🏗️ المشاريع النشطة
+              </span>
+              <span style={{fontSize:10,background:"#F0FDF4",color:"#16A34A",
+                borderRadius:20,padding:"2px 10px",fontWeight:700}}>
+                {projects.filter(p=>p.status==="active").length} مشروع
+              </span>
+            </div>
+            <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+              {projects.filter(p=>p.status==="active").slice(0,8).map(p=>(
+                <div key={p.id} style={{background:"#F8FAFC",borderRadius:8,
+                  padding:"6px 10px",border:"1px solid #E2E8F0"}}>
+                  <span style={{fontSize:11,fontWeight:600,color:"#1E293B"}}>{p.name}</span>
+                  <span style={{fontSize:10,color:"#16A34A",fontWeight:700}}>
+                    {" "}· {fNum(p.balDin||0)} د.ع
+                  </span>
+                </div>
+              ))}
+            </div>
           </div>
-          <div style={{ display:"grid", gridTemplateColumns:isMobile?"1fr":"1fr 1fr 1fr", gap:isMobile?10:14 }}>
-            {MAIN_FUNDS.map(f=>{
+        )}
+
+        {/* ── الصناديق الرئيسية ── */}
+        <div style={{marginBottom:isMobile?12:18}}>
+          <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:10}}>
+            <div style={{width:3,height:16,background:"#059669",borderRadius:99}}/>
+            <span style={{fontSize:12,fontWeight:700,color:"#64748B"}}>
+              الصناديق الرئيسية
+            </span>
+          </div>
+          <div style={{display:"grid",
+            gridTemplateColumns:isMobile?"1fr 1fr":"1fr 1fr 1fr",gap:isMobile?8:10}}>
+            {MAIN_FUNDS.filter(f=>f.id!=="شركاء").map(f=>{
               const bal=funds[f.id]||{din:0,dol:0};
               return (
                 <button key={f.id} onClick={()=>{setSelFund(f);setPage("fund");}}
-                  style={{ background:"#fff", border:"1px solid #E2E8F0",
-                    borderTop:"3px solid "+f.color, borderRadius:16,
-                    padding:"20px", cursor:"pointer", fontFamily:"Tahoma", textAlign:"right",
-                    gridColumn:f.id==="شركاء"?"span 3":"span 1",
-                    boxShadow:"0 1px 4px rgba(0,0,0,0.04)",
-                    transition:"box-shadow 0.2s" }}
-                  onMouseEnter={e=>e.currentTarget.style.boxShadow="0 6px 24px rgba(0,0,0,0.1)"}
-                  onMouseLeave={e=>e.currentTarget.style.boxShadow="0 1px 4px rgba(0,0,0,0.04)"}>
-                  <div style={{ display:"flex", justifyContent:"space-between",
-                    alignItems:"center", marginBottom:16 }}>
-                    <span style={{ fontSize:11, color:f.color, background:f.bg,
-                      borderRadius:20, padding:"3px 10px", fontWeight:600 }}>تفاصيل ←</span>
-                    <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-                      <span style={{ fontSize:15, fontWeight:700, color:"#1E293B" }}>{f.label}</span>
-                      <span style={{ fontSize:24 }}>{f.icon}</span>
+                  style={{background:"#fff",border:"none",
+                    borderTop:"3px solid "+f.color,borderRadius:12,
+                    padding:"14px 12px",cursor:"pointer",fontFamily:"Tahoma",
+                    textAlign:"center",boxShadow:"0 1px 4px rgba(0,0,0,0.05)",
+                    transition:"all 0.2s"}}
+                  onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-3px)";
+                    e.currentTarget.style.boxShadow="0 8px 20px rgba(0,0,0,0.1)";}}
+                  onMouseLeave={e=>{e.currentTarget.style.transform="translateY(0)";
+                    e.currentTarget.style.boxShadow="0 1px 4px rgba(0,0,0,0.05)";}}>
+                  <div style={{fontSize:24,marginBottom:6}}>{f.icon}</div>
+                  <div style={{fontSize:12,fontWeight:700,color:"#1E293B",marginBottom:10}}>
+                    {f.label}
+                  </div>
+                  <div style={{background:f.bg,borderRadius:8,
+                    padding:"8px 4px",marginBottom:6}}>
+                    <div style={{fontSize:7,color:"#64748B",marginBottom:2}}>🇮🇶 د.ع</div>
+                    <div style={{fontSize:15,fontWeight:800,color:f.color}}>
+                      {fNum(bal.din)}
                     </div>
                   </div>
-                  {f.id==="شركاء" ? (
-                    <div style={{ display:"grid", gridTemplateColumns:isMobile?"1fr 1fr":"1fr 1fr 1fr 1fr 1fr", gap:8 }}>
-                      {/* الإجمالي */}
-                      <div style={{ background:f.bg, borderRadius:10, padding:"12px", textAlign:"center" }}>
-                        <div style={{ fontSize:9, color:"#64748B", marginBottom:3 }}>الإجمالي</div>
-                        <div style={{ fontSize:14, fontWeight:700, color:f.color }}>{fNum(bal.din)}</div>
-                        <div style={{ fontSize:9, color:"#94A3B8", marginBottom:4 }}>د.ع</div>
-                        <div style={{ fontSize:12, fontWeight:700, color:"#2563EB" }}>{fNum(bal.dol||0)}</div>
-                        <div style={{ fontSize:9, color:"#94A3B8" }}>$</div>
-                      </div>
-                      {/* حصة كل شريك */}
-                      {[{n:"إيهاب",c:"#2563EB"},{n:"أحمد",c:"#D97706"},
-                        {n:"نور",c:"#059669"},{n:"محمد",c:"#7C3AED"}].map(p=>{
-                        const pf=funds["partner_"+p.n]||{din:0,dol:0};
-                        return (
-                          <div key={p.n} style={{ background:"#F8FAFC", borderRadius:10,
-                            padding:"12px", textAlign:"center" }}>
-                            <div style={{ fontSize:9, color:p.c, fontWeight:700, marginBottom:3 }}>
-                              م.{p.n}
-                            </div>
-                            <div style={{ fontSize:13, fontWeight:700, color:p.c }}>
-                              {fNum(pf.din)}
-                            </div>
-                            <div style={{ fontSize:9, color:"#94A3B8", marginBottom:4 }}>د.ع</div>
-                            <div style={{ fontSize:11, fontWeight:700, color:"#2563EB" }}>
-                              {fNum(pf.dol||0)}
-                            </div>
-                            <div style={{ fontSize:9, color:"#94A3B8" }}>$</div>
-                          </div>
-                        );
-                      })}
+                  <div style={{background:"#EFF6FF",borderRadius:8,padding:"6px 4px"}}>
+                    <div style={{fontSize:7,color:"#64748B",marginBottom:2}}>🇺🇸 $</div>
+                    <div style={{fontSize:13,fontWeight:800,color:"#2563EB"}}>
+                      {fNum(bal.dol)}
                     </div>
-                  ) : (
-                    <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
-                      <div style={{ background:f.bg, borderRadius:10, padding:"14px", textAlign:"center" }}>
-                        <div style={{ fontSize:9, color:"#64748B", marginBottom:4 }}>🇮🇶 دينار</div>
-                        <div style={{ fontSize:18, fontWeight:700, color:f.color }}>{fNum(bal.din)}</div>
-                        <div style={{ fontSize:10, color:"#94A3B8" }}>د.ع</div>
-                      </div>
-                      <div style={{ background:"#EFF6FF", borderRadius:10, padding:"14px", textAlign:"center" }}>
-                        <div style={{ fontSize:9, color:"#64748B", marginBottom:4 }}>🇺🇸 دولار</div>
-                        <div style={{ fontSize:18, fontWeight:700, color:"#2563EB" }}>{fNum(bal.dol)}</div>
-                        <div style={{ fontSize:10, color:"#94A3B8" }}>$</div>
-                      </div>
-                    </div>
-                  )}
+                  </div>
                 </button>
               );
             })}
           </div>
         </div>
 
-        {/* صناديق الأقسام */}
-        <div style={{ marginBottom:24 }}>
-          <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:14 }}>
-            <div style={{ width:4, height:20, background:"#D97706", borderRadius:99 }}/>
-            <span style={{ fontSize:14, fontWeight:700, color:"#475569" }}>صناديق الأقسام</span>
+        {/* ── أرباح الشركاء ── */}
+        {(()=>{
+          const f=MAIN_FUNDS.find(f=>f.id==="شركاء");
+          if(!f) return null;
+          const bal=funds[f.id]||{din:0,dol:0};
+          return (
+            <button onClick={()=>{setSelFund(f);setPage("fund");}}
+              style={{width:"100%",background:"#fff",border:"none",
+                borderTop:"3px solid "+f.color,borderRadius:12,
+                padding:"16px",cursor:"pointer",fontFamily:"Tahoma",textAlign:"right",
+                boxShadow:"0 1px 4px rgba(0,0,0,0.05)",
+                marginBottom:isMobile?12:18,transition:"all 0.2s",display:"block"}}
+              onMouseEnter={e=>e.currentTarget.style.boxShadow="0 8px 20px rgba(0,0,0,0.1)"}
+              onMouseLeave={e=>e.currentTarget.style.boxShadow="0 1px 4px rgba(0,0,0,0.05)"}>
+              <div style={{display:"flex",justifyContent:"space-between",
+                alignItems:"center",marginBottom:12}}>
+                <span style={{fontSize:10,color:f.color,fontWeight:700}}>
+                  إجمالي: {fNum(bal.din)} د.ع · {fNum(bal.dol||0)} $
+                </span>
+                <span style={{fontSize:13,fontWeight:700,color:"#1E293B"}}>
+                  {f.icon} {f.label}
+                </span>
+              </div>
+              <div style={{display:"grid",
+                gridTemplateColumns:isMobile?"1fr 1fr":"repeat(4,1fr)",gap:8}}>
+                {[{n:"إيهاب",c:"#2563EB",pct:"30%"},
+                  {n:"أحمد",c:"#D97706",pct:"10%"},
+                  {n:"نور",c:"#059669",pct:"30%"},
+                  {n:"محمد",c:"#7C3AED",pct:"30%"}].map(p=>{
+                  const pf=funds["partner_"+p.n]||{din:0,dol:0};
+                  return (
+                    <div key={p.n} style={{background:"#F8FAFC",borderRadius:10,
+                      padding:"12px 8px",textAlign:"center",
+                      border:"1px solid "+p.c+"18"}}>
+                      <div style={{fontSize:11,color:p.c,fontWeight:700,marginBottom:1}}>
+                        {p.n}
+                      </div>
+                      <div style={{fontSize:9,color:"#94A3B8",marginBottom:8}}>
+                        {p.pct}
+                      </div>
+                      <div style={{fontSize:14,fontWeight:800,color:p.c}}>
+                        {fNum(pf.din)}
+                      </div>
+                      <div style={{fontSize:8,color:"#94A3B8",marginBottom:4}}>د.ع</div>
+                      <div style={{fontSize:12,fontWeight:700,color:"#2563EB"}}>
+                        {fNum(pf.dol||0)}
+                      </div>
+                      <div style={{fontSize:8,color:"#94A3B8"}}>$</div>
+                    </div>
+                  );
+                })}
+              </div>
+            </button>
+          );
+        })()}
+
+        {/* ── صناديق الأقسام ── */}
+        <div style={{marginBottom:isMobile?12:18}}>
+          <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:10}}>
+            <div style={{width:3,height:16,background:"#D97706",borderRadius:99}}/>
+            <span style={{fontSize:12,fontWeight:700,color:"#64748B"}}>
+              صناديق الأقسام
+            </span>
           </div>
-          <div style={{ display:"grid", gridTemplateColumns:isMobile?"1fr 1fr":"repeat(4,1fr)", gap:isMobile?10:14 }}>
+          <div style={{display:"grid",
+            gridTemplateColumns:isMobile?"1fr 1fr":"repeat(4,1fr)",
+            gap:isMobile?8:10}}>
             {DEPT_FUNDS.map(f=>{
               const bal=funds[f.id]||{din:0,dol:0};
               return (
                 <button key={f.id} onClick={()=>{setSelFund(f);setPage("fund");}}
-                  style={{ background:"#fff", border:"1px solid #E2E8F0",
-                    borderTop:"3px solid "+f.color, borderRadius:16,
-                    padding:"18px", cursor:"pointer", fontFamily:"Tahoma", textAlign:"right",
-                    boxShadow:"0 1px 4px rgba(0,0,0,0.04)", transition:"box-shadow 0.2s" }}
-                  onMouseEnter={e=>e.currentTarget.style.boxShadow="0 6px 24px rgba(0,0,0,0.1)"}
-                  onMouseLeave={e=>e.currentTarget.style.boxShadow="0 1px 4px rgba(0,0,0,0.04)"}>
-                  <div style={{ display:"flex", justifyContent:"space-between",
-                    alignItems:"center", marginBottom:14 }}>
-                    <span style={{ fontSize:22 }}>{f.icon}</span>
-                    <span style={{ fontSize:14, fontWeight:700, color:"#1E293B" }}>{f.label}</span>
+                  style={{background:"#fff",border:"none",
+                    borderTop:"4px solid "+f.color,borderRadius:12,
+                    padding:"14px 10px",cursor:"pointer",fontFamily:"Tahoma",
+                    textAlign:"center",boxShadow:"0 1px 4px rgba(0,0,0,0.05)",
+                    transition:"all 0.2s"}}
+                  onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-4px)";
+                    e.currentTarget.style.boxShadow="0 12px 28px rgba(0,0,0,0.12)";}}
+                  onMouseLeave={e=>{e.currentTarget.style.transform="translateY(0)";
+                    e.currentTarget.style.boxShadow="0 1px 4px rgba(0,0,0,0.05)";}}>
+                  <div style={{fontSize:26,marginBottom:6}}>{f.icon}</div>
+                  <div style={{fontSize:13,fontWeight:700,color:"#1E293B",marginBottom:10}}>
+                    {f.label}
                   </div>
-                  <div style={{ background:f.bg, borderRadius:10, padding:"10px",
-                    textAlign:"center", marginBottom:8 }}>
-                    <div style={{ fontSize:9, color:"#64748B", marginBottom:2 }}>🇮🇶 دينار</div>
-                    <div style={{ fontSize:16, fontWeight:700, color:f.color }}>{fNum(bal.din)}</div>
-                    <div style={{ fontSize:9, color:"#94A3B8" }}>د.ع</div>
+                  <div style={{background:f.bg,borderRadius:8,
+                    padding:"9px 6px",marginBottom:6}}>
+                    <div style={{fontSize:8,color:"#64748B",marginBottom:2}}>🇮🇶 دينار</div>
+                    <div style={{fontSize:16,fontWeight:800,color:f.color,lineHeight:1}}>
+                      {fNum(bal.din)}
+                    </div>
+                    <div style={{fontSize:8,color:"#94A3B8",marginTop:2}}>د.ع</div>
                   </div>
-                  <div style={{ background:"#EFF6FF", borderRadius:10, padding:"10px", textAlign:"center" }}>
-                    <div style={{ fontSize:9, color:"#64748B", marginBottom:2 }}>🇺🇸 دولار</div>
-                    <div style={{ fontSize:16, fontWeight:700, color:"#2563EB" }}>{fNum(bal.dol)}</div>
-                    <div style={{ fontSize:9, color:"#94A3B8" }}>$</div>
+                  <div style={{background:"#EFF6FF",borderRadius:8,padding:"7px 6px"}}>
+                    <div style={{fontSize:8,color:"#64748B",marginBottom:2}}>🇺🇸 دولار</div>
+                    <div style={{fontSize:14,fontWeight:800,color:"#2563EB"}}>
+                      {fNum(bal.dol)}
+                    </div>
+                    <div style={{fontSize:8,color:"#94A3B8",marginTop:2}}>$</div>
                   </div>
                 </button>
               );
             })}
           </div>
         </div>
+
 
       </div>
 
