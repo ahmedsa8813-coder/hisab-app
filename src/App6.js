@@ -258,6 +258,7 @@ function FactoryView({ foreman, onLogout, lang="ar" }) {
   const [notes,        setNotes]        = useState({});
   const [genNote,      setGenNote]      = useState("");
   const [saving,       setSaving]       = useState(false);
+  const [dekorEmps,    setDekorEmps]    = useState([]);
 
   const [factReport, setFactReport] = useState({
     machineStatus:"جيدة",
@@ -268,7 +269,8 @@ function FactoryView({ foreman, onLogout, lang="ar" }) {
   });
   const fr = k => v => setFactReport(f=>({...f,[k]:v}));
 
-  const [workers,    setWorkers]    = useState([{name:"",hours:""}]);
+  // الكادر: يختار من قائمة الموظفين
+  const [workers,    setWorkers]    = useState([{empId:"",empName:"",hours:""}]);
   const [factSaved,  setFactSaved]  = useState(false);
   const [factSaving, setFactSaving] = useState(false);
 
@@ -279,7 +281,13 @@ function FactoryView({ foreman, onLogout, lang="ar" }) {
       s=>{const d=s.docs[0];setTomorrowPlan(d?{id:d.id,...d.data()}:null);});
     const u3=onSnapshot(query(collection(db,"factory_reports"),where("date","==",TODAY)),
       s=>{const d=s.docs[0];setTodayReport(d?{id:d.id,...d.data()}:null);});
-    return()=>{u1();u2();u3();};
+    // جلب موظفي ديكور من نظام الرواتب
+    const u4=onSnapshot(
+      query(collection(db,"employees"),where("branch","==","ديكور")),
+      s=>setDekorEmps(s.docs.map(d=>({id:d.id,...d.data()}))
+        .sort((a,b)=>(a.name||"").localeCompare(b.name||"")))
+    );
+    return()=>{u1();u2();u3();u4();};
   },[]);
 
   const getS=()=>[
@@ -304,20 +312,21 @@ function FactoryView({ foreman, onLogout, lang="ar" }) {
 
   const submitFactory = async () => {
     setFactSaving(true);
-    const validWorkers=workers.filter(w=>w.name.trim()&&w.hours);
+    const validWorkers=workers.filter(w=>w.empId&&w.hours);
 
     // حفظ تقرير المعمل
     await setDoc(doc(db,"factory_status",TODAY),{
       date:TODAY,foremanId:foreman.id,foremanName:foreman.name,
       ...factReport,
-      workers:validWorkers,
+      workers:validWorkers.map(w=>({empId:w.empId,empName:w.empName,hours:w.hours})),
       submittedAt:new Date().toISOString()
     });
 
     // إرسال الأوفرتايم لصفحة الرواتب
     for(const w of validWorkers){
       await addDoc(collection(db,"overtime_records"),{
-        workerName:w.name.trim(),
+        workerName:w.empName,
+        empId:w.empId,
         hours:Number(w.hours)||0,
         date:TODAY,
         source:"معمل الديكور",
@@ -671,16 +680,38 @@ function FactoryView({ foreman, onLogout, lang="ar" }) {
               <div style={{fontSize:15,fontWeight:700,color:"#0F172A",marginBottom:14}}>
                 👷 الكادر والساعات الإضافية
               </div>
+              {dekorEmps.length===0&&(
+                <div style={{background:"#FFF7ED",borderRadius:10,
+                  padding:"10px 14px",fontSize:12,color:"#92400E",marginBottom:10}}>
+                  ⚠️ {lang==="ar"
+                    ?"ما في موظفين مسجّلين في الديكور — يجب إضافتهم من نظام الموظفين"
+                    :"No employees registered in Decor — add them from HR system"}
+                </div>
+              )}
               {workers.map((w,i)=>(
                 <div key={i} style={{display:"flex",gap:8,
                   marginBottom:10,alignItems:"center"}}>
-                  <input placeholder={"اسم العامل "+(i+1)}
-                    value={w.name}
-                    onChange={e=>setWorkers(p=>p.map((ww,ii)=>
-                      ii===i?{...ww,name:e.target.value}:ww))}
+                  <select value={w.empId}
+                    onChange={e=>{
+                      const emp=dekorEmps.find(em=>em.id===e.target.value);
+                      setWorkers(p=>p.map((ww,ii)=>
+                        ii===i?{...ww,empId:e.target.value,
+                          empName:emp?.name||""}:ww));
+                    }}
                     style={{flex:1,border:"1px solid #CBD5E1",borderRadius:12,
                       padding:"13px 14px",fontSize:14,outline:"none",
-                      fontFamily:"Tahoma",direction:"rtl",boxSizing:"border-box"}}/>
+                      fontFamily:"Tahoma",direction:"rtl",boxSizing:"border-box",
+                      background:"#fff",appearance:"none"}}>
+                    <option value="">
+                      {lang==="ar"?"— اختر الموظف —":"— Select Employee —"}
+                    </option>
+                    {dekorEmps.map(emp=>(
+                      <option key={emp.id} value={emp.id}>
+                        {emp.name} · {fNum(emp.baseDin||emp.baseDol||0)}
+                        {emp.baseDin?" د.ع":" $"}/شهر
+                      </option>
+                    ))}
+                  </select>
                   <div style={{textAlign:"center",width:72}}>
                     <input type="number" placeholder="0"
                       value={w.hours}
@@ -699,7 +730,7 @@ function FactoryView({ foreman, onLogout, lang="ar" }) {
                       color:"#DC2626",fontSize:18}}>✕</button>
                 </div>
               ))}
-              <button onClick={()=>setWorkers(p=>[...p,{name:"",hours:""}])}
+              <button onClick={()=>setWorkers(p=>[...p,{empId:"",empName:"",hours:""}])}
                 style={{width:"100%",border:"2px dashed #CBD5E1",borderRadius:12,
                   padding:"13px",fontSize:14,fontFamily:"Tahoma",cursor:"pointer",
                   background:"transparent",color:"#64748B",marginTop:4}}>
@@ -1463,7 +1494,7 @@ ${body}
                       <div key={i} style={{display:"flex",justifyContent:"space-between",
                         padding:"6px 10px",borderRadius:8,marginBottom:4,
                         background:"#F8FAFC",fontSize:12}}>
-                        <span style={{color:"#1E293B",fontWeight:600}}>{w.name}</span>
+                        <span style={{color:"#1E293B",fontWeight:600}}>{w.empName||w.name||""}</span>
                         <span style={{color:"#F97316",fontWeight:700}}>
                           +{w.hours} ساعة OT
                         </span>

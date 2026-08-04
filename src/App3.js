@@ -155,8 +155,10 @@ export function EmployeesPage({ funds, onBack }) {
   const empOT = React.useMemo(()=>{
     if(!selEmp) return [];
     return otRecords.filter(r=>
-      (r.workerName||"").trim().includes((selEmp.name||"").trim()) ||
-      (selEmp.name||"").trim().includes((r.workerName||"").trim())
+      // مطابقة بالـ ID أولاً (الأدق)
+      r.empId===selEmp.id ||
+      // ثم بالاسم كـ fallback
+      (r.workerName||"").trim()===( selEmp.name||"").trim()
     );
   },[selEmp,otRecords]);
 
