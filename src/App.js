@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import App2 from "./App2";
+import { ForemanSystem } from "./App6";
 import { initializeApp } from "firebase/app";
 import { getFirestore, collection, addDoc, onSnapshot,
   deleteDoc, doc, updateDoc, setDoc, query, where, getDocs, getDoc } from "firebase/firestore";
@@ -351,6 +352,7 @@ export default function App() {
 
   // الصفحة المالية الرئيسية — تُعرض عند page==="financial"
   if (page === "financial2") return <App2 onBack={() => setPage("financial")} />;
+  if (page === "foreman_login") return <ForemanSystem onBack={() => setPage("home")} />;
 
   if (page === "financial") return (
     <div style={{ minHeight:"100vh", background:"#F1F5F9",

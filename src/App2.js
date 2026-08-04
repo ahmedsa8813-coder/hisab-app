@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { EmployeesPage, ReportsPage, FinancialReportsPage } from "./App3";
 import { AssetsPage, OpeningBalancesPage, SettingsPage, ExpensesPage, DebtsPage } from "./App4";
 import { AttendancePage } from "./App5";
+import { ForemanManagePage } from "./App6";
 import { initializeApp, getApps } from "firebase/app";
 import { getFirestore, collection, addDoc, onSnapshot,
   deleteDoc, doc, updateDoc, setDoc, query, where, getDocs } from "firebase/firestore";
@@ -142,6 +143,10 @@ export default function App2({ onBack }) {
   if (page === "attendance")
     return <AttendancePage funds={funds} projects={projects}
       employees={employees} onBack={() => setPage("home")}/>;
+
+  if (page === "foreman")
+    return <ForemanManagePage projects={projects}
+      onBack={() => setPage("home")}/>;
 
   // الصفحة الرئيسية
   const fundsDin    = ALL_FUNDS.reduce((s,f) => s + (funds[f.id]?.din||0), 0);
@@ -437,6 +442,7 @@ export default function App2({ onBack }) {
                 {label:"الأصول الثابتة",    icon:"📦", pg:"assets",    sub:assets.filter(a=>(a.qtyRemaining||0)>0).length+" صنف"},
                 {label:"الأرصدة الافتتاحية",icon:"🏁", pg:"opening",   sub:"رصيد البداية"},
               {label:"الحضور والمواقع",  icon:"📋", pg:"attendance", sub:"متابعة العمال"},
+              {label:"إدارة الفورمن",      icon:"👷", pg:"foreman",   sub:"ديكور"},
               ]
             },
             {
