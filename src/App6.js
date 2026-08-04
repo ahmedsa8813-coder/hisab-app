@@ -107,7 +107,8 @@ export function ForemanSystem({ onBack }) {
 
 // ─── فورمن المعمل ────────────────────────────────────
 function FactoryForeman({ foreman, onLogout }) {
-  const [plan,   setPlan]   = useState(null);
+  const [plan,      setPlan]      = useState(null);
+  const [planTomorrow, setPlanTomorrow] = useState(null);
   const [report, setReport] = useState(null);
   const [taskStatuses, setTaskStatuses] = useState({});
   const [taskNotes,    setTaskNotes]    = useState({});
@@ -122,6 +123,18 @@ function FactoryForeman({ foreman, onLogout }) {
       snap=>{
         const plans = snap.docs.map(d=>({id:d.id,...d.data()}));
         setPlan(plans[0]||null);
+      }
+    );
+    return unsub;
+  },[]);
+
+  // خطة الغد
+  useEffect(()=>{
+    const unsub = onSnapshot(
+      query(collection(db,"factory_plans"), where("date","==",TOMORROW)),
+      snap=>{
+        const plans = snap.docs.map(d=>({id:d.id,...d.data()}));
+        setPlanTomorrow(plans[0]||null);
       }
     );
     return unsub;
@@ -222,6 +235,45 @@ function FactoryForeman({ foreman, onLogout }) {
             </div>
           )}
         </div>
+
+        {/* خطة الغد */}
+        {planTomorrow && (
+          <div style={{background:"#fff",borderRadius:14,padding:18,
+            border:"2px solid #2563EB",marginBottom:14}}>
+            <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:14}}>
+              <div style={{background:"#2563EB",borderRadius:8,
+                padding:"6px 12px",fontSize:11,fontWeight:700,color:"#fff"}}>
+                📅 خطة الغد — {TOMORROW}
+              </div>
+            </div>
+            {planTomorrow.note&&(
+              <div style={{background:"#EFF6FF",borderRadius:10,
+                padding:"10px 14px",fontSize:12,color:"#1D4ED8",
+                marginBottom:12,fontWeight:600}}>
+                💬 {planTomorrow.note}
+              </div>
+            )}
+            <div style={{display:"flex",flexDirection:"column",gap:8}}>
+              {(planTomorrow.tasks||[]).map((t,i)=>(
+                <div key={i} style={{borderRadius:10,padding:"12px 14px",
+                  background:"#F8FAFC",border:"1px solid #DBEAFE",
+                  borderRight:"4px solid #2563EB"}}>
+                  <div style={{fontSize:13,fontWeight:700,color:"#1E293B",marginBottom:4}}>
+                    {i+1}. {t.desc}
+                    {t.qty&&<span style={{color:"#64748B",fontWeight:400,fontSize:12}}>
+                      {" — "}{t.qty}
+                    </span>}
+                  </div>
+                  {t.note&&(
+                    <div style={{fontSize:11,color:"#64748B"}}>
+                      📌 {t.note}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* تقرير نهاية اليوم */}
         <div style={{background:"#fff",borderRadius:14,padding:18,
@@ -328,6 +380,7 @@ function FactoryForeman({ foreman, onLogout }) {
 // ─── فورمن الموقع ────────────────────────────────────
 function SiteForeman({ foreman, onLogout }) {
   const [report,    setReport]    = useState(null);
+  const [sitePlanTomorrow, setSitePlanTomorrow] = useState(null);
   const [workers,   setWorkers]   = useState("");
   const [progress,  setProgress]  = useState("");
   const [tasks,     setTasks]     = useState("");
@@ -335,6 +388,21 @@ function SiteForeman({ foreman, onLogout }) {
   const [submitted, setSubmitted] = useState(false);
   const [saving,    setSaving]    = useState(false);
   const [history,   setHistory]   = useState([]);
+
+  // خطة الغد للموقع
+  useEffect(()=>{
+    if(!foreman.projectId) return;
+    const unsub = onSnapshot(
+      query(collection(db,"site_plans"),
+        where("projectId","==",foreman.projectId),
+        where("date","==",TOMORROW)),
+      snap=>{
+        const list=snap.docs.map(d=>({id:d.id,...d.data()}));
+        setSitePlanTomorrow(list[0]||null);
+      }
+    );
+    return unsub;
+  },[foreman.projectId]);
 
   // تقارير سابقة لهذا الموقع
   useEffect(()=>{
@@ -409,6 +477,36 @@ function SiteForeman({ foreman, onLogout }) {
             </div>
           )}
         </div>
+
+        {/* خطة الغد للموقع */}
+        {sitePlanTomorrow && (
+          <div style={{background:"#fff",borderRadius:14,padding:18,
+            border:"2px solid #2563EB",marginBottom:14}}>
+            <div style={{background:"#2563EB",borderRadius:8,display:"inline-block",
+              padding:"5px 14px",fontSize:11,fontWeight:700,color:"#fff",marginBottom:12}}>
+              📅 مهمة الغد — {TOMORROW}
+            </div>
+            {sitePlanTomorrow.note&&(
+              <div style={{background:"#EFF6FF",borderRadius:10,
+                padding:"10px 14px",fontSize:12,color:"#1D4ED8",
+                marginBottom:10,fontWeight:600}}>
+                💬 {sitePlanTomorrow.note}
+              </div>
+            )}
+            {(sitePlanTomorrow.tasks||[]).map((t,i)=>(
+              <div key={i} style={{borderRadius:10,padding:"11px 14px",
+                marginBottom:6,background:"#F8FAFC",
+                border:"1px solid #DBEAFE",borderRight:"4px solid #2563EB"}}>
+                <div style={{fontSize:13,fontWeight:700,color:"#1E293B"}}>
+                  {i+1}. {t.desc}
+                </div>
+                {t.note&&<div style={{fontSize:11,color:"#64748B",marginTop:3}}>
+                  📌 {t.note}
+                </div>}
+              </div>
+            ))}
+          </div>
+        )}
 
         {/* تقرير اليوم */}
         <div style={{background:"#fff",borderRadius:14,padding:18,
