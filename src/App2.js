@@ -115,38 +115,43 @@ export default function App2({ onBack }) {
 
   if (page === "employees")
     return <EmployeesPage funds={funds}
-      onBack={() => setPage("home")}/>;
+      onBack={() => setPage("admin")}/>;
 
   if (page === "reports")
     return <ReportsPage funds={funds} projects={projects}
-      onBack={() => setPage("home")}/>;
+      onBack={() => setPage("admin")}/>;
 
   if (page === "assets")
-    return <AssetsPage funds={funds} onBack={() => setPage("home")}/>;
+    return <AssetsPage funds={funds} onBack={() => setPage("admin")}/>;
 
   if (page === "opening")
-    return <OpeningBalancesPage funds={funds} onBack={() => setPage("home")}/>;
+    return <OpeningBalancesPage funds={funds} onBack={() => setPage("admin")}/>;
 
   if (page === "expenses")
-    return <ExpensesPage funds={funds} onBack={() => setPage("home")}/>;
+    return <ExpensesPage funds={funds} onBack={() => setPage("admin")}/>;
 
   if (page === "settings")
-    return <SettingsPage funds={funds} onBack={() => setPage("home")}/>;
+    return <SettingsPage funds={funds} onBack={() => setPage("admin")}/>;
 
   if (page === "debts")
-    return <DebtsPage funds={funds} onBack={() => setPage("home")}/>;
+    return <DebtsPage funds={funds} onBack={() => setPage("admin")}/>;
 
   if (page === "financial_reports")
     return <FinancialReportsPage funds={funds} projects={projects}
-      onBack={() => setPage("home")}/>;
+      onBack={() => setPage("admin")}/>;
 
   if (page === "attendance")
     return <AttendancePage funds={funds} projects={projects}
-      employees={employees} onBack={() => setPage("home")}/>;
+      employees={employees} onBack={() => setPage("admin")}/>;
 
   if (page === "foreman")
     return <ForemanManagePage projects={projects}
-      onBack={() => setPage("home")}/>;
+      onBack={() => setPage("admin")}/>;
+
+  if (page === "admin")
+    return <AdminSection funds={funds} projects={projects}
+      employees={employees} assets={assets}
+      setPage={setPage} onBack={onBack}/>;
 
   // الصفحة الرئيسية
   const fundsDin    = ALL_FUNDS.reduce((s,f) => s + (funds[f.id]?.din||0), 0);
@@ -164,7 +169,7 @@ export default function App2({ onBack }) {
     {id:"settings",  label:"الإعدادات", icon:"⚙️"},
   ];
 
-  // Navigation groups
+  // Navigation groups - مالي فقط
   const NAV_GROUPS = [
     {
       title:"الصناديق", icon:"💎",
@@ -174,26 +179,9 @@ export default function App2({ onBack }) {
       ]
     },
     {
-      title:"الإدارة", icon:"📋",
+      title:"التقارير المالية", icon:"📊",
       items:[
-        {id:"employees",    label:"الموظفون",          icon:"👷"},
-        {id:"debts",        label:"الذمم المالية",      icon:"💳"},
-        {id:"expenses",     label:"المصاريف الثابتة",  icon:"🏠"},
-        {id:"assets",       label:"الأصول الثابتة",    icon:"📦"},
-        {id:"opening",      label:"الأرصدة الافتتاحية",icon:"🏁"},
-      ]
-    },
-    {
-      title:"التقارير", icon:"📊",
-      items:[
-        {id:"reports",          label:"التقارير العامة",    icon:"📊"},
         {id:"financial_reports",label:"الميزانية والأرباح", icon:"📈"},
-      ]
-    },
-    {
-      title:"الإعدادات", icon:"⚙️",
-      items:[
-        {id:"settings", label:"الإعدادات والنسخ الاحتياطي", icon:"⚙️"},
       ]
     },
   ];
@@ -501,9 +489,7 @@ export default function App2({ onBack }) {
                 {label:"الذمم المالية",      icon:"💳", pg:"debts",     sub:"طالبة ومطلوبة"},
                 {label:"المصاريف الثابتة",  icon:"🏠", pg:"expenses",  sub:"إيجارات"},
                 {label:"الأصول الثابتة",    icon:"📦", pg:"assets",    sub:assets.filter(a=>(a.qtyRemaining||0)>0).length+" صنف"},
-                {label:"الأرصدة الافتتاحية",icon:"🏁", pg:"opening",   sub:"رصيد البداية"},
-              {label:"الحضور والمواقع",  icon:"📋", pg:"attendance", sub:"متابعة العمال"},
-              {label:"إدارة الفورمن",      icon:"👷", pg:"foreman",   sub:"ديكور"},
+  
               ]
             },
             {
@@ -552,11 +538,22 @@ export default function App2({ onBack }) {
           ))}
         </div>
 
+        {/* زر القسم الإداري */}
+        <div style={{ padding:"10px 12px 4px" }}>
+          <button onClick={()=>setPage("admin")} style={{ width:"100%",
+            background:"linear-gradient(135deg,#7C3AED,#9333EA)",
+            border:"none", borderRadius:10, padding:"12px", cursor:"pointer",
+            fontFamily:"Tahoma", color:"#fff", fontSize:13, fontWeight:700,
+            display:"flex", alignItems:"center", justifyContent:"center", gap:8 }}>
+            📋 القسم الإداري
+          </button>
+        </div>
+
         {/* زر الرجوع */}
-        <div style={{ padding:"10px 12px 18px" }}>
+        <div style={{ padding:"6px 12px 18px" }}>
           <button onClick={onBack} style={{ width:"100%",
             background:"#1E293B", border:"1px solid #334155",
-            borderRadius:10, padding:"11px", cursor:"pointer",
+            borderRadius:10, padding:"10px", cursor:"pointer",
             fontFamily:"Tahoma", color:"#64748B", fontSize:12,
             display:"flex", alignItems:"center", justifyContent:"center", gap:8 }}>
             ← رجوع للمشاريع
@@ -1627,6 +1624,154 @@ function LendToGeneralSection({ fund, funds, bal }) {
           </button>
         </div>
       )}
+    </div>
+  );
+}
+
+// ─── القسم الإداري ───────────────────────────────────
+function AdminSection({ funds, projects, employees, assets, setPage, onBack }) {
+  const ADMIN_ITEMS = [
+    {
+      title:"إدارة الموارد البشرية", color:"#0284C7", bg:"#F0F9FF",
+      items:[
+        {pg:"employees", icon:"👷", label:"الموظفون",
+          desc:employees.length+" موظف مسجّل", color:"#0284C7"},
+        {pg:"attendance", icon:"📋", label:"الحضور والمواقع",
+          desc:"تسجيل يومي ومتابعة", color:"#0891B2"},
+        {pg:"foreman", icon:"🦺", label:"إدارة الفورمن",
+          desc:"معمل ومواقع الديكور", color:"#7C3AED"},
+      ]
+    },
+    {
+      title:"الأصول والمصاريف", color:"#D97706", bg:"#FFFBEB",
+      items:[
+        {pg:"assets", icon:"📦", label:"الأصول الثابتة",
+          desc:assets.filter(a=>(a.qtyRemaining||0)>0).length+" صنف نشط", color:"#0891B2"},
+        {pg:"expenses", icon:"🏠", label:"المصاريف الثابتة",
+          desc:"إيجارات واشتراكات", color:"#DC2626"},
+      ]
+    },
+    {
+      title:"الذمم والتقارير", color:"#7C2D12", bg:"#FFF7ED",
+      items:[
+        {pg:"debts", icon:"💳", label:"الذمم المالية",
+          desc:"طالبة ومطلوبة", color:"#7C2D12"},
+        {pg:"reports", icon:"📊", label:"التقارير العامة",
+          desc:"مشاريع وصناديق وشركاء", color:"#7C3AED"},
+      ]
+    },
+    {
+      title:"الإعدادات والأرشيف", color:"#475569", bg:"#F8FAFC",
+      items:[
+        {pg:"opening", icon:"🏁", label:"الأرصدة الافتتاحية",
+          desc:"رصيد بداية الصناديق", color:"#475569"},
+        {pg:"settings", icon:"⚙️", label:"الإعدادات والنسخ",
+          desc:"تصدير واستيراد البيانات", color:"#334155"},
+      ]
+    },
+  ];
+
+  return (
+    <div style={{minHeight:"100vh",background:"#F1F5F9",
+      fontFamily:"Tahoma",direction:"rtl"}}>
+      <div style={{maxWidth:900,margin:"0 auto",padding:"20px 16px"}}>
+
+        {/* هيدر */}
+        <div style={{background:"linear-gradient(135deg,#4C1D95,#7C3AED)",
+          borderRadius:18,padding:"22px 28px",marginBottom:24}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+            <div>
+              <div style={{fontSize:22,fontWeight:700,color:"#fff",marginBottom:4}}>
+                📋 القسم الإداري
+              </div>
+              <div style={{fontSize:12,color:"rgba(255,255,255,0.6)"}}>
+                إدارة الموارد والأصول والتقارير
+              </div>
+            </div>
+            <div style={{display:"flex",gap:8}}>
+              <button onClick={()=>setPage("home")} style={{
+                background:"rgba(255,255,255,0.15)",border:"none",
+                borderRadius:10,padding:"8px 16px",cursor:"pointer",
+                fontFamily:"Tahoma",color:"#fff",fontSize:12}}>
+                💰 القسم المالي
+              </button>
+              <button onClick={onBack} style={{
+                background:"rgba(255,255,255,0.1)",border:"none",
+                borderRadius:10,padding:"8px 14px",cursor:"pointer",
+                fontFamily:"Tahoma",color:"rgba(255,255,255,0.7)",fontSize:12}}>
+                ← رجوع
+              </button>
+            </div>
+          </div>
+
+          {/* إحصائيات سريعة */}
+          <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",
+            gap:10,marginTop:16}}>
+            {[
+              {l:"الموظفون",v:employees.length,c:"#A78BFA"},
+              {l:"الأصول",v:assets.filter(a=>(a.qtyRemaining||0)>0).length,c:"#60A5FA"},
+              {l:"المشاريع النشطة",v:projects.filter(p=>p.status==="active").length,c:"#4ADE80"},
+              {l:"",v:"",c:"#F9A8D4"},
+            ].map((s,i)=>s.l&&(
+              <div key={i} style={{background:"rgba(255,255,255,0.1)",
+                borderRadius:10,padding:"10px",textAlign:"center"}}>
+                <div style={{fontSize:9,color:"rgba(255,255,255,0.5)",marginBottom:3}}>{s.l}</div>
+                <div style={{fontSize:22,fontWeight:700,color:s.c}}>{s.v}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* الأقسام */}
+        {ADMIN_ITEMS.map((section,si)=>(
+          <div key={si} style={{marginBottom:24}}>
+            <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:12}}>
+              <div style={{width:3,height:18,
+                background:section.color,borderRadius:99}}/>
+              <span style={{fontSize:13,fontWeight:700,color:"#475569"}}>
+                {section.title}
+              </span>
+            </div>
+            <div style={{display:"grid",
+              gridTemplateColumns:"repeat("+section.items.length+",1fr)",
+              gap:12}}>
+              {section.items.map((item,ii)=>(
+                <button key={ii} onClick={()=>setPage(item.pg)}
+                  style={{background:"#fff",border:"none",
+                    borderTop:"3px solid "+item.color,
+                    borderRadius:14,padding:"20px 18px",
+                    cursor:"pointer",fontFamily:"Tahoma",textAlign:"right",
+                    boxShadow:"0 1px 4px rgba(0,0,0,0.05)",
+                    transition:"all 0.2s"}}
+                  onMouseEnter={e=>{
+                    e.currentTarget.style.transform="translateY(-3px)";
+                    e.currentTarget.style.boxShadow="0 8px 24px rgba(0,0,0,0.12)";
+                    e.currentTarget.style.borderTopColor=item.color;
+                  }}
+                  onMouseLeave={e=>{
+                    e.currentTarget.style.transform="translateY(0)";
+                    e.currentTarget.style.boxShadow="0 1px 4px rgba(0,0,0,0.05)";
+                  }}>
+                  <div style={{display:"flex",justifyContent:"space-between",
+                    alignItems:"start",marginBottom:12}}>
+                    <span style={{fontSize:10,color:item.color,fontWeight:700,
+                      background:item.color+"15",borderRadius:20,
+                      padding:"2px 8px"}}>فتح ←</span>
+                    <span style={{fontSize:32}}>{item.icon}</span>
+                  </div>
+                  <div style={{fontSize:15,fontWeight:700,color:"#1E293B",marginBottom:4}}>
+                    {item.label}
+                  </div>
+                  <div style={{fontSize:11,color:"#94A3B8"}}>
+                    {item.desc}
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+        ))}
+
+      </div>
     </div>
   );
 }
