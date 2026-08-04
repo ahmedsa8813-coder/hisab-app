@@ -81,6 +81,8 @@ export function EmployeesPage({ funds, onBack }) {
   const sf  = k => v => setSalForm(f=>({...f,[k]:v}));
   const af  = k => v => setAdvForm(f=>({...f,[k]:v}));
 
+  const [otRecords, setOtRecords] = useState([]);
+
   useEffect(()=>{
     const u1=onSnapshot(collection(db,"employees"), s=>{
       const list=s.docs.map(d=>({id:d.id,...d.data()}));
@@ -93,7 +95,12 @@ export function EmployeesPage({ funds, onBack }) {
     const u3=onSnapshot(collection(db,"advances"), s=>{
       setAdvances(s.docs.map(d=>({id:d.id,...d.data()})));
     });
-    return()=>{u1();u2();u3();};
+    const u4=onSnapshot(
+      query(collection(db,"overtime_records"),where("status","==","pending")),
+      s=>setOtRecords(s.docs.map(d=>({id:d.id,...d.data()}))
+        .sort((a,b)=>b.date.localeCompare(a.date)))
+    );
+    return()=>{u1();u2();u3();u4();};
   },[]);
 
   // ── تعديل موظف ───────────────────────────────────────
@@ -283,12 +290,30 @@ ${sal.note?`<div class="row"><span class="lbl">ملاحظة</span><span class="v
           borderRadius:16,padding:"20px 24px",marginBottom:16}}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
             <div style={{fontSize:18,fontWeight:700,color:"#fff"}}>👷 نظام الرواتب والموظفين</div>
-            <button onClick={()=>setTab(tab==="add_emp"?"list":"add_emp")} style={{
-              background:tab==="add_emp"?"#475569":"#3B82F6",border:"none",borderRadius:10,
-              padding:"9px 18px",color:"#fff",cursor:"pointer",fontFamily:"Tahoma",
-              fontSize:13,fontWeight:700}}>
-              {tab==="add_emp"?"✕ إلغاء":"+ موظف جديد"}
-            </button>
+            <div style={{display:"flex",gap:8,alignItems:"center"}}>
+              {otRecords.length>0&&(
+                <button onClick={()=>setTab("overtime")} style={{
+                  background:tab==="overtime"?"#F97316":"#FFF7ED",
+                  border:"2px solid #F97316",borderRadius:10,
+                  padding:"9px 14px",color:tab==="overtime"?"#fff":"#F97316",
+                  cursor:"pointer",fontFamily:"Tahoma",
+                  fontSize:12,fontWeight:700,position:"relative"}}>
+                  ⏱️ أوفرتايم
+                  <span style={{position:"absolute",top:-8,left:-8,
+                    background:"#DC2626",color:"#fff",borderRadius:"50%",
+                    width:18,height:18,fontSize:10,fontWeight:700,
+                    display:"flex",alignItems:"center",justifyContent:"center"}}>
+                    {otRecords.length}
+                  </span>
+                </button>
+              )}
+              <button onClick={()=>setTab(tab==="add_emp"?"list":"add_emp")} style={{
+                background:tab==="add_emp"?"#475569":"#3B82F6",border:"none",borderRadius:10,
+                padding:"9px 18px",color:"#fff",cursor:"pointer",fontFamily:"Tahoma",
+                fontSize:13,fontWeight:700}}>
+                {tab==="add_emp"?"✕ إلغاء":"+ موظف جديد"}
+              </button>
+            </div>
           </div>
           <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10}}>
             {EMP_BRANCHES.map(b=>{
@@ -383,6 +408,11 @@ ${sal.note?`<div class="row"><span class="lbl">ملاحظة</span><span class="v
               ✅ تسجيل الموظف
             </button>
           </div>
+        )}
+
+        {/* ─── أوفرتايم المعمل ─── */}
+        {tab==="overtime" && (
+          <OvertimePendingSection otRecords={otRecords} funds={funds} employees={employees}/>
         )}
 
         {/* فورم الراتب */}
@@ -1917,6 +1947,150 @@ ${row("إجمالي المصاريف",totalExpDin,totalExpDol,true,"#DC2626")}
         )}
 
       </div>
+    </div>
+  );
+}
+
+// ─── قسم الأوفرتايم المعلق ─────────────────────────────
+function OvertimePendingSection({ otRecords, funds, employees }) {
+  const WORK_DAYS=26, WORK_HOURS=10;
+
+  const calcOTPay = (empName, hours) => {
+    const emp = employees.find(e=>
+      e.name.trim().includes(empName.trim()) ||
+      empName.trim().includes(e.name.trim())
+    );
+    if(!emp) return {din:0, dol:0, found:false};
+    const din = emp.baseDin>0
+      ? Math.round(emp.baseDin/WORK_DAYS/WORK_HOURS*hours) : 0;
+    const dol = emp.baseDol>0
+      ? Math.round(emp.baseDol/WORK_DAYS/WORK_HOURS*hours*10)/10 : 0;
+    return {din, dol, found:true, branch:emp.branch};
+  };
+
+  const approveOT = async (ot) => {
+    const pay = calcOTPay(ot.workerName, ot.hours);
+    const pw = window.prompt("🔒 باسورد صرف الأوفرتايم:");
+    if(!pw)return; if(pw!=="1234"){alert("❌ باسورد غلط");return;}
+
+    const branch = pay.branch || ot.branch || "ديكور";
+    const fBal = funds[branch]||{din:0,dol:0};
+
+    if(pay.din>0){
+      if(pay.din>fBal.din){
+        alert("⛔ رصيد صندوق "+branch+" غير كافٍ — المتاح: "+
+          Math.round(fBal.din).toLocaleString()+" د.ع");
+        return;
+      }
+      // خصم من الصندوق
+      await setDoc(doc(db,"funds",branch),
+        {din:fBal.din-pay.din,dol:fBal.dol},{merge:true});
+      await addDoc(collection(db,"fund_txs"),{
+        fundId:branch,fundLabel:branch,type:"صرف",
+        din:pay.din,dol:0,
+        note:"أوفرتايم — "+ot.workerName+" — "+ot.hours+" ساعة — "+ot.date,
+        date:ot.date,createdAt:new Date().toISOString()
+      });
+    }
+
+    // تغيير الحالة لمعتمد
+    await updateDoc(doc(db,"overtime_records",ot.id),{
+      status:"approved",
+      approvedAt:new Date().toISOString(),
+      paidDin:pay.din, paidDol:pay.dol
+    });
+    alert("✅ تم صرف أوفرتايم "+ot.workerName+" — "+
+      (pay.din>0?Math.round(pay.din).toLocaleString()+" د.ع":""));
+  };
+
+  const rejectOT = async (id) => {
+    if(!window.confirm("رفض هذا الأوفرتايم؟")) return;
+    await updateDoc(doc(db,"overtime_records",id),{status:"rejected"});
+  };
+
+  if(otRecords.length===0) return (
+    <div style={{background:"#fff",borderRadius:14,padding:40,
+      textAlign:"center",border:"1px solid #E2E8F0"}}>
+      <div style={{fontSize:40,marginBottom:10}}>✅</div>
+      <div style={{fontSize:14,color:"#64748B"}}>ما في أوفرتايم معلق</div>
+    </div>
+  );
+
+  const totalPending=otRecords.length;
+
+  return (
+    <div>
+      <div style={{background:"linear-gradient(135deg,#EA580C,#F97316)",
+        borderRadius:16,padding:"16px 20px",marginBottom:16}}>
+        <div style={{fontSize:16,fontWeight:700,color:"#fff"}}>
+          ⏱️ الأوفرتايم المعلق
+        </div>
+        <div style={{fontSize:12,color:"rgba(255,255,255,0.7)",marginTop:4}}>
+          {totalPending} سجل ينتظر الموافقة والصرف
+        </div>
+      </div>
+
+      {otRecords.map(ot=>{
+        const pay=calcOTPay(ot.workerName, ot.hours);
+        return (
+          <div key={ot.id} style={{background:"#fff",borderRadius:14,
+            padding:16,marginBottom:10,border:"1px solid #E2E8F0",
+            borderRight:"5px solid #F97316"}}>
+            <div style={{display:"flex",justifyContent:"space-between",
+              alignItems:"start",marginBottom:12}}>
+              <div>
+                <div style={{fontSize:15,fontWeight:700,color:"#1E293B"}}>
+                  {ot.workerName}
+                </div>
+                <div style={{fontSize:11,color:"#64748B",marginTop:3}}>
+                  📅 {ot.date} · 🏭 {ot.source} · 👷 {ot.foremanName}
+                </div>
+              </div>
+              <div style={{textAlign:"left"}}>
+                <div style={{fontSize:18,fontWeight:800,color:"#F97316"}}>
+                  {ot.hours} ساعة
+                </div>
+                {pay.found&&pay.din>0&&(
+                  <div style={{fontSize:13,fontWeight:700,color:"#DC2626",marginTop:2}}>
+                    {Math.round(pay.din).toLocaleString()} د.ع
+                  </div>
+                )}
+                {!pay.found&&(
+                  <div style={{fontSize:10,color:"#94A3B8"}}>
+                    غير مسجّل
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {!pay.found&&(
+              <div style={{background:"#FFF7ED",borderRadius:8,
+                padding:"8px 12px",fontSize:11,color:"#92400E",marginBottom:10}}>
+                ⚠️ "{ot.workerName}" غير موجود في قاعدة الموظفين —
+                تأكد من تطابق الاسم لحساب المبلغ
+              </div>
+            )}
+
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+              <button onClick={()=>approveOT(ot)}
+                disabled={!pay.found}
+                style={{border:"none",borderRadius:10,padding:"12px",
+                  cursor:pay.found?"pointer":"not-allowed",
+                  fontFamily:"Tahoma",fontSize:13,fontWeight:700,
+                  background:pay.found?"#16A34A":"#E2E8F0",
+                  color:pay.found?"#fff":"#94A3B8"}}>
+                ✅ اعتماد وصرف
+              </button>
+              <button onClick={()=>rejectOT(ot.id)}
+                style={{border:"2px solid #DC2626",borderRadius:10,padding:"12px",
+                  cursor:"pointer",fontFamily:"Tahoma",fontSize:13,fontWeight:700,
+                  background:"#fff",color:"#DC2626"}}>
+                ❌ رفض
+              </button>
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }

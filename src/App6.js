@@ -261,12 +261,30 @@ function FactoryView({ foreman, onLogout, lang="ar" }) {
 
   const submitFactory = async () => {
     setFactSaving(true);
+    const validWorkers=workers.filter(w=>w.name.trim()&&w.hours);
+
+    // حفظ تقرير المعمل
     await setDoc(doc(db,"factory_status",TODAY),{
       date:TODAY,foremanId:foreman.id,foremanName:foreman.name,
       ...factReport,
-      workers:workers.filter(w=>w.name.trim()&&w.hours),
+      workers:validWorkers,
       submittedAt:new Date().toISOString()
     });
+
+    // إرسال الأوفرتايم لصفحة الرواتب
+    for(const w of validWorkers){
+      await addDoc(collection(db,"overtime_records"),{
+        workerName:w.name.trim(),
+        hours:Number(w.hours)||0,
+        date:TODAY,
+        source:"معمل الديكور",
+        foremanName:foreman.name,
+        branch:"ديكور",
+        status:"pending", // معلق — ينتظر موافقة المدير المالي
+        createdAt:new Date().toISOString()
+      });
+    }
+
     setFactSaved(true); setFactSaving(false);
     setTimeout(()=>setFactSaved(false),3000);
   };
