@@ -509,6 +509,12 @@ function SiteView({ foreman, onLogout }) {
 
 // ─── لوحة المدير الاحترافية ───────────────────────────
 export function ForemanManagePage({ onBack }) {
+  // شاشة دخول المدير
+  const [loggedIn, setLoggedIn] = useState(false);
+  const [mgrPin,   setMgrPin]   = useState("");
+  const [mgrErr,   setMgrErr]   = useState("");
+  const MANAGER_PIN = "1234"; // نفس الباسورد
+
   const [projects,    setProjects]    = useState([]);
   const [tab,         setTab]         = useState("dashboard");
   const [foremans,    setForemans]    = useState([]);
@@ -516,6 +522,42 @@ export function ForemanManagePage({ onBack }) {
   const [factReports, setFactReports] = useState([]);
   const [siteReports, setSiteReports] = useState([]);
   const [sitePlans,   setSitePlans]   = useState([]);
+
+  // تعديل وحذف مهام الخطة
+  const [editPlanIdx,  setEditPlanIdx]  = useState(null);
+  const [editPlanText, setEditPlanText] = useState("");
+
+  const deletePlanTask = async (plan, idx, type) => {
+    const pw=window.prompt("🔒 باسورد الحذف:");
+    if(!pw)return; if(pw!==PASS){alert("❌ باسورد غلط");return;}
+    const newTasks=(plan.tasks||[]).filter((_,i)=>i!==idx);
+    if(type==="factory")
+      await setDoc(doc(db,"factory_plans",plan.id),{...plan,tasks:newTasks});
+    else
+      await setDoc(doc(db,"site_plans",plan.id),{...plan,tasks:newTasks});
+    alert("✅ تم الحذف");
+  };
+
+  const saveEditPlanTask = async (plan, idx, type) => {
+    if(!editPlanText.trim()) return;
+    const pw=window.prompt("🔒 باسورد التعديل:");
+    if(!pw)return; if(pw!==PASS){alert("❌ باسورد غلط");return;}
+    const newTasks=(plan.tasks||[]).map((t,i)=>
+      i===idx?{...t,desc:editPlanText.trim()}:t);
+    if(type==="factory")
+      await setDoc(doc(db,"factory_plans",plan.id),{...plan,tasks:newTasks});
+    else
+      await setDoc(doc(db,"site_plans",plan.id),{...plan,tasks:newTasks});
+    setEditPlanIdx(null); setEditPlanText(""); alert("✅ تم التعديل");
+  };
+
+  // حذف خطة كاملة
+  const deletePlan = async (planId, type) => {
+    const pw=window.prompt("🔒 باسورد حذف الخطة كاملة:");
+    if(!pw)return; if(pw!==PASS){alert("❌ باسورد غلط");return;}
+    if(!window.confirm("حذف هذه الخطة كاملاً؟")) return;
+    await deleteDoc(doc(db,type==="factory"?"factory_plans":"site_plans",planId));
+  };
 
   // خطة المعمل
   const [selPlanner,   setSelPlanner]   = useState("factory");
@@ -673,6 +715,52 @@ ${body}
     w.focus(); setTimeout(()=>w.print(),700);
   };
 
+  if(!loggedIn) return (
+    <div style={{minHeight:"100vh",background:"#0F172A",
+      fontFamily:"Tahoma",direction:"rtl",
+      display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+      <div style={{background:"#1E293B",borderRadius:24,padding:"36px 28px",
+        width:"100%",maxWidth:360,boxShadow:"0 32px 80px rgba(0,0,0,0.6)"}}>
+        <div style={{textAlign:"center",marginBottom:28}}>
+          <div style={{fontSize:48,marginBottom:10}}>🏗️</div>
+          <div style={{fontSize:20,fontWeight:700,color:"#fff",marginBottom:4}}>
+            لوحة إدارة العمل
+          </div>
+          <div style={{fontSize:12,color:"#475569"}}>قسم الديكور</div>
+        </div>
+        <div style={{marginBottom:20}}>
+          <div style={{fontSize:11,color:"#475569",fontWeight:700,
+            marginBottom:6,letterSpacing:1}}>رمز الدخول</div>
+          <input type="password" value={mgrPin}
+            onChange={e=>setMgrPin(e.target.value)}
+            onKeyDown={e=>e.key==="Enter"&&(
+              mgrPin===MANAGER_PIN?setLoggedIn(true):setMgrErr("❌ الرمز غلط")
+            )}
+            placeholder="••••"
+            style={{width:"100%",background:"#0F172A",border:"1.5px solid #334155",
+              borderRadius:12,padding:"14px",fontSize:24,outline:"none",
+              fontFamily:"Tahoma",textAlign:"center",boxSizing:"border-box",
+              color:"#fff",letterSpacing:6}}/>
+        </div>
+        {mgrErr&&<div style={{color:"#F87171",fontSize:12,textAlign:"center",
+          marginBottom:12}}>{mgrErr}</div>}
+        <button onClick={()=>{
+          if(mgrPin===MANAGER_PIN) setLoggedIn(true);
+          else setMgrErr("❌ الرمز غلط");
+        }} style={{width:"100%",border:"none",borderRadius:12,padding:"15px",
+          fontSize:15,fontWeight:700,fontFamily:"Tahoma",cursor:"pointer",
+          background:"linear-gradient(135deg,#1D4ED8,#3B82F6)",color:"#fff"}}>
+          دخول →
+        </button>
+        {onBack&&<button onClick={onBack} style={{width:"100%",border:"none",
+          borderRadius:10,padding:"10px",fontSize:12,fontFamily:"Tahoma",
+          cursor:"pointer",background:"transparent",color:"#334155",marginTop:10}}>
+          ← رجوع
+        </button>}
+      </div>
+    </div>
+  );
+
   const TABS=[
     {id:"dashboard",icon:"📊",label:"لوحة المتابعة"},
     {id:"plan",     icon:"📋",label:"خطة الغد"},
@@ -702,6 +790,12 @@ ${body}
               borderRadius:8,padding:"7px 14px",cursor:"pointer",
               fontFamily:"Tahoma",color:"#94A3B8",fontSize:11}}>
               🖨️ طباعة اليوم
+            </button>
+            <button onClick={()=>setLoggedIn(false)} style={{
+              background:"#DC2626",border:"none",
+              borderRadius:8,padding:"7px 14px",cursor:"pointer",
+              fontFamily:"Tahoma",color:"#fff",fontSize:11,fontWeight:700}}>
+              خروج
             </button>
             <button onClick={onBack} style={{
               background:"transparent",border:"1px solid #334155",
@@ -926,8 +1020,20 @@ ${body}
             {selPlanner==="factory"&&(
               <div style={{background:"#fff",borderRadius:14,padding:20,
                 border:"1px solid #E2E8F0"}}>
-                <div style={{fontSize:14,fontWeight:700,color:"#1E293B",marginBottom:16}}>
-                  🏭 خطة المعمل — {TOMORROW}
+                <div style={{display:"flex",justifyContent:"space-between",
+                  alignItems:"center",marginBottom:16}}>
+                  <div style={{fontSize:14,fontWeight:700,color:"#1E293B"}}>
+                    🏭 خطة المعمل — {TOMORROW}
+                  </div>
+                  {factPlans.find(p=>p.date===TOMORROW)&&(
+                    <button onClick={()=>deletePlan(
+                      factPlans.find(p=>p.date===TOMORROW).id,"factory")}
+                      style={{background:"#FFF1F2",border:"none",borderRadius:7,
+                        padding:"5px 10px",cursor:"pointer",fontSize:11,
+                        color:"#DC2626",fontFamily:"Tahoma"}}>
+                      🗑️ حذف الخطة
+                    </button>
+                  )}
                 </div>
                 {planTasks.map((t,i)=>(
                   <div key={i} style={{background:"#F8FAFC",borderRadius:12,
@@ -1271,6 +1377,43 @@ ${body}
                 </div>
               </div>
             )}
+          </div>
+        )}
+
+        {/* مودال تعديل المهمة */}
+        {editPlanIdx!==null&&(
+          <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.6)",
+            zIndex:200,display:"flex",alignItems:"center",
+            justifyContent:"center",padding:20}}>
+            <div style={{background:"#fff",borderRadius:16,padding:24,
+              width:"100%",maxWidth:420,direction:"rtl"}}>
+              <div style={{fontSize:15,fontWeight:700,color:"#1E293B",marginBottom:14}}>
+                ✏️ تعديل المهمة
+              </div>
+              <input value={editPlanText}
+                onChange={e=>setEditPlanText(e.target.value)}
+                style={{width:"100%",border:"1.5px solid #CBD5E1",borderRadius:10,
+                  padding:"12px 14px",fontSize:14,outline:"none",fontFamily:"Tahoma",
+                  direction:"rtl",boxSizing:"border-box",marginBottom:14}}/>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+                <button onClick={()=>{setEditPlanIdx(null);setEditPlanText("");}}
+                  style={{border:"1px solid #E2E8F0",borderRadius:10,padding:"11px",
+                    cursor:"pointer",fontFamily:"Tahoma",fontSize:13,
+                    background:"#fff",color:"#64748B"}}>
+                  إلغاء
+                </button>
+                <button onClick={()=>{
+                  if(editPlanIdx&&editPlanIdx.plan){
+                    saveEditPlanTask(editPlanIdx.plan,editPlanIdx.idx,editPlanIdx.type);
+                  }
+                }}
+                  style={{border:"none",borderRadius:10,padding:"11px",
+                    cursor:"pointer",fontFamily:"Tahoma",fontSize:13,fontWeight:700,
+                    background:"#2563EB",color:"#fff"}}>
+                  💾 حفظ التعديل
+                </button>
+              </div>
+            </div>
           </div>
         )}
 
