@@ -1126,7 +1126,8 @@ export function ForemanManagePage() {
     return()=>{u0();u1();u2();u3();u3b();u4();u5();};
   },[]);
 
-  const activeProjects=(projects||[]).filter(p=>p.status==="active"&&p.type==="ديكور");
+  const activeProjects=(projects||[]).filter(p=>p.status==="active");
+  const dekorProjects=activeProjects.filter(p=>p.type==="ديكور");
   const siteForemans=foremans.filter(f=>f.type==="موقع");
   const todayFactReport=factReports.find(r=>r.date===TODAY);
   const todayFactStatus=factStatus.find(r=>r.date===TODAY);
@@ -1752,16 +1753,26 @@ ${body}
                   {t.plan_sites_sel}
                 </div>
                 <div style={{display:"flex",flexWrap:"wrap",gap:8,marginBottom:14}}>
-                  {siteForemans.map(f=>(
-                    <button key={f.id} onClick={()=>setSelPlanner(f.id)} style={{
-                      border:"2px solid "+(selPlanner===f.id?"#2563EB":"#E2E8F0"),
-                      borderRadius:10,padding:"9px 16px",cursor:"pointer",
-                      fontFamily:t.fontFamily,fontSize:12,fontWeight:700,
-                      background:selPlanner===f.id?"#2563EB":"#fff",
-                      color:selPlanner===f.id?"#fff":"#64748B"}}>
-                      📍 {f.name}
-                    </button>
-                  ))}
+                  {siteForemans.map(f=>{
+                    const proj=projects.find(p=>p.id===f.projectId);
+                    const sel=selPlanner===f.id;
+                    return (
+                      <button key={f.id} onClick={()=>setSelPlanner(f.id)} style={{
+                        border:"2px solid "+(sel?"#2563EB":"#E2E8F0"),
+                        borderRadius:12,padding:"10px 16px",cursor:"pointer",
+                        fontFamily:t.fontFamily,textAlign:"right",
+                        background:sel?"#2563EB":"#fff",
+                        color:sel?"#fff":"#64748B"}}>
+                        <div style={{fontSize:12,fontWeight:700}}>
+                          📍 {f.projectName||f.name}
+                        </div>
+                        <div style={{fontSize:10,opacity:0.8,marginTop:2}}>
+                          👷 {f.name}
+                          {proj&&<span> · رصيد: {fNum(proj.balDin||0)} د.ع</span>}
+                        </div>
+                      </button>
+                    );
+                  })}
                   {siteForemans.length===0&&(
                     <div style={{fontSize:12,color:"#94A3B8"}}>
                       ما في فورمن مواقع — أضف من تبويب الفريق
@@ -1776,8 +1787,53 @@ ${body}
               return (
                 <div style={{background:"#fff",borderRadius:14,padding:20,
                   border:"1px solid #E2E8F0"}}>
+                  {/* معلومات المشروع */}
+                  {(()=>{
+                    const proj=projects.find(p=>p.id===selF.projectId);
+                    return proj?(
+                      <div style={{background:"#EFF6FF",borderRadius:12,
+                        padding:"12px 14px",marginBottom:14,
+                        border:"1px solid #DBEAFE"}}>
+                        <div style={{fontSize:14,fontWeight:700,color:"#1E293B",
+                          marginBottom:8}}>
+                          🏗️ {proj.name}
+                        </div>
+                        <div style={{display:"grid",
+                          gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
+                          <div style={{textAlign:"center"}}>
+                            <div style={{fontSize:9,color:"#64748B",marginBottom:3}}>
+                              النوع
+                            </div>
+                            <div style={{fontSize:12,fontWeight:700,color:"#2563EB"}}>
+                              {proj.type}
+                            </div>
+                          </div>
+                          <div style={{textAlign:"center"}}>
+                            <div style={{fontSize:9,color:"#64748B",marginBottom:3}}>
+                              الرصيد
+                            </div>
+                            <div style={{fontSize:12,fontWeight:700,color:"#16A34A"}}>
+                              {fNum(proj.balDin||0)} د.ع
+                            </div>
+                          </div>
+                          <div style={{textAlign:"center"}}>
+                            <div style={{fontSize:9,color:"#64748B",marginBottom:3}}>
+                              المدة
+                            </div>
+                            <div style={{fontSize:12,fontWeight:700,color:"#D97706"}}>
+                              {proj.days||"؟"} يوم
+                            </div>
+                          </div>
+                        </div>
+                        <div style={{fontSize:10,color:"#64748B",marginTop:8}}>
+                          👷 فورمن الموقع: {selF.name} ·
+                          📅 بدأ: {proj.startDate||"—"}
+                        </div>
+                      </div>
+                    ):null;
+                  })()}
                   <div style={{fontSize:14,fontWeight:700,color:"#1E293B",marginBottom:4}}>
-                    📍 مهام {selF.name} — {TOMORROW}
+                    📍 مهام {selF.projectName||selF.name} — {TOMORROW}
                   </div>
                   <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",
                     gap:8,marginBottom:10}}>
@@ -2128,7 +2184,9 @@ ${monthRecs.map(r=>`<tr>
                         direction:"rtl",boxSizing:"border-box",appearance:"none"}}>
                       <option value="">— اختر المشروع —</option>
                       {activeProjects.map(p=>(
-                        <option key={p.id} value={p.id}>{p.name}</option>
+                        <option key={p.id} value={p.id}>
+                          {p.name} ({p.type})
+                        </option>
                       ))}
                     </select>
                   </div>
