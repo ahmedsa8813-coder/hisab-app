@@ -161,13 +161,7 @@ export default function App2({ onBack }) {
   const totalDin    = fundsDin + activeDin;
   const totalDol    = fundsDol + activeDol;
 
-  const NAV_ITEMS = [
-    {id:"fund",      label:"الصناديق",   icon:"💎"},
-    {id:"reports",   label:"التقارير",   icon:"📊"},
-    {id:"assets",    label:"الأصول",     icon:"📦"},
-    {id:"employees", label:"الموظفون",   icon:"👷"},
-    {id:"settings",  label:"الإعدادات", icon:"⚙️"},
-  ];
+  // NAV_ITEMS — مالي فقط (تم نقل الإداري لـ AdminSection)
 
   // Navigation groups - مالي فقط
   const NAV_GROUPS = [
