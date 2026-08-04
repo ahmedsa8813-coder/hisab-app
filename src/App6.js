@@ -365,6 +365,25 @@ function SiteView({ foreman, onLogout }) {
                 📅 مهام الغد — {TOMORROW}
               </div>
             </div>
+            {(tomorrowPlan.area||tomorrowPlan.goal)&&(
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",
+                gap:8,marginBottom:10}}>
+                {tomorrowPlan.area&&(
+                  <div style={{background:"#EFF6FF",borderRadius:9,
+                    padding:"8px 12px",fontSize:12}}>
+                    <div style={{fontSize:9,color:"#64748B",marginBottom:2}}>📍 المنطقة</div>
+                    <strong style={{color:"#1D4ED8"}}>{tomorrowPlan.area}</strong>
+                  </div>
+                )}
+                {tomorrowPlan.goal&&(
+                  <div style={{background:"#F0FDF4",borderRadius:9,
+                    padding:"8px 12px",fontSize:12}}>
+                    <div style={{fontSize:9,color:"#64748B",marginBottom:2}}>🎯 الهدف</div>
+                    <strong style={{color:"#16A34A"}}>{tomorrowPlan.goal}</strong>
+                  </div>
+                )}
+              </div>
+            )}
             {tomorrowPlan.note&&(
               <div style={{background:"#EFF6FF",borderRadius:10,
                 padding:"10px 14px",fontSize:12,color:"#1D4ED8",
@@ -519,6 +538,19 @@ export function ForemanManagePage() {
   const [siteReports, setSiteReports] = useState([]);
   const [sitePlans,   setSitePlans]   = useState([]);
 
+  // نسبة الإنجاز الرسمية
+  const [officialProgress, setOfficialProgress] = useState({});
+
+  const approveProgress = async (reportId, value) => {
+    const pw=window.prompt("🔒 باسورد تأكيد النسبة:");
+    if(!pw)return; if(pw!==PASS){alert("❌ باسورد غلط");return;}
+    await updateDoc(doc(db,"site_reports",reportId),{
+      officialProgress:Number(value),
+      approvedAt:new Date().toISOString()
+    });
+    alert("✅ تم تحديد النسبة الرسمية: "+value+"%");
+  };
+
   // تعديل وحذف مهام الخطة
   const [editPlanIdx,  setEditPlanIdx]  = useState(null);
   const [editPlanText, setEditPlanText] = useState("");
@@ -562,6 +594,8 @@ export function ForemanManagePage() {
   const [planSaved,    setPlanSaved]    = useState(false);
   const [sitePlanText, setSitePlanText] = useState("");
   const [sitePlanNote, setSitePlanNote] = useState("");
+  const [siteArea,     setSiteArea]     = useState("");
+  const [siteGoal,     setSiteGoal]     = useState("");
   const [sitePlanSaved,setSitePlanSaved]= useState(false);
 
   // إضافة فورمن
@@ -611,11 +645,13 @@ export function ForemanManagePage() {
       .map(t=>({desc:t.trim(),note:""}));
     await setDoc(doc(db,"site_plans",selF.projectId+"_"+TOMORROW),{
       projectId:selF.projectId,projectName:selF.projectName||"",
-      foremanId:selF.id,date:TOMORROW,tasks,note:sitePlanNote,
+      foremanId:selF.id,date:TOMORROW,tasks,
+      area:siteArea.trim(),goal:siteGoal.trim(),note:sitePlanNote,
       createdAt:new Date().toISOString()
     });
     setSitePlanSaved(true);
     setSitePlanText(""); setSitePlanNote("");
+    setSiteArea(""); setSiteGoal("");
     setTimeout(()=>setSitePlanSaved(false),2500);
   };
 
@@ -860,17 +896,25 @@ ${body}
                     رُفع: {todayFactReport.submittedAt?.slice(11,16)}
                   </div>
                   {(todayFactReport.tasks||[]).map((t,i)=>(
-                    <div key={i} style={{display:"flex",justifyContent:"space-between",
-                      padding:"8px 12px",borderRadius:8,marginBottom:4,
-                      background:"#F8FAFC",border:"1px solid #F1F5F9",fontSize:12}}>
-                      <span style={{color:"#1E293B"}}>{t.desc}</span>
-                      <div>
-                        <span style={{color:STATUS_C[t.status]||"#64748B",
-                          fontWeight:700,marginLeft:8}}>{t.status}</span>
-                        {t.note&&<span style={{color:"#94A3B8",fontSize:10}}>
-                          · {t.note}
-                        </span>}
+                    <div key={i} style={{padding:"8px 12px",borderRadius:8,marginBottom:4,
+                      background:"#F8FAFC",border:"1px solid #F1F5F9"}}>
+                      <div style={{display:"flex",justifyContent:"space-between",
+                        fontSize:12,marginBottom:t.qty||t.material||t.responsible?4:0}}>
+                        <span style={{color:"#1E293B",fontWeight:600}}>{t.desc}</span>
+                        <span style={{color:STATUS_C[t.status]||"#64748B",fontWeight:700}}>
+                          {t.status}
+                        </span>
                       </div>
+                      {(t.qty||t.material||t.responsible)&&(
+                        <div style={{fontSize:10,color:"#94A3B8",display:"flex",gap:10}}>
+                          {t.qty&&<span>📦 {t.qty}</span>}
+                          {t.material&&<span>🪵 {t.material}</span>}
+                          {t.responsible&&<span>👷 {t.responsible}</span>}
+                        </div>
+                      )}
+                      {t.note&&<div style={{fontSize:10,color:"#64748B",marginTop:2}}>
+                        📌 {t.note}
+                      </div>}
                     </div>
                   ))}
                 </div>
@@ -941,10 +985,26 @@ ${body}
                       </div>
                       {rep?(
                         <div style={{textAlign:"left"}}>
-                          <div style={{fontSize:20,fontWeight:800,color:"#2563EB"}}>
-                            {rep.progress}%
-                          </div>
-                          <div style={{fontSize:10,color:"#64748B"}}>
+                          {rep.officialProgress!=null?(
+                            <div style={{fontSize:20,fontWeight:800,color:"#16A34A"}}>
+                              {rep.officialProgress}%
+                              <div style={{fontSize:9,color:"#94A3B8",fontWeight:400}}>رسمي</div>
+                            </div>
+                          ):(
+                            <div>
+                              <div style={{fontSize:16,fontWeight:700,color:"#D97706"}}>
+                                {rep.progress}%
+                              </div>
+                              <div style={{fontSize:9,color:"#D97706"}}>مقترح</div>
+                              <button onClick={()=>approveProgress(rep.id,rep.progress)}
+                                style={{background:"#2563EB",border:"none",
+                                  borderRadius:6,padding:"3px 8px",cursor:"pointer",
+                                  fontFamily:"Tahoma",color:"#fff",fontSize:9,marginTop:3}}>
+                                ✅ اعتمد
+                              </button>
+                            </div>
+                          )}
+                          <div style={{fontSize:10,color:"#64748B",marginTop:4}}>
                             {rep.workers} عامل
                           </div>
                         </div>
@@ -1042,11 +1102,27 @@ ${body}
                       style={{width:"100%",border:"1px solid #CBD5E1",borderRadius:9,
                         padding:"10px 13px",fontSize:13,outline:"none",fontFamily:"Tahoma",
                         direction:"rtl",boxSizing:"border-box",marginBottom:8}}/>
-                    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+                    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:6}}>
                       <input placeholder="الكمية (مثال: 5 قطع)"
                         value={t.qty}
                         onChange={e=>setPlanTasks(p=>p.map((tt,ii)=>
                           ii===i?{...tt,qty:e.target.value}:tt))}
+                        style={{width:"100%",border:"1px solid #CBD5E1",borderRadius:9,
+                          padding:"9px",fontSize:12,outline:"none",fontFamily:"Tahoma",
+                          direction:"rtl",boxSizing:"border-box"}}/>
+                      <input placeholder="المادة (مثال: خشب جوز)"
+                        value={t.material||""}
+                        onChange={e=>setPlanTasks(p=>p.map((tt,ii)=>
+                          ii===i?{...tt,material:e.target.value}:tt))}
+                        style={{width:"100%",border:"1px solid #CBD5E1",borderRadius:9,
+                          padding:"9px",fontSize:12,outline:"none",fontFamily:"Tahoma",
+                          direction:"rtl",boxSizing:"border-box"}}/>
+                    </div>
+                    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+                      <input placeholder="المسؤول (مثال: استاذ كاظم)"
+                        value={t.responsible||""}
+                        onChange={e=>setPlanTasks(p=>p.map((tt,ii)=>
+                          ii===i?{...tt,responsible:e.target.value}:tt))}
                         style={{width:"100%",border:"1px solid #CBD5E1",borderRadius:9,
                           padding:"9px",fontSize:12,outline:"none",fontFamily:"Tahoma",
                           direction:"rtl",boxSizing:"border-box"}}/>
@@ -1102,23 +1178,49 @@ ${body}
                   <div style={{fontSize:14,fontWeight:700,color:"#1E293B",marginBottom:4}}>
                     📍 مهام {selF.name} — {TOMORROW}
                   </div>
-                  <div style={{fontSize:11,color:"#64748B",marginBottom:16}}>
-                    كل سطر = مهمة منفصلة تطلع للفورمن
+                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",
+                    gap:8,marginBottom:10}}>
+                    <div>
+                      <div style={{fontSize:11,color:"#2563EB",fontWeight:700,marginBottom:4}}>
+                        📍 المنطقة
+                      </div>
+                      <input placeholder="مثال: الطابق 2 — غرفة 5"
+                        value={siteArea}
+                        onChange={e=>setSiteArea(e.target.value)}
+                        style={{width:"100%",border:"1.5px solid #DBEAFE",borderRadius:9,
+                          padding:"9px 12px",fontSize:12,outline:"none",fontFamily:"Tahoma",
+                          direction:"rtl",boxSizing:"border-box"}}/>
+                    </div>
+                    <div>
+                      <div style={{fontSize:11,color:"#16A34A",fontWeight:700,marginBottom:4}}>
+                        🎯 الهدف
+                      </div>
+                      <input placeholder="مثال: إنجاز السقف كاملاً"
+                        value={siteGoal}
+                        onChange={e=>setSiteGoal(e.target.value)}
+                        style={{width:"100%",border:"1.5px solid #DCFCE7",borderRadius:9,
+                          padding:"9px 12px",fontSize:12,outline:"none",fontFamily:"Tahoma",
+                          direction:"rtl",boxSizing:"border-box"}}/>
+                    </div>
                   </div>
-                  <textarea value={sitePlanText}
-                    onChange={e=>setSitePlanText(e.target.value)}
-                    placeholder="اكتب المهام — كل مهمة في سطر"
-                    rows={6}
-                    style={{width:"100%",border:"1.5px solid #CBD5E1",borderRadius:10,
-                      padding:"10px 14px",fontSize:13,outline:"none",fontFamily:"Tahoma",
-                      direction:"rtl",boxSizing:"border-box",
-                      resize:"none",marginBottom:12}}/>
-                  <input placeholder="ملاحظة توجيهية..."
+                  <div style={{marginBottom:8}}>
+                    <div style={{fontSize:11,color:"#64748B",fontWeight:700,marginBottom:4}}>
+                      🔨 الأعمال المطلوبة (كل سطر = عمل)
+                    </div>
+                    <textarea value={sitePlanText}
+                      onChange={e=>setSitePlanText(e.target.value)}
+                      placeholder="مثال: تركيب سقف جبس / دهان الجدران / تركيب إضاءة"
+                      rows={4}
+                      style={{width:"100%",border:"1.5px solid #CBD5E1",borderRadius:10,
+                        padding:"10px 14px",fontSize:13,outline:"none",fontFamily:"Tahoma",
+                        direction:"rtl",boxSizing:"border-box",resize:"none"}}/>
+                  </div>
+                  <input placeholder="ملاحظة توجيهية للفورمن..."
                     value={sitePlanNote}
                     onChange={e=>setSitePlanNote(e.target.value)}
                     style={{width:"100%",border:"1px solid #CBD5E1",borderRadius:9,
-                      padding:"10px 13px",fontSize:13,outline:"none",fontFamily:"Tahoma",
-                      direction:"rtl",boxSizing:"border-box",marginBottom:14}}/>
+                      padding:"9px 13px",fontSize:12,outline:"none",fontFamily:"Tahoma",
+                      direction:"rtl",boxSizing:"border-box",marginBottom:12}}/>
                   {sitePlanSaved?(
                     <div style={{background:"#F0FDF4",border:"2px solid #16A34A",
                       borderRadius:12,padding:14,textAlign:"center"}}>
