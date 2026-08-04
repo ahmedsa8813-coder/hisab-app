@@ -86,11 +86,7 @@ export function ForemanSystem({ onBack }) {
           background:"linear-gradient(135deg,#1D4ED8,#3B82F6)",color:"#fff"}}>
           دخول →
         </button>
-        {onBack&&<button onClick={onBack} style={{width:"100%",border:"none",
-          borderRadius:10,padding:"10px",fontSize:12,fontFamily:"Tahoma",
-          cursor:"pointer",background:"transparent",color:"#334155",marginTop:10}}>
-          ← رجوع
-        </button>}
+
       </div>
     </div>
   );
@@ -508,7 +504,7 @@ function SiteView({ foreman, onLogout }) {
 }
 
 // ─── لوحة المدير الاحترافية ───────────────────────────
-export function ForemanManagePage({ onBack }) {
+export function ForemanManagePage() {
   // شاشة دخول المدير
   const [loggedIn, setLoggedIn] = useState(false);
   const [mgrPin,   setMgrPin]   = useState("");
@@ -752,11 +748,7 @@ ${body}
           background:"linear-gradient(135deg,#1D4ED8,#3B82F6)",color:"#fff"}}>
           دخول →
         </button>
-        {onBack&&<button onClick={onBack} style={{width:"100%",border:"none",
-          borderRadius:10,padding:"10px",fontSize:12,fontFamily:"Tahoma",
-          cursor:"pointer",background:"transparent",color:"#334155",marginTop:10}}>
-          ← رجوع
-        </button>}
+
       </div>
     </div>
   );
@@ -795,13 +787,7 @@ ${body}
               background:"#DC2626",border:"none",
               borderRadius:8,padding:"7px 14px",cursor:"pointer",
               fontFamily:"Tahoma",color:"#fff",fontSize:11,fontWeight:700}}>
-              خروج
-            </button>
-            <button onClick={onBack} style={{
-              background:"transparent",border:"1px solid #334155",
-              borderRadius:8,padding:"7px 12px",cursor:"pointer",
-              fontFamily:"Tahoma",color:"#475569",fontSize:11}}>
-              ← رجوع
+              🚪 خروج
             </button>
           </div>
         </div>

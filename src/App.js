@@ -84,7 +84,7 @@ export default function App() {
   const isForeman = urlParams.get("foreman") === "1";
   const isManager = urlParams.get("manager") === "1";
   if (isForeman) return <ForemanSystem />;
-  if (isManager) return <ForemanManagePage onBack={()=>window.history.back()} />;
+  if (isManager) return <ForemanManagePage />;
 
   const [page, setPage]       = useState("home");
   const [selProj, setSelProj] = useState(null);
