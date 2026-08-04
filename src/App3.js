@@ -151,6 +151,29 @@ export function EmployeesPage({ funds, onBack }) {
   };
 
   // ── صرف راتب ─────────────────────────────────────────
+  // جلب OT الموظف للشهر المحدد
+  const empOT = React.useMemo(()=>{
+    if(!selEmp) return [];
+    return otRecords.filter(r=>
+      (r.workerName||"").trim().includes((selEmp.name||"").trim()) ||
+      (selEmp.name||"").trim().includes((r.workerName||"").trim())
+    );
+  },[selEmp,otRecords]);
+
+  const empOTPayDin = React.useMemo(()=>{
+    if(!selEmp||!selEmp.baseDin) return 0;
+    const WORK_DAYS=26,WORK_HOURS=10;
+    const totalHours=empOT.reduce((s,r)=>s+(Number(r.hours)||0),0);
+    return Math.round(selEmp.baseDin/WORK_DAYS/WORK_HOURS*totalHours);
+  },[empOT,selEmp]);
+
+  // تطبيق OT تلقائياً على extraDin لما يُختار موظف
+  React.useEffect(()=>{
+    if(empOTPayDin>0 && selEmp){
+      setSalForm(f=>({...f, extraDin:String(empOTPayDin)}));
+    }
+  },[selEmp?.id, empOTPayDin]);
+
   const calcSalary = () => {
     const extra   = Number(salForm.extraDin)||0;
     const deduct  = Number(salForm.deductDin)||0;
@@ -238,6 +261,15 @@ ${sal.note?`<div class="row"><span class="lbl">ملاحظة</span><span class="v
     });
 
     if(withPrint) printSalarySlip(selEmp, {...sal, month:salForm.month, note:salForm.note}, fundId);
+
+    // إغلاق سجلات OT بحالة "صُرف مع الراتب"
+    for(const ot of empOT){
+      await updateDoc(doc(db,"overtime_records",ot.id),{
+        status:"paid_with_salary",
+        paidMonth:salForm.month,
+        paidAt:new Date().toISOString()
+      });
+    }
 
     setSelEmp(null); setTab("list");
     setSalForm({month:new Date().toISOString().slice(0,7),fund:"",currency:"دينار",
@@ -450,6 +482,39 @@ ${sal.note?`<div class="row"><span class="lbl">ملاحظة</span><span class="v
                 </div>
               </div>
             </div>
+
+            {/* بطاقة الأوفرتايم */}
+            {empOT.length>0&&(
+              <div style={{background:"#FFF7ED",borderRadius:12,
+                padding:14,marginBottom:14,border:"2px solid #F97316"}}>
+                <div style={{display:"flex",justifyContent:"space-between",
+                  alignItems:"center",marginBottom:10}}>
+                  <span style={{fontSize:13,fontWeight:700,color:"#F97316"}}>
+                    ⏱️ أوفرتايم مستحق هذا الشهر
+                  </span>
+                  <span style={{fontSize:12,fontWeight:700,color:"#F97316"}}>
+                    {empOT.reduce((s,r)=>s+(Number(r.hours)||0),0)} ساعة
+                  </span>
+                </div>
+                {empOT.map(ot=>(
+                  <div key={ot.id} style={{display:"flex",justifyContent:"space-between",
+                    padding:"5px 0",borderBottom:"1px solid #FED7AA",fontSize:11}}>
+                    <span style={{color:"#92400E"}}>📅 {ot.date} · {ot.source}</span>
+                    <span style={{fontWeight:700,color:"#F97316"}}>{ot.hours} ساعة</span>
+                  </div>
+                ))}
+                <div style={{marginTop:10,display:"flex",justifyContent:"space-between",
+                  fontSize:12,fontWeight:700}}>
+                  <span style={{color:"#92400E"}}>تكلفة الأوفرتايم</span>
+                  <span style={{color:"#DC2626",fontSize:14}}>
+                    {fNum(empOTPayDin)} د.ع
+                  </span>
+                </div>
+                <div style={{fontSize:10,color:"#94A3B8",marginTop:4}}>
+                  ✅ أُضيف تلقائياً لحقل "إضافي" أدناه
+                </div>
+              </div>
+            )}
 
             {/* الصندوق المخصص للموظف */}
             {(()=>{
