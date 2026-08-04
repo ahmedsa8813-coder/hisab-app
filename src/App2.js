@@ -70,6 +70,14 @@ export default function App2({ onBack }) {
   const [employees, setEmployees] = useState([]);
   const [projects, setProjects]   = useState([]);
   const [assets,   setAssets]     = useState([]);
+  const [isMobile, setIsMobile]   = useState(typeof window!=="undefined"&&window.innerWidth<768);
+  const [sideOpen, setSideOpen]   = useState(false);
+
+  useEffect(()=>{
+    const onResize=()=>setIsMobile(window.innerWidth<768);
+    window.addEventListener("resize",onResize);
+    return()=>window.removeEventListener("resize",onResize);
+  },[]);
 
   useEffect(()=>{
     return onSnapshot(collection(db,"assets"), snap=>{
