@@ -346,7 +346,7 @@ export default function App() {
     }}/>;
 
   if (page === "home")    return <HomePage onSelect={setPage} />;
-  if (page === "admin")   return <AdminPage onBack={() => setPage("home")} />;
+  if (page === "admin")   return <App2 startPage="admin" onBack={() => setPage("home")} />;
   if (page === "proj" && selProj)
     return <ProjectDetail proj={selProj} onBack={() => { setPage("projects"); setSelProj(null); }}/>;
 

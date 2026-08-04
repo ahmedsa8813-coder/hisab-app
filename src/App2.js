@@ -65,8 +65,8 @@ const DEPT_FUNDS = [
 const ALL_FUNDS = [...MAIN_FUNDS, ...DEPT_FUNDS];
 
 // ─── التطبيق الرئيسي ─────────────────────────────────
-export default function App2({ onBack }) {
-  const [page, setPage] = useState("home"); // home | fund | employees
+export default function App2({ onBack, startPage="home" }) {
+  const [page, setPage] = useState(startPage); // home | fund | employees | admin
   const [selFund, setSelFund] = useState(null);
   const [funds, setFunds] = useState({});
   const [employees, setEmployees] = useState([]);
