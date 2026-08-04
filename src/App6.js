@@ -17,6 +17,7 @@ const db  = getFirestore(app);
 const TODAY    = new Date().toISOString().split("T")[0];
 const TOMORROW = new Date(Date.now()+86400000).toISOString().split("T")[0];
 const PASS = "1234";
+const fNum = n => { if(!n&&n!==0)return"0"; return Math.round(Number(n)).toLocaleString("en"); };
 
 // ─── ترجمات اللغتين ────────────────────────────────
 const T = {
