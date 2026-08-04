@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import App2 from "./App2";
-import { ForemanSystem } from "./App6";
+import { ForemanSystem, ForemanManagePage } from "./App6";
 import { initializeApp } from "firebase/app";
 import { getFirestore, collection, addDoc, onSnapshot,
   deleteDoc, doc, updateDoc, setDoc, query, where, getDocs, getDoc } from "firebase/firestore";
@@ -79,9 +79,12 @@ const emptyForm = {
 };
 
 export default function App() {
-  // كشف رابط الفورمن — ?foreman=1
-  const isForeman = new URLSearchParams(window.location.search).get("foreman") === "1";
+  // كشف الروابط الخاصة
+  const urlParams = new URLSearchParams(window.location.search);
+  const isForeman = urlParams.get("foreman") === "1";
+  const isManager = urlParams.get("manager") === "1";
   if (isForeman) return <ForemanSystem />;
+  if (isManager) return <ForemanManagePage projects={projects} onBack={()=>window.history.back()} />;
 
   const [page, setPage]       = useState("home");
   const [selProj, setSelProj] = useState(null);
