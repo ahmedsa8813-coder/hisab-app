@@ -118,6 +118,17 @@ export default function App() {
              && form.startDate;
 
   const [saving, setSaving] = useState(false);
+  const [editId,   setEditId]   = useState(null);
+  const [editText, setEditText] = useState("");
+
+  const saveEdit = () => {
+    if(!editText.trim()) return;
+    const pw = window.prompt("🔒 باسورد التعديل:");
+    if(!pw) return;
+    if(pw !== PASS) { alert("❌ باسورد غلط"); return; }
+    updateDoc(doc(db, "daily_tasks", editId), { text: editText.trim() });
+    setEditId(null); setEditText("");
+  };
 
   const addProject = async () => {
     if (!valid || saving) return;
@@ -2408,6 +2419,17 @@ function PartnerPage({ partner, funds, onBack, onWithdraw }) {
   const [wDol, setWDol] = useState("");
   const [wNote, setWNote] = useState("");
   const [saving, setSaving] = useState(false);
+  const [editId,   setEditId]   = useState(null);
+  const [editText, setEditText] = useState("");
+
+  const saveEdit = () => {
+    if(!editText.trim()) return;
+    const pw = window.prompt("🔒 باسورد التعديل:");
+    if(!pw) return;
+    if(pw !== PASS) { alert("❌ باسورد غلط"); return; }
+    updateDoc(doc(db, "daily_tasks", editId), { text: editText.trim() });
+    setEditId(null); setEditText("");
+  };
   const [ok, setOk] = useState(false);
   const [showStatement, setShowStatement] = useState(false);
   const [fromDate, setFromDate] = useState("");
