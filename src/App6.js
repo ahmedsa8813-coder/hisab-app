@@ -692,12 +692,84 @@ function FactoryView({ foreman, onLogout, lang="ar" }) {
                   </div>
                 ))}
               </div>
-              <textarea placeholder="ملاحظات عن المعمل..." rows={2}
+              {inputErr&&(
+                <div style={{background:"#FEE2E2",borderRadius:9,
+                  padding:"8px 12px",fontSize:12,color:"#DC2626",
+                  marginTop:8,fontWeight:600}}>
+                  ⚠️ {inputErr}
+                </div>
+              )}
+              <textarea placeholder={t.factory_notes} rows={2}
                 value={factReport.note} onChange={e=>fr("note")(e.target.value)}
                 style={{width:"100%",border:"1px solid #E2E8F0",borderRadius:12,
-                  padding:"11px 14px",fontSize:13,outline:"none",fontFamily:"Tahoma",
-                  direction:"rtl",boxSizing:"border-box",
+                  padding:"11px 14px",fontSize:13,outline:"none",fontFamily:t.fontFamily,
+                  direction:t.dir,boxSizing:"border-box",
                   resize:"none",marginTop:12}}/>
+            </div>
+
+            {/* وقت العمل + الساعات اليومية */}
+            <div style={{background:"#fff",borderRadius:16,
+              padding:16,marginBottom:14,border:"1px solid #E2E8F0"}}>
+              <div style={{fontSize:15,fontWeight:700,color:"#0F172A",marginBottom:14}}>
+                🕰️ {t.daily_work_hours}
+              </div>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:12}}>
+                <div>
+                  <div style={{fontSize:11,color:"#64748B",fontWeight:600,marginBottom:6}}>
+                    🟢 {t.work_start}
+                  </div>
+                  <input type="time" value={factReport.workStart}
+                    onChange={e=>fr("workStart")(e.target.value)}
+                    style={{width:"100%",border:"1.5px solid #DCFCE7",borderRadius:12,
+                      padding:"12px",fontSize:16,fontWeight:700,outline:"none",
+                      fontFamily:t.fontFamily,textAlign:"center",
+                      boxSizing:"border-box",color:"#16A34A"}}/>
+                </div>
+                <div>
+                  <div style={{fontSize:11,color:"#64748B",fontWeight:600,marginBottom:6}}>
+                    🔴 {t.work_end}
+                  </div>
+                  <input type="time" value={factReport.workEnd}
+                    onChange={e=>fr("workEnd")(e.target.value)}
+                    style={{width:"100%",border:"1.5px solid #FEE2E2",borderRadius:12,
+                      padding:"12px",fontSize:16,fontWeight:700,outline:"none",
+                      fontFamily:t.fontFamily,textAlign:"center",
+                      boxSizing:"border-box",color:"#DC2626"}}/>
+                </div>
+              </div>
+              {(()=>{
+                if(!factReport.workStart||!factReport.workEnd) return null;
+                const [sh,sm]=factReport.workStart.split(":").map(Number);
+                const [eh,em]=factReport.workEnd.split(":").map(Number);
+                const totalMin=(eh*60+em)-(sh*60+sm);
+                if(totalMin<=0) return null;
+                const hrs=Math.floor(totalMin/60);
+                const mins=totalMin%60;
+                return (
+                  <div style={{background:"#F0FDF4",borderRadius:10,
+                    padding:"10px 14px",fontSize:13,color:"#16A34A",
+                    fontWeight:700,textAlign:"center",marginBottom:12}}>
+                    ⏱️ {lang==="ar"
+                      ?`مدة العمل: ${hrs} ساعة${mins>0?` و ${mins} دقيقة`:""}`
+                      :`Duration: ${hrs}h${mins>0?` ${mins}m`:""}`}
+                  </div>
+                );
+              })()}
+              <div>
+                <div style={{fontSize:11,color:"#64748B",fontWeight:600,marginBottom:6}}>
+                  📊 {t.daily_work_hours}
+                </div>
+                <input type="number" placeholder="0" min="0" max="20"
+                  value={factReport.dailyWorkHours}
+                  onChange={e=>safeNum("dailyWorkHours",e.target.value,20)}
+                  style={{width:"100%",border:"1.5px solid #DBEAFE",borderRadius:12,
+                    padding:"12px",fontSize:22,fontWeight:800,outline:"none",
+                    fontFamily:t.fontFamily,textAlign:"center",
+                    boxSizing:"border-box",color:"#2563EB"}}/>
+                <div style={{fontSize:10,color:"#94A3B8",marginTop:4,textAlign:"center"}}>
+                  {t.hours_unit}
+                </div>
+              </div>
             </div>
 
             {/* الكادر والأوفرتايم */}
