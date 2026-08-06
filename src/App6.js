@@ -39,7 +39,12 @@ const T = {
     today_hours:"🕐 ساعات اليوم", gen1:"مولد ١", gen2:"مولد ٢",
     elec:"كهرباء", hour:"ساعة", total_hours:"📊 الساعات الكلية",
     gen1_total:"مجموع مولد ١", gen2_total:"مجموع مولد ٢",
-    factory_notes:"ملاحظات عن المعمل...", staff:"👷 الكادر والساعات الإضافية",
+    factory_notes:"ملاحظات عن المعمل...",
+    work_start:"وقت بدء العمل", work_end:"وقت انتهاء العمل",
+    daily_work_hours:"ساعات العمل اليومية", hours_unit:"ساعة",
+    max_hours_err:"لا يمكن تجاوز 20 ساعة باليوم",
+    negative_err:"لا تقبل أرقام سالبة",
+    staff:"👷 الكادر والساعات الإضافية",
     worker_name:"اسم العامل", ot_hours:"ساعة OT", add_worker:"+ إضافة عامل",
     factory_report:"📤 رفع تقرير المعمل", factory_reported:"تم رفع تقرير المعمل",
     site_title:"📍 الموقع", workers_count:"👷 عدد العمال",
@@ -82,7 +87,12 @@ const T = {
     today_hours:"🕐 Today's Hours", gen1:"Generator 1", gen2:"Generator 2",
     elec:"Electricity", hour:"hrs", total_hours:"📊 Total Hours",
     gen1_total:"Gen 1 Total", gen2_total:"Gen 2 Total",
-    factory_notes:"Factory notes...", staff:"👷 Staff & Overtime",
+    factory_notes:"Factory notes...",
+    work_start:"Work Start Time", work_end:"Work End Time",
+    daily_work_hours:"Daily Work Hours", hours_unit:"hrs",
+    max_hours_err:"Cannot exceed 20 hours per day",
+    negative_err:"Negative numbers not allowed",
+    staff:"👷 Staff & Overtime",
     worker_name:"Worker name", ot_hours:"OT hrs", add_worker:"+ Add Worker",
     factory_report:"📤 Submit Factory Report", factory_reported:"Factory Report Submitted",
     site_title:"📍 Site", workers_count:"👷 Workers",
@@ -266,8 +276,20 @@ function FactoryView({ foreman, onLogout, lang="ar" }) {
     fuel:"", water:"",
     gen1Hours:"", gen2Hours:"", elecHours:"",
     gen1Total:"", gen2Total:"",
+    workStart:"", workEnd:"", dailyWorkHours:"",
     note:"",
   });
+  const [inputErr, setInputErr] = useState("");
+
+  // دالة إدخال آمنة — بدون سالب + حد أقصى
+  const safeNum = (key, val, max=999) => {
+    const n = val.replace(/[^0-9.]/g,"");
+    const num = parseFloat(n)||0;
+    if(num < 0){ setInputErr(t.negative_err); return; }
+    if(max && num > max){ setInputErr(t.max_hours_err); return; }
+    setInputErr("");
+    fr(key)(n);
+  };
   const fr = k => v => setFactReport(f=>({...f,[k]:v}));
 
   // الكادر: يختار من قائمة الموظفين
