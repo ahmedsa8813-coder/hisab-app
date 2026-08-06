@@ -97,8 +97,9 @@ export function EmployeesPage({ funds, onBack }) {
     });
     const u4=onSnapshot(
       collection(db,"overtime_records"),
-      s=>setOtRecords(s.docs.map(d=>({id:d.id,...d.data()}))
-        .sort((a,b)=>b.date.localeCompare(a.date)))
+      s=>{const list=s.docs.map(d=>({id:d.id,...d.data()}));
+        list.sort((a,b)=>(b.date||"").localeCompare(a.date||""));
+        setOtRecords(list);}
     );
     return()=>{u1();u2();u3();u4();};
   },[]);
@@ -329,7 +330,7 @@ ${sal.note?`<div class="row"><span class="lbl">ملاحظة</span><span class="v
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
             <div style={{fontSize:18,fontWeight:700,color:"#fff"}}>👷 نظام الرواتب والموظفين</div>
             <div style={{display:"flex",gap:8,alignItems:"center"}}>
-              {otRecords.length>0&&(
+              {otRecords.filter(r=>r.status==="pending").length>0&&(
                 <button onClick={()=>setTab("overtime")} style={{
                   background:tab==="overtime"?"#F97316":"#FFF7ED",
                   border:"2px solid #F97316",borderRadius:10,
@@ -341,7 +342,7 @@ ${sal.note?`<div class="row"><span class="lbl">ملاحظة</span><span class="v
                     background:"#DC2626",color:"#fff",borderRadius:"50%",
                     width:18,height:18,fontSize:10,fontWeight:700,
                     display:"flex",alignItems:"center",justifyContent:"center"}}>
-                    {otRecords.length}
+                    {otRecords.filter(r=>r.status==="pending").length}
                   </span>
                 </button>
               )}
@@ -2079,7 +2080,9 @@ ${row("إجمالي المصاريف",totalExpDin,totalExpDol,true,"#DC2626")}
 
 // ─── قسم الأوفرتايم المعلق ─────────────────────────────
 function OvertimePendingSection({ otRecords, funds, employees }) {
-  const WORK_DAYS=26, WORK_HOURS=10;
+  const WORK_DAYS=30, WORK_HOURS=8;
+  // فقط السجلات المعلقة
+  const pending = (otRecords||[]).filter(r=>r.status==="pending");
 
   const calcOTPay = (empName, hours) => {
     const emp = employees.find(e=>
@@ -2134,7 +2137,7 @@ function OvertimePendingSection({ otRecords, funds, employees }) {
     await updateDoc(doc(db,"overtime_records",id),{status:"rejected"});
   };
 
-  if(otRecords.length===0) return (
+  if(pending.length===0) return (
     <div style={{background:"#fff",borderRadius:14,padding:40,
       textAlign:"center",border:"1px solid #E2E8F0"}}>
       <div style={{fontSize:40,marginBottom:10}}>✅</div>
@@ -2142,7 +2145,7 @@ function OvertimePendingSection({ otRecords, funds, employees }) {
     </div>
   );
 
-  const totalPending=otRecords.length;
+  const totalPending=pending.length;
 
   return (
     <div>
@@ -2156,7 +2159,7 @@ function OvertimePendingSection({ otRecords, funds, employees }) {
         </div>
       </div>
 
-      {otRecords.map(ot=>{
+      {pending.map(ot=>{
         const pay=calcOTPay(ot.workerName, ot.hours);
         return (
           <div key={ot.id} style={{background:"#fff",borderRadius:14,

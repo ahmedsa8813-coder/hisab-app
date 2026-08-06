@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { initializeApp, getApps } from "firebase/app";
 import { getFirestore, collection, addDoc, onSnapshot,
-  doc, setDoc, updateDoc, deleteDoc, query, where } from "firebase/firestore";
+  doc, setDoc, updateDoc, deleteDoc, query, where, getDocs } from "firebase/firestore";
 
 const firebaseConfig = {
   apiKey: "AIzaSyCBGovCJ_Bx64dOjC0UWzJsBPgXEuJaizI",
@@ -345,10 +345,11 @@ function FactoryView({ foreman, onLogout, lang="ar" }) {
     setTimeout(()=>setFactSaved(false),3000);
   };
 
-  const getMachineStatus=()=>[
-    {v:"جيدة",l:t.good},{v:"تحتاج صيانة",l:t.needs_maint},{v:"متوقفة",l:t.stopped}
+  const MACHINE_STATUS_LIST=[
+    {v:"جيدة",   label:t.good,       c:"#16A34A",bg:"#DCFCE7",e:"✅"},
+    {v:"تحتاج صيانة",label:t.needs_maint,c:"#D97706",bg:"#FEF3C7",e:"⚠️"},
+    {v:"متوقفة", label:t.stopped,    c:"#DC2626",bg:"#FEE2E2",e:"❌"},
   ];
-  const MACHINE_STATUS=["جيدة","تحتاج صيانة","متوقفة"];
   const MACHINE_COLORS={
     "جيدة":       {c:"#16A34A",bg:"#DCFCE7",e:"✅"},
     "تحتاج صيانة":{c:"#D97706",bg:"#FEF3C7",e:"⚠️"},
@@ -569,18 +570,17 @@ function FactoryView({ foreman, onLogout, lang="ar" }) {
                 🔧 حالة المكائن
               </div>
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10}}>
-                {MACHINE_STATUS.map(s=>{
-                  const mc=MACHINE_COLORS[s];
-                  const sel=factReport.machineStatus===s;
+                {MACHINE_STATUS_LIST.map(ms=>{
+                  const sel=factReport.machineStatus===ms.v;
                   return (
-                    <button key={s} onClick={()=>fr("machineStatus")(s)} style={{
-                      border:"2px solid "+(sel?mc.c:"#E2E8F0"),
+                    <button key={ms.v} onClick={()=>fr("machineStatus")(ms.v)} style={{
+                      border:"2px solid "+(sel?ms.c:"#E2E8F0"),
                       borderRadius:14,padding:"14px 8px",cursor:"pointer",
-                      fontFamily:"Tahoma",fontSize:12,fontWeight:700,
-                      background:sel?mc.bg:"#fff",
-                      color:sel?mc.c:"#94A3B8"}}>
-                      <div style={{fontSize:24,marginBottom:6}}>{mc.e}</div>
-                      {s}
+                      fontFamily:t.fontFamily,fontSize:12,fontWeight:700,
+                      background:sel?ms.bg:"#fff",
+                      color:sel?ms.c:"#94A3B8"}}>
+                      <div style={{fontSize:24,marginBottom:6}}>{ms.e}</div>
+                      {ms.label}
                     </button>
                   );
                 })}
@@ -591,12 +591,12 @@ function FactoryView({ foreman, onLogout, lang="ar" }) {
             <div style={{background:"#fff",borderRadius:16,
               padding:16,marginBottom:14,border:"1px solid #E2E8F0"}}>
               <div style={{fontSize:15,fontWeight:700,color:"#0F172A",marginBottom:14}}>
-                ⛽ الوقود والماء
+                {t.fuel} & {t.water}
               </div>
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
                 {[
-                  {k:"fuel", l:"⛽ الوقود",c:"#F97316",unit:"لتر"},
-                  {k:"water",l:"💧 الماء",  c:"#2563EB",unit:"لتر"},
+                  {k:"fuel", l:t.fuel,c:"#F97316",unit:t.liter},
+                  {k:"water",l:t.water,c:"#2563EB",unit:t.liter},
                 ].map(({k,l,c2,unit,c})=>(
                   <div key={k} style={{background:"#F8FAFC",borderRadius:14,
                     padding:"14px",textAlign:"center",border:"1px solid #E2E8F0"}}>
@@ -619,13 +619,13 @@ function FactoryView({ foreman, onLogout, lang="ar" }) {
             <div style={{background:"#fff",borderRadius:16,
               padding:16,marginBottom:14,border:"1px solid #E2E8F0"}}>
               <div style={{fontSize:15,fontWeight:700,color:"#0F172A",marginBottom:14}}>
-                🕐 ساعات اليوم
+                🕐 {t.today_hours}
               </div>
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10}}>
                 {[
-                  {k:"gen1Hours",l:"مولد ١", c:"#F97316",e:"🔋"},
-                  {k:"gen2Hours",l:"مولد ٢", c:"#8B5CF6",e:"🔋"},
-                  {k:"elecHours",l:"كهرباء",c:"#2563EB",e:"⚡"},
+                  {k:"gen1Hours",l:t.gen1,c:"#F97316",e:"🔋"},
+                  {k:"gen2Hours",l:t.gen2,c:"#8B5CF6",e:"🔋"},
+                  {k:"elecHours",l:t.elec,c:"#2563EB",e:"⚡"},
                 ].map(({k,l,c,e})=>(
                   <div key={k} style={{background:"#F8FAFC",borderRadius:14,
                     padding:"14px 10px",textAlign:"center",border:"1px solid #E2E8F0"}}>
@@ -638,7 +638,7 @@ function FactoryView({ foreman, onLogout, lang="ar" }) {
                         padding:"10px 4px",fontSize:22,fontWeight:800,outline:"none",
                         fontFamily:"Tahoma",textAlign:"center",
                         boxSizing:"border-box",color:c}}/>
-                    <div style={{fontSize:10,color:"#94A3B8",marginTop:4}}>ساعة</div>
+                    <div style={{fontSize:10,color:"#94A3B8",marginTop:4}}>{t.hour}</div>
                   </div>
                 ))}
               </div>
@@ -648,12 +648,12 @@ function FactoryView({ foreman, onLogout, lang="ar" }) {
             <div style={{background:"#fff",borderRadius:16,
               padding:16,marginBottom:14,border:"1px solid #E2E8F0"}}>
               <div style={{fontSize:15,fontWeight:700,color:"#0F172A",marginBottom:14}}>
-                📊 الساعات الكلية التراكمية
+                {t.total_hours}
               </div>
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
                 {[
-                  {k:"gen1Total",l:"مجموع مولد ١",c:"#F97316"},
-                  {k:"gen2Total",l:"مجموع مولد ٢",c:"#8B5CF6"},
+                  {k:"gen1Total",l:t.gen1_total,c:"#F97316"},
+                  {k:"gen2Total",l:t.gen2_total,c:"#8B5CF6"},
                 ].map(({k,l,c})=>(
                   <div key={k} style={{background:"#F8FAFC",borderRadius:14,
                     padding:"14px",textAlign:"center",border:"1px solid #E2E8F0"}}>
@@ -666,7 +666,7 @@ function FactoryView({ foreman, onLogout, lang="ar" }) {
                         padding:"10px",fontSize:22,fontWeight:800,outline:"none",
                         fontFamily:"Tahoma",textAlign:"center",
                         boxSizing:"border-box",color:c}}/>
-                    <div style={{fontSize:10,color:"#94A3B8",marginTop:4}}>ساعة</div>
+                    <div style={{fontSize:10,color:"#94A3B8",marginTop:4}}>{t.hour}</div>
                   </div>
                 ))}
               </div>
@@ -682,7 +682,7 @@ function FactoryView({ foreman, onLogout, lang="ar" }) {
             <div style={{background:"#fff",borderRadius:16,
               padding:16,marginBottom:14,border:"1px solid #E2E8F0"}}>
               <div style={{fontSize:15,fontWeight:700,color:"#0F172A",marginBottom:14}}>
-                👷 الكادر والساعات الإضافية
+                {t.staff}
               </div>
               {dekorEmps.length===0&&(
                 <div style={{background:"#FFF7ED",borderRadius:10,
@@ -738,7 +738,7 @@ function FactoryView({ foreman, onLogout, lang="ar" }) {
                 style={{width:"100%",border:"2px dashed #CBD5E1",borderRadius:12,
                   padding:"13px",fontSize:14,fontFamily:"Tahoma",cursor:"pointer",
                   background:"transparent",color:"#64748B",marginTop:4}}>
-                + إضافة عامل
+                {t.add_worker}
               </button>
             </div>
 
@@ -748,7 +748,7 @@ function FactoryView({ foreman, onLogout, lang="ar" }) {
                 borderRadius:16,padding:24,textAlign:"center"}}>
                 <div style={{fontSize:48,marginBottom:8}}>✅</div>
                 <div style={{fontSize:16,fontWeight:700,color:"#7C3AED"}}>
-                  تم رفع تقرير المعمل
+                  {t.factory_reported}
                 </div>
               </div>
             ):(
@@ -757,7 +757,7 @@ function FactoryView({ foreman, onLogout, lang="ar" }) {
                   fontSize:16,fontWeight:700,fontFamily:"Tahoma",cursor:"pointer",
                   background:factSaving?"#E2E8F0":"#7C3AED",
                   color:factSaving?"#94A3B8":"#fff"}}>
-                {factSaving?"⏳ جاري الرفع...":"📤 رفع تقرير المعمل"}
+                {factSaving?t.uploading:t.factory_report}
               </button>
             )}
 
@@ -1323,6 +1323,22 @@ ${body}
           </div>
           <div style={{display:"flex",gap:8,alignItems:"center"}}>
             <LangBtn lang={lang} setLang={setLang}/>
+            <button onClick={async()=>{
+              const pw=window.prompt("🔒 باسورد التصفية الكاملة:");
+              if(!pw||pw!=="1234"){alert("❌ باسورد غلط");return;}
+              if(!window.confirm("⚠️ هذا سيحذف جميع البيانات التجريبية:\n- تقارير المعمل\n- تقارير المواقع\n- خطط الغد\n- حالة المعمل\nمتأكد؟"))return;
+              const cols=["factory_reports","factory_plans","factory_status","site_reports","site_plans","foremans","overtime_records"];
+              for(const col of cols){
+                const snap=await getDocs(collection(db,col));
+                for(const d of snap.docs) await deleteDoc(doc(db,col,d.id));
+              }
+              alert("✅ تم مسح جميع البيانات التجريبية");
+            }} style={{
+              background:"#DC2626",border:"none",
+              borderRadius:8,padding:"7px 14px",cursor:"pointer",
+              fontFamily:"Tahoma",color:"#fff",fontSize:11,fontWeight:700}}>
+              🗑️ تصفية الكل
+            </button>
             <button onClick={()=>printReport("all")} style={{
               background:"#1E293B",border:"1px solid #334155",
               borderRadius:8,padding:"7px 14px",cursor:"pointer",
