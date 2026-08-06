@@ -1,4 +1,6 @@
+import { ForemanSystem } from "./App6";
 import React, { useState, useEffect } from "react";
+import App2 from "./App2";
 import { initializeApp } from "firebase/app";
 import { getFirestore, collection, addDoc, onSnapshot,
   deleteDoc, doc, updateDoc, setDoc, query, where, getDocs, getDoc } from "firebase/firestore";
@@ -116,6 +118,17 @@ export default function App() {
              && form.startDate;
 
   const [saving, setSaving] = useState(false);
+  const [editId,   setEditId]   = useState(null);
+  const [editText, setEditText] = useState("");
+
+  const saveEdit = () => {
+    if(!editText.trim()) return;
+    const pw = window.prompt("🔒 باسورد التعديل:");
+    if(!pw) return;
+    if(pw !== PASS) { alert("❌ باسورد غلط"); return; }
+    updateDoc(doc(db, "daily_tasks", editId), { text: editText.trim() });
+    setEditId(null); setEditText("");
+  };
 
   const addProject = async () => {
     if (!valid || saving) return;
@@ -217,8 +230,47 @@ export default function App() {
   };
 
   const confirmClose = async (proj, distPcts) => {
-    const balDin = proj.balDin || 0;
-    const balDol = proj.balDol || 0;
+    const today = new Date().toISOString().split("T")[0];
+
+    // ── خطوة ١: سداد السلف التشغيلية أولاً ──────────────
+    const loansSnap = await getDocs(
+      query(collection(db,"project_loans"),
+        where("projectId","==",proj.id),where("status","==","open"))
+    );
+    const openLoans = loansSnap.docs.map(d=>({id:d.id,...d.data()}));
+
+    let usedDin = 0, usedDol = 0;
+    for (const loan of openLoans) {
+      const lDin = loan.din||0, lDol = loan.dol||0;
+      const fundBal = funds[loan.fund]||{din:0,dol:0};
+
+      // إرجاع المبلغ للصندوق
+      await setDoc(doc(db,"funds",loan.fund),
+        {din:fundBal.din+lDin, dol:fundBal.dol+lDol},{merge:true});
+
+      // تسجيل حركة الإيداع في الصندوق
+      await addDoc(collection(db,"fund_txs"),{
+        fundId:loan.fund, fundLabel:loan.fund, type:"إيداع",
+        din:lDin, dol:lDol,
+        note:"سداد سلفة تشغيلية ← "+proj.name+" (إنهاء المشروع)",
+        date:today, createdAt:new Date().toISOString()
+      });
+
+      // إغلاق الدَّيْن
+      await updateDoc(doc(db,"project_loans",loan.id),{
+        status:"paid", paidDate:today, paidBy:"project_close"
+      });
+
+      usedDin += lDin;
+      usedDol += lDol;
+    }
+
+    // ── خطوة ٢: توزيع المتبقي بعد خصم السلف ────────────
+    const rawDin = proj.balDin || 0;
+    const rawDol = proj.balDol || 0;
+    const balDin = Math.max(0, rawDin - usedDin);
+    const balDol = Math.max(0, rawDol - usedDol);
+
     const distributions = [];
     for (const d of distPcts) {
       if (!d.pct) continue;
@@ -228,7 +280,8 @@ export default function App() {
       await setDoc(doc(db, "funds", d.fund),
         { din: cur.din + din, dol: cur.dol + dol }, { merge: true });
       distributions.push({ fund: d.fund, label: d.label, pct: d.pct, din, dol });
-      // توزيع حصص الشركاء + تحديث إجمالي شركاء
+
+      // توزيع حصص الشركاء
       if (d.fund === "شركاء") {
         for (const p of PARTNERS) {
           const pDin = Math.round(din * p.pct / 100);
@@ -237,13 +290,23 @@ export default function App() {
           const pCur = funds[pId] || { din: 0, dol: 0 };
           await setDoc(doc(db, "funds", pId),
             { din: pCur.din + pDin, dol: pCur.dol + pDol }, { merge: true });
+          if (pDin > 0 || pDol > 0) {
+            await addDoc(collection(db, "partner_txs"), {
+              partnerId: pId, partnerName: p.name,
+              type: "إيداع", din: pDin, dol: pDol,
+              note: "أرباح مشروع: " + proj.name,
+              date: today, createdAt: new Date().toISOString()
+            });
+          }
         }
       }
-      // إذا لم تكن هناك أرصدة سابقة في صناديق الشركاء، تأكد من التوزيع الصحيح
     }
+
     await updateDoc(doc(db, "projects", proj.id), {
       status: "done", distributions,
-      closedAt: new Date().toISOString().split("T")[0]
+      loansRepaid: openLoans.length,
+      loansTotalDin: usedDin,
+      closedAt: today
     });
     setClosingProj(null);
   };
@@ -276,22 +339,32 @@ export default function App() {
   if (partnerPage) return <PartnerPage
     partner={partnerPage} funds={funds}
     onBack={() => setPartnerPage(null)}
-    onWithdraw={async (pid, din, dol) => {
+    onWithdraw={async (pid, din, dol, note) => {
       const pId = "partner_" + pid;
       const pf = funds[pId] || { din:0, dol:0 };
       const sf = funds["شركاء"] || { din:0, dol:0 };
+      const partner = PARTNERS.find(p=>p.id===pid);
       await setDoc(doc(db,"funds",pId),
         { din: Math.max(0,pf.din-din), dol: Math.max(0,pf.dol-dol) }, {merge:true});
       await setDoc(doc(db,"funds","شركاء"),
         { din: Math.max(0,sf.din-din), dol: Math.max(0,sf.dol-dol) }, {merge:true});
+      await addDoc(collection(db,"partner_txs"), {
+        partnerId: pId, partnerName: partner?.name||"",
+        type: "سحب", din, dol, note: note||"سحب",
+        date: new Date().toISOString().split("T")[0],
+        createdAt: new Date().toISOString()
+      });
     }}/>;
 
   if (page === "home")    return <HomePage onSelect={setPage} />;
-  if (page === "admin")   return <AdminPage onBack={() => setPage("home")} />;
+  if (page === "admin")   return <App2 startPage="admin" onBack={() => setPage("home")} />;
   if (page === "proj" && selProj)
     return <ProjectDetail proj={selProj} onBack={() => { setPage("projects"); setSelProj(null); }}/>;
 
   // الصفحة المالية الرئيسية — تُعرض عند page==="financial"
+  if (page === "financial2") return <App2 onBack={() => setPage("financial")} />;
+  if (page === "foreman_login") return <ForemanSystem onBack={() => setPage("home")} />;
+
   if (page === "financial") return (
     <div style={{ minHeight:"100vh", background:"#F1F5F9",
       fontFamily:"Tahoma", direction:"rtl" }}>
@@ -347,8 +420,38 @@ export default function App() {
             </div>
           );
         })()}
-        {/* زر المشاريع */}
-        <button onClick={() => setPage("projects")} style={{ width:"100%",
+        {/* أزرار التنقل */}
+        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:14 }}>
+          <button onClick={() => setPage("projects")} style={{
+            background:"#fff", border:"1px solid #E2E8F0", borderTop:"4px solid #D97706",
+            borderRadius:16, padding:"14px 16px", cursor:"pointer", textAlign:"right",
+            fontFamily:"Tahoma" }}>
+            <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+              <span style={{ fontSize:22 }}>🏗️</span>
+              <div>
+                <div style={{ fontSize:14, fontWeight:700, color:"#1E293B" }}>المشاريع</div>
+                <div style={{ fontSize:11, color:"#64748B" }}>
+                  {projects.filter(p=>p.status==="active").length} نشط
+                </div>
+              </div>
+            </div>
+          </button>
+          <button onClick={() => setPage("financial2")} style={{
+            background:"#fff", border:"1px solid #E2E8F0", borderTop:"4px solid #059669",
+            borderRadius:16, padding:"14px 16px", cursor:"pointer", textAlign:"right",
+            fontFamily:"Tahoma" }}>
+            <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+              <span style={{ fontSize:22 }}>📊</span>
+              <div>
+                <div style={{ fontSize:14, fontWeight:700, color:"#1E293B" }}>الحسابات</div>
+                <div style={{ fontSize:11, color:"#64748B" }}>الصناديق والموظفين</div>
+              </div>
+            </div>
+          </button>
+        </div>
+
+        {/* زر المشاريع القديم - محذوف */}
+        <button onClick={() => setPage("projects")} style={{ width:"100%", display:"none",
           background:"#fff", border:"1px solid #E2E8F0", borderTop:"4px solid #D97706",
           borderRadius:16, padding:"18px 20px", cursor:"pointer", textAlign:"right",
           fontFamily:"Tahoma", marginBottom:20 }}>
@@ -721,6 +824,41 @@ export default function App() {
             onDelete={() => deleteProject(p.id)}
             onEdit={editProject} />
         )}
+        {/* مودال التعديل */}
+        {editId && (
+          <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.5)",
+            zIndex:100, display:"flex", alignItems:"center",
+            justifyContent:"center", padding:20 }}>
+            <div style={{ background:"#fff", borderRadius:16, padding:24,
+              width:"100%", maxWidth:420, direction:"rtl" }}>
+              <div style={{ fontSize:15, fontWeight:700, color:"#1E293B",
+                marginBottom:14 }}>✏️ تعديل المهمة</div>
+              <textarea value={editText}
+                onChange={e=>setEditText(e.target.value)}
+                rows={3}
+                style={{ width:"100%", border:"1.5px solid #CBD5E1",
+                  borderRadius:10, padding:"10px 14px", fontSize:14,
+                  outline:"none", fontFamily:"Tahoma", direction:"rtl",
+                  boxSizing:"border-box", resize:"none", marginBottom:14 }}/>
+              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
+                <button onClick={()=>{ setEditId(null); setEditText(""); }}
+                  style={{ border:"1px solid #E2E8F0", borderRadius:10,
+                    padding:"11px", cursor:"pointer", fontFamily:"Tahoma",
+                    fontSize:13, background:"#fff", color:"#64748B" }}>
+                  إلغاء
+                </button>
+                <button onClick={saveEdit}
+                  disabled={!editText.trim()}
+                  style={{ border:"none", borderRadius:10, padding:"11px",
+                    cursor:"pointer", fontFamily:"Tahoma", fontSize:13,
+                    fontWeight:700, background:"#2563EB", color:"#fff" }}>
+                  💾 حفظ التعديل
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
       </div>
     </div>
   );
@@ -816,19 +954,19 @@ function AdminPage({ onBack }) {
     });
   }, []);
 
+  const [editId,   setEditId]   = useState(null);
+  const [editText, setEditText] = useState("");
+
   const addTask = () => {
     if (!text.trim()) return;
     const proj = activeProjs.find(p => p.id === selProj);
     addDoc(collection(db, "daily_tasks"), {
       text: text.trim(),
-      date: today,
-      done: false,
-      projectId:   proj?.id   || "",
-      projectName: proj?.name || "",
+      date: today, done: false,
+      projectId: proj?.id||"", projectName: proj?.name||"",
       createdAt: new Date().toISOString()
     });
-    setText("");
-    setSelProj("");
+    setText(""); setSelProj("");
   };
 
   const toggleDone = (id, done) => {
@@ -836,7 +974,25 @@ function AdminPage({ onBack }) {
   };
 
   const deleteTask = id => {
+    const pw = window.prompt("🔒 باسورد الحذف:");
+    if(!pw) return;
+    if(pw !== PASS) { alert("❌ باسورد غلط"); return; }
+    if(!window.confirm("حذف هذه المهمة نهائياً؟")) return;
     deleteDoc(doc(db, "daily_tasks", id));
+  };
+
+  const startEdit = (task) => {
+    setEditId(task.id);
+    setEditText(task.text);
+  };
+
+  const saveEdit = () => {
+    if(!editText.trim()) return;
+    const pw = window.prompt("🔒 باسورد التعديل:");
+    if(!pw) return;
+    if(pw !== PASS) { alert("❌ باسورد غلط"); return; }
+    updateDoc(doc(db, "daily_tasks", editId), { text: editText.trim() });
+    setEditId(null); setEditText("");
   };
 
   const todayTasks = tasks.filter(t => t.date === today);
@@ -1153,6 +1309,11 @@ function ProjectCard({ p, onOpen, onToggle, onDelete, onEdit }) {
                     style={{width:"100%",border:"1px solid #CBD5E1",borderRadius:9,
                       padding:"10px 13px",fontSize:14,outline:"none",fontFamily:"Tahoma",
                       direction:"rtl",boxSizing:"border-box",background:"#F8FAFC"}}/>
+                  {(k==="valueDin"||k==="valueDol") && Number(ef[k])>0 && (
+                    <div style={{fontSize:11,color:"#059669",fontWeight:600,marginTop:3}}>
+                      ✍️ {w2(Number(ef[k]))} {k==="valueDin"?"دينار عراقي":"دولار أمريكي"}
+                    </div>
+                  )}
                 </div>
               ))}
               <div style={{marginBottom:12}}>
@@ -1232,6 +1393,120 @@ function ProjectDetail({ proj, onBack }) {
   });
   const sf = k => v => setForm(f => ({ ...f, [k]: v }));
   const amt = Number(form.amount) || 0;
+
+  const [showLoan,  setShowLoan]  = useState(false);
+  const [projLoans, setProjLoans] = useState([]);
+  const [loanForm,  setLoanForm]  = useState({
+    fund:"إشراف", din:"", dol:"",
+    date: new Date().toISOString().split("T")[0], note:""
+  });
+  const lf = k => v => setLoanForm(f=>({...f,[k]:v}));
+  const [funds, setFunds] = useState({});
+
+  useEffect(()=>{
+    return onSnapshot(collection(db,"funds"), snap=>{
+      const f={};snap.docs.forEach(d=>{f[d.id]={din:d.data().din||0,dol:d.data().dol||0};});setFunds(f);
+    });
+  },[]);
+
+  useEffect(()=>{
+    return onSnapshot(
+      query(collection(db,"project_loans"),where("projectId","==",proj.id),where("status","==","open")),
+      snap=>setProjLoans(snap.docs.map(d=>({id:d.id,...d.data()})))
+    );
+  },[proj.id]);
+
+  const giveProjLoan = async () => {
+    const din=Number(loanForm.din)||0, dol=Number(loanForm.dol)||0;
+    if(!din&&!dol) return;
+    const bal=funds[loanForm.fund]||{din:0,dol:0};
+    if(din>bal.din){alert("⛔ رصيد صندوق "+loanForm.fund+" غير كافٍ — المتاح: "+fNum(bal.din)+" د.ع");return;}
+    if(dol>bal.dol){alert("⛔ رصيد الدولار في صندوق "+loanForm.fund+" غير كافٍ");return;}
+    const pw=window.prompt("🔒 أدخل الباسورد:");
+    if(!pw)return; if(pw!==PASS){alert("❌ باسورد غلط");return;}
+
+    // خصم من الصندوق
+    await setDoc(doc(db,"funds",loanForm.fund),{din:bal.din-din,dol:bal.dol-dol},{merge:true});
+
+    // تسجيل كحركة إيداع في المشروع
+    await addDoc(collection(db,"project_txs"),{
+      projectId:proj.id, projectName:proj.name,
+      type:"in", amount:din||dol,
+      currency:din>0?"دينار":"دولار",
+      receiver:"سلفة تشغيلية",
+      date:loanForm.date,
+      note:"سلفة من صندوق "+loanForm.fund+(loanForm.note?" — "+loanForm.note:""),
+      isLoan:true,
+      createdAt:new Date().toISOString()
+    });
+
+    // حركة الصندوق
+    await addDoc(collection(db,"fund_txs"),{
+      fundId:loanForm.fund,fundLabel:loanForm.fund,type:"صرف",
+      din,dol,note:"سلفة تشغيلية → "+proj.name,
+      date:loanForm.date,createdAt:new Date().toISOString()
+    });
+
+    // تسجيل الدَّيْن
+    await addDoc(collection(db,"project_loans"),{
+      projectId:proj.id,projectName:proj.name,
+      fund:loanForm.fund,din,dol,
+      note:loanForm.note,date:loanForm.date,
+      status:"open",createdAt:new Date().toISOString()
+    });
+
+    // تحديث ميزان المشروع
+    const curRecDin=inTxs.filter(t=>t.currency!=="دولار").reduce((s,t)=>s+t.amount,0);
+    const curSpdDin=outTxs.filter(t=>t.currency!=="دولار").reduce((s,t)=>s+t.amount,0);
+    if(din>0){
+      await updateDoc(doc(db,"projects",proj.id),{
+        recDin:curRecDin+din, balDin:(curRecDin+din)-curSpdDin
+      });
+    }
+
+    setLoanForm({fund:"إشراف",din:"",dol:"",date:new Date().toISOString().split("T")[0],note:""});
+    setShowLoan(false);
+    alert("✅ تم صرف السلفة التشغيلية");
+  };
+
+  const repayProjLoan = async (loan) => {
+    const pw=window.prompt("🔒 تأكيد سداد السلفة — باسورد:");
+    if(!pw)return; if(pw!==PASS){alert("❌ باسورد غلط");return;}
+    // التحقق من ميزان المشروع
+    const projBal = (proj.balDin||0);
+    if((loan.din||0)>projBal){
+      alert("⛔ ميزان المشروع غير كافٍ للسداد — المتاح: "+fNum(projBal)+" د.ع | المطلوب: "+fNum(loan.din)+" د.ع");
+      return;
+    }
+    const fundBal=funds[loan.fund]||{din:0,dol:0};
+    const today=new Date().toISOString().split("T")[0];
+
+    // إعادة المبلغ للصندوق
+    await setDoc(doc(db,"funds",loan.fund),{din:fundBal.din+(loan.din||0),dol:fundBal.dol+(loan.dol||0)},{merge:true});
+
+    // تسجيل الصرف من المشروع
+    await addDoc(collection(db,"project_txs"),{
+      projectId:proj.id,projectName:proj.name,
+      type:"out",amount:loan.din||loan.dol,
+      currency:(loan.din||0)>0?"دينار":"دولار",
+      receiver:"صندوق "+loan.fund,
+      date:today,note:"سداد سلفة تشغيلية",
+      isLoanRepay:true,
+      createdAt:new Date().toISOString()
+    });
+
+    // حركة الصندوق
+    await addDoc(collection(db,"fund_txs"),{
+      fundId:loan.fund,fundLabel:loan.fund,type:"إيداع",
+      din:loan.din||0,dol:loan.dol||0,
+      note:"سداد سلفة ← "+proj.name,
+      date:today,createdAt:new Date().toISOString()
+    });
+
+    // إغلاق الدَّيْن
+    await updateDoc(doc(db,"project_loans",loan.id),{status:"paid",paidDate:today});
+    alert("✅ تم سداد السلفة — صندوق "+loan.fund+" استرجع مبلغه");
+  };
 
   // جلب الحركات
   useEffect(() => {
@@ -1633,6 +1908,97 @@ ${(f!=="in"&&totalIn("دولار")+totalOut("دولار")>0)||f==="all"?
           {show ? "✕ إلغاء" : tab === "in" ? "+ إضافة مبلغ مستلم" : "+ إضافة مبلغ مصروف"}
         </button>
 
+        {/* فورم السلفة التشغيلية */}
+        {showLoan && (
+          <div style={{ background:"#FFF7ED", borderRadius:14, padding:18,
+            border:"2px solid #F97316", marginBottom:14 }}>
+            <div style={{ fontSize:14, fontWeight:700, color:"#F97316", marginBottom:14 }}>
+              💸 سلفة تشغيلية للمشروع
+            </div>
+
+            {/* اختيار الصندوق */}
+            <div style={{ marginBottom:12 }}>
+              <div style={{ fontSize:12, color:"#64748B", fontWeight:600, marginBottom:6 }}>
+                الصندوق المُقرض
+              </div>
+              <div style={{ display:"grid", gridTemplateColumns:"repeat(5,1fr)", gap:6 }}>
+                {["إشراف","ديكور","مقاولات","واجهات","عام"].map(f=>{
+                  const bal=funds[f]||{din:0,dol:0};
+                  return (
+                    <button key={f} onClick={()=>lf("fund")(f)} style={{
+                      border:"1.5px solid "+(loanForm.fund===f?"#F97316":"#E2E8F0"),
+                      borderRadius:9,padding:"8px 4px",cursor:"pointer",
+                      fontFamily:"Tahoma",background:loanForm.fund===f?"#FFF7ED":"#fff",
+                      textAlign:"center"}}>
+                      <div style={{ fontSize:11, fontWeight:700,
+                        color:loanForm.fund===f?"#F97316":"#64748B" }}>{f}</div>
+                      <div style={{ fontSize:9, color:"#94A3B8", marginTop:1 }}>
+                        {fNum(bal.din)} د.ع
+                        {bal.dol>0&&" | "+fNum(bal.dol)+" $"}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* المبالغ */}
+            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:12 }}>
+              {[{k:"din",l:"مبلغ الدينار",c:"#D97706"},{k:"dol",l:"مبلغ الدولار",c:"#2563EB"}].map(({k,l,cl})=>{
+                const bal=funds[loanForm.fund]||{din:0,dol:0};
+                const v=Number(loanForm[k])||0;
+                const ok=v===0||bal[k]>=v;
+                return (
+                  <div key={k}>
+                    <div style={{ fontSize:12, color:k==="din"?"#D97706":"#2563EB",
+                      fontWeight:600, marginBottom:5 }}>{l}</div>
+                    <input type="text" inputMode="numeric" placeholder="٠" value={loanForm[k]}
+                      onChange={e=>lf(k)(e.target.value.replace(/[^0-9]/g,""))}
+                      style={{ width:"100%", border:"1.5px solid "+(v>0&&!ok?"#DC2626":"#CBD5E1"),
+                        borderRadius:9, padding:"10px 13px", fontSize:14, outline:"none",
+                        fontFamily:"Tahoma", direction:"rtl",
+                        boxSizing:"border-box", background:"#fff" }}/>
+                    {v>0&&(
+                      <div style={{ fontSize:11, marginTop:3, fontWeight:600,
+                        color:ok?k==="din"?"#D97706":"#2563EB":"#DC2626" }}>
+                        {ok?"✍️ "+w2(v)+" "+(k==="din"?"دينار":"دولار")+"  متبقي: "+fNum(bal[k]-v)+(k==="din"?" د.ع":" $")
+                          :"⛔ يتجاوز الرصيد — المتاح: "+fNum(bal[k])+(k==="din"?" د.ع":" $")}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:14 }}>
+              <div>
+                <div style={{ fontSize:12, color:"#64748B", fontWeight:600, marginBottom:5 }}>التاريخ</div>
+                <input type="date" value={loanForm.date} onChange={e=>lf("date")(e.target.value)}
+                  style={{ width:"100%", border:"1px solid #CBD5E1", borderRadius:9,
+                    padding:"10px", fontSize:13, outline:"none", fontFamily:"Tahoma",
+                    boxSizing:"border-box", background:"#fff" }}/>
+              </div>
+              <div>
+                <div style={{ fontSize:12, color:"#64748B", fontWeight:600, marginBottom:5 }}>السبب</div>
+                <input placeholder="عمال، مواد، معدات..." value={loanForm.note}
+                  onChange={e=>lf("note")(e.target.value)}
+                  style={{ width:"100%", border:"1px solid #CBD5E1", borderRadius:9,
+                    padding:"10px", fontSize:13, outline:"none", fontFamily:"Tahoma",
+                    direction:"rtl", boxSizing:"border-box", background:"#fff" }}/>
+              </div>
+            </div>
+
+            <button onClick={giveProjLoan}
+              disabled={!Number(loanForm.din)&&!Number(loanForm.dol)}
+              style={{ width:"100%", border:"none", borderRadius:10, padding:"13px",
+                fontSize:14, fontWeight:700, fontFamily:"Tahoma", cursor:"pointer",
+                background:Number(loanForm.din)||Number(loanForm.dol)?"#F97316":"#E2E8F0",
+                color:Number(loanForm.din)||Number(loanForm.dol)?"#fff":"#94A3B8" }}>
+              ✅ صرف السلفة وتسجيلها في المشروع
+            </button>
+          </div>
+        )}
+
         {/* فورم الإضافة */}
         {show && (
           <div style={{ background: "#fff", borderRadius: 14, padding: 18,
@@ -1845,8 +2211,24 @@ ${form.note?`<div class="row"><span class="lbl">ملاحظة</span><span class="
 
 // ─── شاشة إنهاء وتوزيع الأرباح ───────────────────────────
 function ClosingModal({ proj, funds, onConfirm, onCancel }) {
-  const balDin = proj.balDin || 0;
-  const balDol = proj.balDol || 0;
+  const [loans, setLoans] = React.useState([]);
+
+  React.useEffect(()=>{
+    return onSnapshot(
+      query(collection(db,"project_loans"),
+        where("projectId","==",proj.id),where("status","==","open")),
+      snap=>setLoans(snap.docs.map(d=>({id:d.id,...d.data()})))
+    );
+  },[proj.id]);
+
+  const loanTotalDin = loans.reduce((s,l)=>s+(l.din||0),0);
+  const loanTotalDol = loans.reduce((s,l)=>s+(l.dol||0),0);
+
+  // الميزان بعد خصم السلف
+  const rawDin = proj.balDin || 0;
+  const rawDol = proj.balDol || 0;
+  const balDin = Math.max(0, rawDin - loanTotalDin);
+  const balDol = Math.max(0, rawDol - loanTotalDol);
   const ts = typeStyle(proj.type);
 
   const FUNDS = [
@@ -1859,7 +2241,7 @@ function ClosingModal({ proj, funds, onConfirm, onCancel }) {
   const [pcts, setPcts] = React.useState({ "رأس_المال": 0, "عام": 0, [proj.type]: 0, "شركاء": 0 });
   const [loading, setLoading] = React.useState(false);
   const total = Object.values(pcts).reduce((s, v) => s + (Number(v) || 0), 0);
-  const valid = total === 100 && balDin + balDol > 0;
+  const valid = total === 100 && (balDin + balDol > 0);
 
   const set = (fund, val) => {
     const n = Math.min(100, Math.max(0, Number(val) || 0));
@@ -1892,22 +2274,55 @@ function ClosingModal({ proj, funds, onConfirm, onCancel }) {
 
         <div style={{ padding:"20px 24px" }}>
 
-          {/* الأرباح */}
+          {/* السلف التشغيلية المستحقة */}
+          {loans.length > 0 && (
+            <div style={{ background:"#FFF7ED", borderRadius:12, padding:14,
+              border:"2px solid #F97316", marginBottom:14 }}>
+              <div style={{ fontSize:13, fontWeight:700, color:"#F97316", marginBottom:10 }}>
+                ⚠️ سلف تشغيلية تُسدد أولاً ({loans.length})
+              </div>
+              {loans.map(l=>(
+                <div key={l.id} style={{ display:"flex", justifyContent:"space-between",
+                  padding:"8px 0", borderBottom:"1px solid #FED7AA", fontSize:12 }}>
+                  <span style={{ color:"#92400E" }}>← صندوق {l.fund} · {l.date}</span>
+                  <div>
+                    {(l.din||0)>0&&<span style={{ fontWeight:700, color:"#DC2626" }}>{fNum(l.din)} د.ع</span>}
+                    {(l.dol||0)>0&&<span style={{ fontWeight:700, color:"#2563EB", marginRight:8 }}> {fNum(l.dol)} $</span>}
+                  </div>
+                </div>
+              ))}
+              <div style={{ marginTop:8, display:"flex", justifyContent:"space-between",
+                fontSize:12, fontWeight:700 }}>
+                <span style={{ color:"#92400E" }}>إجمالي السلف المستحقة</span>
+                <div>
+                  {loanTotalDin>0&&<span style={{ color:"#DC2626" }}>{fNum(loanTotalDin)} د.ع</span>}
+                  {loanTotalDol>0&&<span style={{ color:"#2563EB", marginRight:8 }}> {fNum(loanTotalDol)} $</span>}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* الأرباح بعد خصم السلف */}
           <div style={{ background:"#F8FAFC", borderRadius:12, padding:14, marginBottom:20 }}>
             <div style={{ fontSize:12, fontWeight:700, color:"#64748B", marginBottom:10 }}>
-              💰 الأرباح المراد توزيعها
+              {loans.length>0?"💰 الصافي المتاح للتوزيع (بعد خصم السلف)":"💰 الأرباح المراد توزيعها"}
             </div>
+            {loans.length>0&&(
+              <div style={{ fontSize:11, color:"#94A3B8", marginBottom:8 }}>
+                الميزان الكلي {fNum(rawDin)} د.ع − السلف {fNum(loanTotalDin)} د.ع = <strong style={{color:"#16A34A"}}>{fNum(balDin)} د.ع</strong>
+              </div>
+            )}
             <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
               <div style={{ background:"#FFFBEB", borderRadius:10, padding:"10px",
                 textAlign:"center", border:"2px solid #D97706" }}>
-                <div style={{ fontSize:10, color:"#64748B", marginBottom:3 }}>🇮🇶 دينار</div>
+                <div style={{ fontSize:10, color:"#64748B", marginBottom:3 }}>🇮🇶 دينار للتوزيع</div>
                 <div style={{ fontSize:16, fontWeight:700, color:"#D97706" }}>
                   {fNum(balDin)} د.ع
                 </div>
               </div>
               <div style={{ background:"#EFF6FF", borderRadius:10, padding:"10px",
                 textAlign:"center", border:"2px solid #2563EB" }}>
-                <div style={{ fontSize:10, color:"#64748B", marginBottom:3 }}>🇺🇸 دولار</div>
+                <div style={{ fontSize:10, color:"#64748B", marginBottom:3 }}>🇺🇸 دولار للتوزيع</div>
                 <div style={{ fontSize:16, fontWeight:700, color:"#2563EB" }}>
                   {fNum(balDol)} $
                 </div>
@@ -1942,16 +2357,22 @@ function ClosingModal({ proj, funds, onConfirm, onCancel }) {
                   </div>
                 </div>
                 {pct > 0 && (
-                  <div style={{ display:"flex", gap:12, fontSize:12 }}>
+                  <div style={{ fontSize:12 }}>
                     {balDin > 0 && (
-                      <span style={{ fontWeight:700, color }}>
+                      <div style={{ fontWeight:700, color, marginBottom:2 }}>
                         {fNum(shareDin)} د.ع
-                      </span>
+                        <span style={{ fontWeight:400, color:"#64748B", marginRight:6 }}>
+                          ✍️ {w2(shareDin)} دينار
+                        </span>
+                      </div>
                     )}
                     {balDol > 0 && (
-                      <span style={{ fontWeight:700, color:"#2563EB" }}>
+                      <div style={{ fontWeight:700, color:"#2563EB" }}>
                         {fNum(shareDol)} $
-                      </span>
+                        <span style={{ fontWeight:400, color:"#64748B", marginRight:6 }}>
+                          ✍️ {w2(shareDol)} دولار
+                        </span>
+                      </div>
                     )}
                   </div>
                 )}
@@ -1993,71 +2414,249 @@ function ClosingModal({ proj, funds, onConfirm, onCancel }) {
 // ─── صفحة الشريك ───────────────────────────────────────
 function PartnerPage({ partner, funds, onBack, onWithdraw }) {
   const pf = funds["partner_" + partner.id] || { din: 0, dol: 0 };
+  const [txs, setTxs] = useState([]);
   const [wDin, setWDin] = useState("");
   const [wDol, setWDol] = useState("");
+  const [wNote, setWNote] = useState("");
   const [saving, setSaving] = useState(false);
+  const [editId,   setEditId]   = useState(null);
+  const [editText, setEditText] = useState("");
+
+  const saveEdit = () => {
+    if(!editText.trim()) return;
+    const pw = window.prompt("🔒 باسورد التعديل:");
+    if(!pw) return;
+    if(pw !== PASS) { alert("❌ باسورد غلط"); return; }
+    updateDoc(doc(db, "daily_tasks", editId), { text: editText.trim() });
+    setEditId(null); setEditText("");
+  };
   const [ok, setOk] = useState(false);
+  const [showStatement, setShowStatement] = useState(false);
+  const [fromDate, setFromDate] = useState("");
+  const [toDate, setToDate] = useState("");
   const amtDin = Number(wDin) || 0;
   const amtDol = Number(wDol) || 0;
-  const valid = (amtDin > 0 || amtDol > 0)
-    && amtDin <= pf.din
-    && amtDol <= pf.dol;
+  const valid = (amtDin > 0 || amtDol > 0) && amtDin <= pf.din && amtDol <= pf.dol;
+
+  // جلب سجل الحركات
+  useEffect(() => {
+    return onSnapshot(
+      query(collection(db, "partner_txs"),
+        where("partnerId","==","partner_"+partner.id)),
+      snap => {
+        const list = snap.docs.map(d=>({id:d.id,...d.data()}));
+        list.sort((a,b)=>(b.createdAt||"").localeCompare(a.createdAt||""));
+        setTxs(list);
+      }
+    );
+  }, [partner.id]);
+
+  const totalDep = { din: txs.filter(t=>t.type==="إيداع").reduce((s,t)=>s+(t.din||0),0),
+                     dol: txs.filter(t=>t.type==="إيداع").reduce((s,t)=>s+(t.dol||0),0) };
+  const totalWit = { din: txs.filter(t=>t.type==="سحب").reduce((s,t)=>s+(t.din||0),0),
+                     dol: txs.filter(t=>t.type==="سحب").reduce((s,t)=>s+(t.dol||0),0) };
+
+  const printReceipt = (din, dol, note) => {
+    const today = new Date().toISOString().split("T")[0];
+    const html = `<!DOCTYPE html><html dir="rtl"><head><meta charset="utf-8"/>
+<style>*{font-family:Tahoma}body{margin:30px;direction:rtl;max-width:420px}
+.top{text-align:center;border-bottom:3px solid ${partner.color};padding-bottom:14px;margin-bottom:16px}
+.co{font-size:18px;font-weight:700}.ca{font-size:11px;color:#64748B}
+.title{font-size:15px;font-weight:700;color:${partner.color};margin:14px 0 10px}
+.amount{font-size:26px;font-weight:700;text-align:center;margin:14px 0;color:#DC2626}
+.row{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #F1F5F9}
+.lbl{font-size:12px;color:#64748B}.val{font-size:12px;font-weight:700;color:#1E293B}
+.summary{background:#F8FAFC;border-radius:10px;padding:12px;margin:14px 0}
+.srow{display:flex;justify-content:space-between;margin-bottom:6px}
+.slbl{font-size:11px;color:#64748B}.sval{font-size:12px;font-weight:700}
+.footer{text-align:center;font-size:10px;color:#94A3B8;margin-top:16px;
+  border-top:2px dashed #E2E8F0;padding-top:10px}
+</style></head><body>
+<div class="top">
+  <div class="co">شركة باب المشاريع</div>
+  <div class="ca">بغداد — العرصات</div>
+</div>
+<div class="title">↑ إيصال سحب — ${partner.name}</div>
+<div class="amount">${din > 0 ? fNum(din) + " د.ع" : ""}${din > 0 && dol > 0 ? " | " : ""}${dol > 0 ? fNum(dol) + " $" : ""}</div>
+${din > 0 ? `<div style="text-align:center;font-size:12px;color:#64748B;margin-bottom:8px">✍️ ${w2(din)} دينار عراقي</div>` : ""}
+${dol > 0 ? `<div style="text-align:center;font-size:12px;color:#64748B;margin-bottom:8px">✍️ ${w2(dol)} دولار أمريكي</div>` : ""}
+<div class="row"><span class="lbl">الشريك</span><span class="val">${partner.name}</span></div>
+<div class="row"><span class="lbl">الحصة</span><span class="val">${partner.pct}%</span></div>
+<div class="row"><span class="lbl">التاريخ</span><span class="val">${today}</span></div>
+${note ? `<div class="row"><span class="lbl">ملاحظة</span><span class="val">${note}</span></div>` : ""}
+<div class="summary">
+  <div style="font-size:11px;font-weight:700;color:#64748B;margin-bottom:8px">📊 الجرد المالي للشريك</div>
+  <div class="srow"><span class="slbl">إجمالي الإيداعات (دينار)</span>
+    <span class="sval" style="color:#16A34A">+${fNum(totalDep.din)} د.ع</span></div>
+  <div class="srow"><span class="slbl">إجمالي السحوبات (دينار)</span>
+    <span class="sval" style="color:#DC2626">-${fNum(totalWit.din + din)} د.ع</span></div>
+  <div class="srow"><span class="slbl" style="font-weight:700">الرصيد المتبقي (دينار)</span>
+    <span class="sval" style="color:${partner.color}">${fNum(Math.max(0,pf.din-din))} د.ع</span></div>
+  ${totalDep.dol > 0 || dol > 0 ? `
+  <div style="border-top:1px solid #E2E8F0;margin:8px 0"></div>
+  <div class="srow"><span class="slbl">إجمالي الإيداعات (دولار)</span>
+    <span class="sval" style="color:#16A34A">+${fNum(totalDep.dol)} $</span></div>
+  <div class="srow"><span class="slbl">إجمالي السحوبات (دولار)</span>
+    <span class="sval" style="color:#DC2626">-${fNum(totalWit.dol + dol)} $</span></div>
+  <div class="srow"><span class="slbl" style="font-weight:700">الرصيد المتبقي (دولار)</span>
+    <span class="sval" style="color:#2563EB">${fNum(Math.max(0,pf.dol-dol))} $</span></div>` : ""}
+</div>
+<div class="footer">شركة باب المشاريع — طُبع: ${today}</div>
+</body></html>`;
+    const w = window.open("","_blank","width=500,height=700");
+    if(!w){alert("السماح بالنوافذ المنبثقة");return;}
+    w.document.write(html);w.document.close();w.focus();
+    setTimeout(()=>w.print(),600);
+  };
+
+  const printStatement = () => {
+    // كل الحركات (إيداع + سحب) مفلترة بالتاريخ
+    const filtered = txs.filter(t => {
+      if (fromDate && t.date < fromDate) return false;
+      if (toDate && t.date > toDate) return false;
+      return true;
+    }).sort((a,b) => (a.date||"").localeCompare(b.date||"")||(a.createdAt||"").localeCompare(b.createdAt||""));
+
+    if (filtered.length === 0) { alert("ما في حركات في هذه الفترة"); return; }
+
+    let balDin = 0, balDol = 0, n = 0;
+    let totDepDin=0, totDepDol=0, totWitDin=0, totWitDol=0;
+
+    const rows = filtered.map(t => {
+      n++;
+      const isIn = t.type === "إيداع";
+      const din = t.din || 0;
+      const dol = t.dol || 0;
+      if (isIn) { balDin += din; balDol += dol; totDepDin += din; totDepDol += dol; }
+      else       { balDin -= din; balDol -= dol; totWitDin += din; totWitDol += dol; }
+      const bg = n%2===0?"#F8FAFC":"#fff";
+      return `<tr style="background:${bg}">
+        <td>${n}</td>
+        <td>${t.date||""}</td>
+        <td style="text-align:right;padding:7px 10px">${t.note||"—"}</td>
+        <td style="color:#16A34A;font-weight:700">${isIn&&din>0?"+"+fNum(din)+" د.ع":""}</td>
+        <td style="color:#DC2626;font-weight:700">${!isIn&&din>0?"-"+fNum(din)+" د.ع":""}</td>
+        <td style="color:#16A34A;font-weight:700">${isIn&&dol>0?"+"+fNum(dol)+" $":""}</td>
+        <td style="color:#DC2626;font-weight:700">${!isIn&&dol>0?"-"+fNum(dol)+" $":""}</td>
+        <td style="font-weight:700;color:${balDin>=0?"#D97706":"#DC2626"}">${fNum(balDin)} د.ع</td>
+      </tr>`;
+    }).join("");
+
+    const today = new Date().toISOString().split("T")[0];
+    const period = (fromDate||"البداية") + " — " + (toDate||"اليوم");
+
+    const html = `<!DOCTYPE html><html dir="rtl"><head><meta charset="utf-8"/>
+<style>
+*{font-family:Tahoma,Arial}body{margin:20px;direction:rtl}
+.hdr{border-bottom:3px solid ${partner.color};padding-bottom:12px;margin-bottom:14px;text-align:center}
+.co{font-size:20px;font-weight:700}.ca{font-size:11px;color:#64748B}
+.title{font-size:16px;font-weight:700;color:${partner.color};margin:12px 0 4px}
+.info{font-size:11px;color:#64748B;margin-bottom:14px}
+.sg{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:16px}
+.sb{border-radius:9px;padding:10px;text-align:center}
+.sl{font-size:9px;color:#64748B;margin-bottom:3px}.sv{font-size:13px;font-weight:700}
+table{width:100%;border-collapse:collapse}
+thead tr{background:${partner.color}}th{color:#fff;padding:8px 6px;font-size:10px}
+td{padding:7px 6px;font-size:10px;text-align:center;border-bottom:1px solid #F1F5F9}
+.tot td{background:#F1F5F9;font-weight:700;border-top:2px solid ${partner.color}}
+.ft{margin-top:14px;font-size:10px;color:#94A3B8;display:flex;justify-content:space-between;border-top:1px dashed #E2E8F0;padding-top:8px}
+</style></head><body>
+<div class="hdr">
+  <div class="co">شركة باب المشاريع</div>
+  <div class="ca">بغداد — العرصات</div>
+</div>
+<div class="title">📋 كشف الحساب الشامل — ${partner.name}</div>
+<div class="info">الحصة: ${partner.pct}% &nbsp;·&nbsp; الفترة: ${period} &nbsp;·&nbsp; ${filtered.length} حركة</div>
+<div class="sg">
+  <div class="sb" style="background:#F0FDF4;border:1px solid #16A34A20">
+    <div class="sl">↓ إجمالي الإيداعات دينار</div>
+    <div class="sv" style="color:#16A34A">+${fNum(totDepDin)} د.ع</div>
+  </div>
+  <div class="sb" style="background:#FFF1F2;border:1px solid #DC262620">
+    <div class="sl">↑ إجمالي السحوبات دينار</div>
+    <div class="sv" style="color:#DC2626">-${fNum(totWitDin)} د.ع</div>
+  </div>
+  <div class="sb" style="background:#EFF6FF;border:1px solid #2563EB20">
+    <div class="sl">↓ إجمالي الإيداعات دولار</div>
+    <div class="sv" style="color:#2563EB">+${fNum(totDepDol)} $</div>
+  </div>
+  <div class="sb" style="background:${partner.bg};border:2px solid ${partner.color}">
+    <div class="sl">⚖️ الرصيد الحالي</div>
+    <div class="sv" style="color:${partner.color}">${fNum(pf.din)} د.ع</div>
+    ${pf.dol>0?`<div style="font-size:11px;font-weight:700;color:#2563EB">${fNum(pf.dol)} $</div>`:""}
+  </div>
+</div>
+<table>
+  <thead><tr>
+    <th>#</th><th>التاريخ</th><th style="text-align:right">البيان</th>
+    <th>إيداع دينار</th><th>سحب دينار</th>
+    <th>إيداع دولار</th><th>سحب دولار</th>
+    <th>الميزان</th>
+  </tr></thead>
+  <tbody>${rows}</tbody>
+  <tr class="tot">
+    <td colspan="2">الإجمالي</td><td></td>
+    <td style="color:#16A34A">+${fNum(totDepDin)} د.ع</td>
+    <td style="color:#DC2626">-${fNum(totWitDin)} د.ع</td>
+    <td style="color:#16A34A">+${fNum(totDepDol)} $</td>
+    <td style="color:#DC2626">-${fNum(totWitDol)} $</td>
+    <td style="color:${partner.color}">${fNum(pf.din)} د.ع</td>
+  </tr>
+</table>
+<div class="ft">
+  <span>${partner.name} — شركة باب المشاريع</span>
+  <span>طُبع: ${today}</span>
+</div>
+</body></html>`;
+
+    const w = window.open("","_blank","width=1000,height=750");
+    if(!w){alert("السماح بالنوافذ المنبثقة");return;}
+    w.document.write(html);w.document.close();w.focus();
+    setTimeout(()=>w.print(),700);
+  };
 
   const doWithdraw = async () => {
     if (!valid || saving) return;
-    if (amtDin > pf.din) { alert("⛔ رصيد الدينار غير كافٍ\nالمتاح: " + fNum(pf.din) + " د.ع"); return; }
-    if (amtDol > pf.dol) { alert("⛔ رصيد الدولار غير كافٍ\nالمتاح: " + fNum(pf.dol) + "$"); return; }
     setSaving(true);
-    await onWithdraw(partner.id, amtDin, amtDol);
+    await onWithdraw(partner.id, amtDin, amtDol, wNote);
     setSaving(false);
     setOk(true);
-    setTimeout(() => { setOk(false); setWDin(""); setWDol(""); }, 1500);
+    setTimeout(() => { setOk(false); setWDin(""); setWDol(""); setWNote(""); }, 1500);
   };
 
   return (
     <div style={{ minHeight:"100vh", background:"#F1F5F9",
       fontFamily:"Tahoma", direction:"rtl" }}>
-      <div style={{ maxWidth:480, margin:"0 auto", padding:"22px 16px" }}>
+      <div style={{ maxWidth:560, margin:"0 auto", padding:"22px 16px" }}>
 
         <button onClick={onBack} style={{ background:"#fff", border:"1px solid #E2E8F0",
           borderRadius:10, padding:"8px 16px", fontSize:13, color:"#475569",
           cursor:"pointer", marginBottom:16, fontFamily:"Tahoma",
-          display:"flex", alignItems:"center", gap:6 }}>
-          ← رجوع
-        </button>
+          display:"flex", alignItems:"center", gap:6 }}>← رجوع</button>
 
         {/* بطاقة الشريك */}
         <div style={{ background:partner.bg, borderRadius:16, padding:"20px",
-          border:"2px solid "+partner.color+"40", marginBottom:16 }}>
+          border:"2px solid "+partner.color+"40", marginBottom:14 }}>
           <div style={{ display:"flex", justifyContent:"space-between",
             alignItems:"center", marginBottom:14 }}>
             <div>
-              <div style={{ fontSize:20, fontWeight:700, color:partner.color }}>
-                {partner.name}
-              </div>
-              <div style={{ fontSize:13, color:"#64748B", marginTop:3 }}>
-                حصة {partner.pct}% من أرباح الشركاء
-              </div>
+              <div style={{ fontSize:20, fontWeight:700, color:partner.color }}>{partner.name}</div>
+              <div style={{ fontSize:13, color:"#64748B", marginTop:3 }}>حصة {partner.pct}%</div>
             </div>
-            <div style={{ width:50, height:50, borderRadius:14,
-              background:"#fff", display:"flex", alignItems:"center",
-              justifyContent:"center", fontSize:26 }}>👤</div>
+            <div style={{ width:50, height:50, borderRadius:14, background:"#fff",
+              display:"flex", alignItems:"center", justifyContent:"center", fontSize:26 }}>👤</div>
           </div>
           <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
             <div style={{ background:"#fff", borderRadius:12, padding:"14px",
               textAlign:"center", border:"1.5px solid "+partner.color+"30" }}>
               <div style={{ fontSize:10, color:"#64748B", marginBottom:4 }}>💰 رصيد الدينار</div>
-              <div style={{ fontSize:20, fontWeight:700, color:partner.color }}>
-                {fNum(pf.din)}
-              </div>
+              <div style={{ fontSize:20, fontWeight:700, color:partner.color }}>{fNum(pf.din)}</div>
               <div style={{ fontSize:12, color:"#64748B" }}>د.ع</div>
             </div>
-            <div style={{ background:"#fff", borderRadius:12, padding:"14px",
-              textAlign:"center", border:"1.5px solid #2563EB30" }}>
-              <div style={{ fontSize:10, color:"#64748B", marginBottom:4 }}>💰 رصيد الدولار</div>
-              <div style={{ fontSize:20, fontWeight:700, color:"#2563EB" }}>
-                {fNum(pf.dol)}
-              </div>
+            <div style={{ background:"#EFF6FF", borderRadius:12, padding:"14px",
+              textAlign:"center", border:"2px solid #2563EB40" }}>
+              <div style={{ fontSize:10, color:"#64748B", marginBottom:4 }}>🇺🇸 رصيد الدولار</div>
+              <div style={{ fontSize:20, fontWeight:700, color:"#2563EB" }}>{fNum(pf.dol)}</div>
               <div style={{ fontSize:12, color:"#64748B" }}>$</div>
             </div>
           </div>
@@ -2065,7 +2664,7 @@ function PartnerPage({ partner, funds, onBack, onWithdraw }) {
 
         {/* سحب */}
         <div style={{ background:"#fff", borderRadius:14, padding:"18px 20px",
-          border:"1px solid #E2E8F0" }}>
+          border:"1px solid #E2E8F0", marginBottom:14 }}>
           <div style={{ fontSize:14, fontWeight:700, color:"#1E293B", marginBottom:14 }}>
             ↑ سحب من الرصيد
           </div>
@@ -2073,67 +2672,196 @@ function PartnerPage({ partner, funds, onBack, onWithdraw }) {
             <div style={{ textAlign:"center", padding:"20px 0" }}>
               <div style={{ fontSize:40 }}>✅</div>
               <div style={{ fontSize:16, fontWeight:700, color:"#16A34A", marginTop:8 }}>
-                تم السحب بنجاح
+                تم السحب وطباعة الإيصال
               </div>
             </div>
           ) : (
             <>
-              {/* دينار */}
               <div style={{ marginBottom:12 }}>
                 <div style={{ fontSize:12, color:"#16A34A", fontWeight:700, marginBottom:6 }}>
                   🇮🇶 مبلغ الدينار
                 </div>
-                <input type="text" inputMode="numeric" placeholder="٠"
-                  value={wDin}
-                  onChange={e => setWDin(e.target.value.replace(/[^0-9]/g,""))}
+                <input type="text" inputMode="numeric" placeholder="٠" value={wDin}
+                  onChange={e=>setWDin(e.target.value.replace(/[^0-9]/g,""))}
                   style={{ width:"100%", border:"1px solid #CBD5E1", borderRadius:10,
                     padding:"12px 14px", fontSize:15, outline:"none", fontFamily:"Tahoma",
-                    direction:"rtl", boxSizing:"border-box",
-                    background:"#F8FAFC", color:"#1E293B",
-                    MozAppearance:"textfield" }}/>
-                {amtDin > 0 && (
-                  <div style={{ fontSize:12, fontWeight:600, marginTop:4,
-                    color: amtDin > pf.din ? "#DC2626" : "#16A34A" }}>
-                    {amtDin > pf.din
-                      ? "⛔ يتجاوز الرصيد! المتاح: " + fNum(pf.din) + " د.ع"
-                      : "✍️ " + w2(amtDin) + " دينار — المتبقي: " + fNum(pf.din - amtDin) + " د.ع"}
-                  </div>
-                )}
+                    direction:"rtl", boxSizing:"border-box", background:"#F8FAFC" }}/>
+                {amtDin > 0 && <div style={{ fontSize:12, fontWeight:600, marginTop:4,
+                  color: amtDin>pf.din?"#DC2626":"#16A34A" }}>
+                  {amtDin>pf.din ? "⛔ يتجاوز الرصيد! المتاح: "+fNum(pf.din)+" د.ع"
+                    : "✍️ "+w2(amtDin)+" دينار — المتبقي: "+fNum(pf.din-amtDin)+" د.ع"}
+                </div>}
               </div>
-              {/* دولار */}
-              <div style={{ marginBottom:16 }}>
+              <div style={{ marginBottom:12 }}>
                 <div style={{ fontSize:12, color:"#2563EB", fontWeight:700, marginBottom:6 }}>
                   🇺🇸 مبلغ الدولار
                 </div>
-                <input type="text" inputMode="numeric" placeholder="٠"
-                  value={wDol}
-                  onChange={e => setWDol(e.target.value.replace(/[^0-9]/g,""))}
+                <input type="text" inputMode="numeric" placeholder="٠" value={wDol}
+                  onChange={e=>setWDol(e.target.value.replace(/[^0-9]/g,""))}
                   style={{ width:"100%", border:"1px solid #CBD5E1", borderRadius:10,
                     padding:"12px 14px", fontSize:15, outline:"none", fontFamily:"Tahoma",
-                    direction:"rtl", boxSizing:"border-box",
-                    background:"#F8FAFC", color:"#1E293B",
-                    MozAppearance:"textfield" }}/>
-                {amtDol > 0 && (
-                  <div style={{ fontSize:12, fontWeight:600, marginTop:4,
-                    color: amtDol > pf.dol ? "#DC2626" : "#2563EB" }}>
-                    {amtDol > pf.dol
-                      ? "⛔ يتجاوز الرصيد! المتاح: " + fNum(pf.dol) + " $"
-                      : "✍️ " + w2(amtDol) + " دولار — المتبقي: " + fNum(pf.dol - amtDol) + " $"}
-                  </div>
+                    direction:"rtl", boxSizing:"border-box", background:"#F8FAFC" }}/>
+                {amtDol > 0 && <div style={{ fontSize:12, fontWeight:600, marginTop:4,
+                  color: amtDol>pf.dol?"#DC2626":"#2563EB" }}>
+                  {amtDol>pf.dol ? "⛔ يتجاوز الرصيد! المتاح: "+fNum(pf.dol)+" $"
+                    : "✍️ "+w2(amtDol)+" دولار — المتبقي: "+fNum(pf.dol-amtDol)+" $"}
+                </div>}
+              </div>
+              <div style={{ marginBottom:16 }}>
+                <div style={{ fontSize:12, color:"#64748B", fontWeight:700, marginBottom:6 }}>
+                  ملاحظة
+                </div>
+                <input placeholder="سبب السحب..." value={wNote}
+                  onChange={e=>setWNote(e.target.value)}
+                  style={{ width:"100%", border:"1px solid #CBD5E1", borderRadius:10,
+                    padding:"12px 14px", fontSize:14, outline:"none", fontFamily:"Tahoma",
+                    direction:"rtl", boxSizing:"border-box", background:"#F8FAFC" }}/>
+              </div>
+              <div style={{ display:"grid", gridTemplateColumns:"1fr auto", gap:8 }}>
+                <button onClick={doWithdraw} disabled={!valid||saving} style={{
+                  border:"none", borderRadius:12, padding:"14px",
+                  fontSize:15, fontWeight:700, fontFamily:"Tahoma",
+                  cursor:valid&&!saving?"pointer":"not-allowed",
+                  background:valid?partner.color:"#E2E8F0",
+                  color:valid?"#fff":"#94A3B8" }}>
+                  {saving?"جاري...":"✅ تأكيد السحب"}
+                </button>
+                {valid && (
+                  <button onClick={()=>printReceipt(amtDin,amtDol,wNote)}
+                    style={{ border:"1px solid "+partner.color, borderRadius:12,
+                      padding:"14px 16px", fontSize:14, fontWeight:700,
+                      fontFamily:"Tahoma", background:"#fff",
+                      color:partner.color, cursor:"pointer", whiteSpace:"nowrap" }}>
+                    🖨️ إيصال
+                  </button>
                 )}
               </div>
-              <button onClick={doWithdraw} disabled={!valid || saving} style={{
-                width:"100%", border:"none", borderRadius:12, padding:"14px",
-                fontSize:15, fontWeight:700, fontFamily:"Tahoma",
-                cursor: valid && !saving ? "pointer" : "not-allowed",
-                background: valid ? partner.color : "#E2E8F0",
-                color: valid ? "#fff" : "#94A3B8" }}>
-                {saving ? "جاري السحب..." : "↑ تأكيد السحب"}
-              </button>
             </>
+          )}
+        </div>
+
+        {/* زر كشف حساب السحوبات */}
+        <div style={{ background:"#fff", borderRadius:14, padding:"16px 20px",
+          border:"1px solid #E2E8F0", marginBottom:14 }}>
+          <div style={{ display:"flex", justifyContent:"space-between",
+            alignItems:"center", marginBottom: showStatement?14:0 }}>
+            <div style={{ fontSize:14, fontWeight:700, color:"#1E293B" }}>
+              🖨️ كشف الحساب الشامل
+            </div>
+            <button onClick={()=>setShowStatement(v=>!v)} style={{
+              background:showStatement?"#475569":partner.color, border:"none",
+              borderRadius:9, padding:"8px 16px", color:"#fff", cursor:"pointer",
+              fontSize:13, fontFamily:"Tahoma", fontWeight:700 }}>
+              {showStatement?"✕ إغلاق":"📊 فتح الكشف"}
+            </button>
+          </div>
+          {showStatement && (
+            <div>
+              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, marginBottom:12 }}>
+                <div>
+                  <div style={{ fontSize:11, color:"#64748B", fontWeight:600, marginBottom:5 }}>
+                    من تاريخ
+                  </div>
+                  <input type="date" value={fromDate} onChange={e=>setFromDate(e.target.value)}
+                    style={{ width:"100%", border:"1px solid #CBD5E1", borderRadius:9,
+                      padding:"9px 12px", fontSize:13, outline:"none", fontFamily:"Tahoma",
+                      boxSizing:"border-box", background:"#F8FAFC" }}/>
+                </div>
+                <div>
+                  <div style={{ fontSize:11, color:"#64748B", fontWeight:600, marginBottom:5 }}>
+                    إلى تاريخ
+                  </div>
+                  <input type="date" value={toDate} onChange={e=>setToDate(e.target.value)}
+                    style={{ width:"100%", border:"1px solid #CBD5E1", borderRadius:9,
+                      padding:"9px 12px", fontSize:13, outline:"none", fontFamily:"Tahoma",
+                      boxSizing:"border-box", background:"#F8FAFC" }}/>
+                </div>
+              </div>
+              {(fromDate||toDate) && (
+                <button onClick={()=>{setFromDate("");setToDate("");}}
+                  style={{ fontSize:11, color:partner.color, background:partner.bg,
+                    border:"none", borderRadius:6, padding:"5px 12px",
+                    cursor:"pointer", fontFamily:"Tahoma", fontWeight:600, marginBottom:10 }}>
+                  ✕ مسح التواريخ
+                </button>
+              )}
+              <div style={{ fontSize:12, color:"#64748B", marginBottom:12 }}>
+                سيتم طباعة{" "}
+                <strong style={{ color:"#1E293B" }}>
+                  {txs.filter(t=>(!fromDate||t.date>=fromDate)&&(!toDate||t.date<=toDate)).length}
+                </strong>
+                {" "}حركة
+                {fromDate||toDate?" في الفترة المحددة":" (كل الحركات)"}
+              </div>
+              <button onClick={printStatement} style={{
+                width:"100%", border:"none", borderRadius:10, padding:"12px",
+                fontSize:14, fontWeight:700, fontFamily:"Tahoma",
+                background:partner.color, color:"#fff", cursor:"pointer" }}>
+                🖨️ طباعة كشف الحساب الشامل
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* كشف الحساب */}
+        <div style={{ background:"#fff", borderRadius:14, padding:"16px 20px",
+          border:"1px solid #E2E8F0" }}>
+          <div style={{ fontSize:14, fontWeight:700, color:"#1E293B", marginBottom:14 }}>
+            📋 كشف الحساب ({txs.length} حركة)
+          </div>
+          {txs.length === 0 ? (
+            <div style={{ textAlign:"center", padding:20, color:"#94A3B8" }}>
+              ما في حركات بعد
+            </div>
+          ) : txs.map(t => {
+            const isIn = t.type === "إيداع";
+            return (
+              <div key={t.id} style={{ borderRadius:10, padding:"12px 14px",
+                marginBottom:8, border:"1px solid "+(isIn?"#DCFCE7":"#FEE2E2"),
+                borderRight:"4px solid "+(isIn?"#16A34A":"#DC2626") }}>
+                <div style={{ display:"flex", justifyContent:"space-between",
+                  alignItems:"flex-start" }}>
+                  <div>
+                    <div style={{ fontSize:12, fontWeight:700,
+                      color:isIn?"#16A34A":"#DC2626", marginBottom:3 }}>
+                      {isIn?"↓ إيداع أرباح":"↑ سحب"}
+                    </div>
+                    <div style={{ fontSize:11, color:"#64748B" }}>📅 {t.date}</div>
+                    {t.note && <div style={{ fontSize:11, color:"#475569", marginTop:2 }}>{t.note}</div>}
+                  </div>
+                  <div style={{ textAlign:"left" }}>
+                    {(t.din||0) > 0 && (
+                      <div style={{ fontSize:14, fontWeight:700,
+                        color:isIn?"#16A34A":"#DC2626" }}>
+                        {isIn?"+":"-"}{fNum(t.din)} <span style={{fontSize:10}}>د.ع</span>
+                      </div>
+                    )}
+                    <div style={{ fontSize:13, fontWeight:700,
+                      color:(t.dol||0)>0?"#2563EB":"#CBD5E1" }}>
+                      {isIn?"+":"-"}{fNum(t.dol||0)} <span style={{fontSize:10}}>$</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+          {txs.length > 0 && (
+            <div style={{ marginTop:12, padding:"10px 14px", background:"#F8FAFC",
+              borderRadius:10, display:"flex", justifyContent:"space-between" }}>
+              <span style={{ fontSize:12, color:"#64748B" }}>الرصيد الحالي</span>
+              <div>
+                <span style={{ fontSize:13, fontWeight:700, color:partner.color }}>
+                  {fNum(pf.din)} د.ع
+                </span>
+                <span style={{ fontSize:12, fontWeight:700, color:"#2563EB", marginRight:10 }}>
+                  {" | "}{fNum(pf.dol)} $
+                </span>
+              </div>
+            </div>
           )}
         </div>
       </div>
     </div>
   );
 }
+// v2.1
